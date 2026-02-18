@@ -1,4 +1,4 @@
-import std
+import { std, fizzbuzz }
 
 fn print-fizzbuzz!(n: int) {
   if n < 1 {
@@ -6,10 +6,10 @@ fn print-fizzbuzz!(n: int) {
   }
 
   for i := 1, i < n, i++ {
-    std.print(match {
-	  i % 15 == 0 => "FizzBuzz!\n",
-	  i % 5 == 0  => "Buzz!\n",
-	  i % 3 == 0  => "Fizz!\n",
+    std-print(match {
+	  i % 15 == 0: "FizzBuzz!\n",
+	  i % 5 == 0:  "Buzz!\n",
+	  i % 3 == 0:  "Fizz!\n",
 	})
   }
 }
