@@ -9,11 +9,17 @@ union FloatOrInt {
     Int(i64)
 }
 
-// match over variants:
-const foi = FloatOrInt.Float(3.14)
-const i = match foi {
-    Float => floor(foi.Float)
-    Int => foi.Int
+union Node {
+    Number(f64),
+    StrLit(String),
+    Add(BinOp),
+    Plus,
+}
+
+
+struct BinOp {
+    lhs: Node?,
+    rhs: Node?,
 }
 
 // or perhaps desrtucture the variant?
@@ -50,7 +56,7 @@ struct Bob {
     shimmy: unt
 }
 
-const b: Bob = {
+const b = Bob {
     cat: String.from("cat"),
     shimmy: 67
 }

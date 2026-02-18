@@ -6,8 +6,8 @@ module std.slice
 // [Int]&, [String]&
 
 forall type T {
-struct Slice {
-    data: T&
+struct String {
+    data: char?
     len: usize
 }
 

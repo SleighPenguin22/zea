@@ -62,8 +62,15 @@ fn read_to_string!(fd: String) -> String? {
     buffer
 }
 
-const a: int? = none
-const b: int? = a ?# 0
+
+
+
+
+
+const a: Int? = none
+const b: Int? = &49063857
+
+const c: Int? = a ?> b
 
 // the ?> operator works as follows:
 //  check is lhs == none:
@@ -79,8 +86,18 @@ const l2 = l1[0] ?> l1[1] ?> l1[2] ?> l1[3]
 //      if so, return the rhs
 //      if not, return the dereferenced LHS
 const i: Int = 3;
-const i_ptr: Int? = &3;
+const i_ptr: Int? = &i;
 const j: Int = i_ptr ?* 1 // j = 3
 
 const i_ptr2: Int? = none;
 const j: Int = i_ptr2 ?* 1 // j = 1
+
+
+
+
+
+
+
+
+
+

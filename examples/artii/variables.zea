@@ -32,10 +32,10 @@ fn main() {
 
   // Enums (stupid, not like in Rust)
   enum Token {
-    plus,
-	minus,
-	times,
-	divide,
+    Plus,
+	Minus,
+	Times,
+	Divide,
   }
 
   const token-a = TokenType.plus
