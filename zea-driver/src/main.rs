@@ -1,6 +1,6 @@
-use std::fs;
-use std::fmt;
 use clap::Parser;
+use std::fmt;
+use std::fs;
 
 /// Zea compiler
 #[derive(Parser, Debug)]
@@ -22,7 +22,7 @@ fn tokenize(input: &String) -> Vec<Token> {
     let mut tokens: Vec<Token> = vec![];
     for c in input.chars() {
         if c.is_whitespace() {
-            continue
+            continue;
         }
 
         match c {
@@ -30,7 +30,7 @@ fn tokenize(input: &String) -> Vec<Token> {
             '-' => tokens.push(Token::Minus),
             '*' => tokens.push(Token::Times),
             '/' => tokens.push(Token::Divide),
-            _ => todo!()
+            _ => todo!(),
         }
     }
     tokens
