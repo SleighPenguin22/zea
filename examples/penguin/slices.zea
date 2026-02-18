@@ -1,0 +1,48 @@
+module std.slice
+
+// slices are array-pointers with a length
+// the can be used when iterating and stuff
+// A slice with elements of type T is denoted [T]&:
+// [Int]&, [String]&
+
+forall type T {
+struct Slice {
+    data: T&
+    len: usize
+}
+
+fn len(slice: [T]&) {
+    slice.len
+}
+
+fn start(slice: [T]&) -> T? {
+    if len(slice) {
+        Some(slice.data)
+    } else {
+        None
+    }
+}
+
+fn end(slice: [T]&) -> T? {
+    if len(slice) {
+        Some(slice.data[slice.len - 1)
+    } else {
+        None
+    }
+}
+
+fn subslice(slice: [T]&, offset: usize) -> [T]& {
+    if offset > len(slice) {
+        Slice {
+            data: start(slice)
+            len: 0
+        }
+    }
+    else {
+        Slice {
+            data: slice.data[offset]
+            len: slice.len - offset
+        }
+    }
+}
+}

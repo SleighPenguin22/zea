@@ -1,0 +1,86 @@
+// separate symbols for namespace and member-accesses
+module std:optional
+
+// optionals are types suffixed with a ?
+// Int?, Bool?, String? etc.
+// references are non-null pointers:
+// int&
+// Int*, Bool*
+
+// generics:
+
+// after the fn?
+fn is_some(ptr: auto?) -> bool {
+    ptr as bool
+}
+
+fn is_none(ptr: auto?) -> bool {
+    !(ptr as bool)
+}
+
+// error handling
+module std:file
+
+struct FileStream {
+    data: char&
+    size: usize
+}
+
+
+fn open!(fd: String) -> FileStream? {
+    if exists {File { magic ... }} else {null}
+}
+
+fn read_to_string!(fd: String) -> String? {
+    // the ?! operator reduces boilerplate when working with pointers
+    const file = open(fd)?!
+    var cursor = 0
+    var buffer = std:String:with-capacity!(file.size)?!
+
+
+    for cursor = 0, cursor < file.size, cursor++ {
+        buffer[cursor] = file.data[cursor]
+    }
+    buffer
+
+    // equivalent to
+
+    const file = open(fd)
+    if is_none(file) {
+        return none
+    }
+
+    var cursor = 0
+    var buffer = std:String:with-capacity!(file.size)
+    if is_none(buffer) {
+        return none
+    }
+
+    for cursor = 0, cursor < file.size, cursor++ {
+        buffer[cursor] = file.data[cursor]
+    }
+    buffer
+}
+
+const a: int? = none
+const b: int? = a ?# 0
+
+// the ?> operator works as follows:
+//  check is lhs == none:
+//      if so, return the rhs
+//      if not, return the LHS
+
+// it can therefor be chained to return the first non-null pointer in a list of them:
+const l1 = [none, none, &bob, none]
+const l2 = l1[0] ?> l1[1] ?> l1[2] ?> l1[3]
+
+// the ?* operator works as follows
+//  check is lhs == none:
+//      if so, return the rhs
+//      if not, return the dereferenced LHS
+const i: Int = 3;
+const i_ptr: Int? = &3;
+const j: Int = i_ptr ?* 1 // j = 3
+
+const i_ptr2: Int? = none;
+const j: Int = i_ptr2 ?* 1 // j = 1
