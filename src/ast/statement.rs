@@ -1,8 +1,7 @@
-use crate::ast::datatype::{TypedIdentifier, ZeaTypeIdent};
 use crate::ast::expression::ZeaExpression;
 use crate::ast::patterns::ZeaPattern;
-use std::collections::HashSet;
 
+#[derive(Debug)]
 pub enum ZeaStatement {
     VarDecl(VarDecl),
     VarDeclAssignment(VarDeclAssignment),
@@ -11,7 +10,7 @@ pub enum ZeaStatement {
     ReturnVoid,
     ReturnValue(ZeaExpression),
 }
-
+#[derive(Debug)]
 pub struct VarDecl {
     pub assignee: ZeaPattern,
     pub mutable: bool,
@@ -21,7 +20,7 @@ impl Into<ZeaStatement> for VarDecl {
         ZeaStatement::VarDecl(self)
     }
 }
-
+#[derive(Debug)]
 pub struct VarDeclAssignment {
     pub decl: VarDecl,
     pub value: ZeaExpression,
@@ -31,7 +30,7 @@ impl Into<ZeaStatement> for VarDeclAssignment {
         ZeaStatement::VarDeclAssignment(self)
     }
 }
-
+#[derive(Debug)]
 pub struct VarReassignment {
     pub assignee: ZeaPattern,
     pub value: ZeaExpression,
@@ -43,6 +42,7 @@ impl Into<ZeaStatement> for VarReassignment {
     }
 }
 
+#[derive(Debug)]
 pub struct FuncCall {
     pub name: String,
     pub args: Vec<ZeaExpression>,
@@ -59,9 +59,5 @@ impl Into<ZeaExpression> for FuncCall {
     }
 }
 
+#[derive(Debug)]
 pub struct StatementBlock(Vec<ZeaStatement>);
-
-pub enum Visibility {
-    Public,
-    Private,
-}

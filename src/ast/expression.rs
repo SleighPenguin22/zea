@@ -1,6 +1,6 @@
 use crate::ast::patterns::ZeaPattern;
 use crate::ast::statement::{FuncCall, StatementBlock};
-
+#[derive(Debug)]
 pub enum ZeaExpression {
     FuncCall(FuncCall),
     Literal(Literal),
@@ -26,17 +26,17 @@ pub enum ZeaExpression {
     ConditionMatch(Box<ZeaExpression>, Vec<ConditionMatchArm>),
     IfThenElse(Box<ZeaExpression>, Box<ZeaExpression>, Box<ZeaExpression>),
 }
-
+#[derive(Debug)]
 pub struct PatternMatchArm {
     pub pattern: ZeaPattern,
     pub value: Box<ZeaExpression>,
 }
-
+#[derive(Debug)]
 pub struct ConditionMatchArm {
     pub condition: Box<ZeaExpression>,
     pub value: Box<ZeaExpression>,
 }
-
+#[derive(Debug)]
 pub enum Literal {
     Integer(u64),
     Float(f64),

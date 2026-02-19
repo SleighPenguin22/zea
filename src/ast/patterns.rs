@@ -1,8 +1,7 @@
-use crate::ast::datatype::{TypedIdentifier, ZeaTypeIdent};
-
 /// Lhs's of decl-assignments, reassignments and match-arms
 ///
 /// The simplest is a basic identifier
+#[derive(Debug)]
 pub enum ZeaPattern {
     /// `a => ...`
     /// or

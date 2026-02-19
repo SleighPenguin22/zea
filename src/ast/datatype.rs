@@ -1,4 +1,3 @@
-use crate::ast::statement::{StatementBlock, Visibility};
 use std::fmt::{Debug, Formatter};
 
 /// The Zea named Struct type / product type
