@@ -1,3 +1,5 @@
+use crate::expression::ZeaExpression;
+
 trait CStatement {
     fn as_c_statement(&self) -> String;
 }

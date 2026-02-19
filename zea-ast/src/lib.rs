@@ -1,9 +1,10 @@
 mod cformatting;
-mod datatype;
+pub mod datatype;
 mod expression;
+mod patterns;
 mod statement;
 mod toplevel;
-mod patterns;
+mod utils;
 
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
@@ -11,11 +12,13 @@ pub fn add(left: u64, right: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use std::hint;
+    use std::hint::assert_unchecked;
     use super::*;
+    use datatype::ZeaType;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn pointers() {
+     hint::select_unpredictable()
     }
 }
