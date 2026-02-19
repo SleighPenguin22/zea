@@ -1,4 +1,4 @@
-use crate::datatype::{TypedIdentifier, ZeaType};
+use crate::ast::datatype::{TypedIdentifier, ZeaTypeIdent};
 
 /// Lhs's of decl-assignments, reassignments and match-arms
 ///

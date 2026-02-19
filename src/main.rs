@@ -1,14 +1,13 @@
+mod ast;
+mod driver;
+mod parser;
+
+use crate::driver::Args;
 use clap::Parser;
 use std::fmt;
 use std::fs;
 
 /// Zea compiler
-#[derive(Parser, Debug)]
-#[command(version, about)]
-struct Args {
-    #[arg(short, long)]
-    filename: String,
-}
 
 enum Token {
     Plus,

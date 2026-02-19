@@ -1,7 +1,0 @@
-[package]
-name = "zea-ast"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-enum_dispatch = "0.3.13"

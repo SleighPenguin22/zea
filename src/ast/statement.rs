@@ -1,6 +1,6 @@
-use crate::datatype::{TypedIdentifier, ZeaType};
-use crate::expression::ZeaExpression;
-use crate::patterns::ZeaPattern;
+use crate::ast::datatype::{TypedIdentifier, ZeaTypeIdent};
+use crate::ast::expression::ZeaExpression;
+use crate::ast::patterns::ZeaPattern;
 use std::collections::HashSet;
 
 pub enum ZeaStatement {
@@ -15,7 +15,6 @@ pub enum ZeaStatement {
 pub struct VarDecl {
     pub assignee: ZeaPattern,
     pub mutable: bool,
-    pub storage_qualifiers: HashSet<StorageQualifier>,
 }
 impl Into<ZeaStatement> for VarDecl {
     fn into(self) -> ZeaStatement {
@@ -62,11 +61,7 @@ impl Into<ZeaExpression> for FuncCall {
 
 pub struct StatementBlock(Vec<ZeaStatement>);
 
-pub enum StorageQualifier {
-    StaticLifeTime,
-}
-
-pub enum Visibilty {
+pub enum Visibility {
     Public,
     Private,
 }

@@ -1,3 +1,9 @@
-[workspace]
-resolver = "3"
-members = ["zea-driver", "zea-parser", "zea-ast"]
+[package]
+name = "zea"
+authors = ["Artsiom", "Iwan"]
+version = "0.1.0"
+edition = "2024"
+readme = "README.md"
+
+[dependencies]
+clap = { version = "4.5.59", features = ["derive"] }
