@@ -1,24 +1,28 @@
 /// Lhs's of decl-assignments, reassignments and match-arms
 ///
 /// The simplest is a basic identifier
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum ZeaPattern {
-    /// `a => ...`
+    /// the pattern `a => ...`
     /// or
     /// `const a := ...`
     Ident(String),
-    /// `(<pat>, <pat>, <pat>) => ...`
+    /// the pattern `(<pat>, <pat>, <pat>) => ...`
+    ///
     /// or
+    ///
     /// `const (a,b,c) = ...`
     TupleUnpack(Vec<ZeaPattern>),
-    /// `[a,b..] => ...`
+    /// the pattern `[a,b...] => ...`
+    ///
     /// or
+    ///
     /// `const [head,rest..] = split-head(...)`
     ListHeadTail(String, String),
-    /// `std:option:Some(<pat>) => ...`
+    /// the pattern `std:option:Some(<pat>) => ...`
     OptionSome(Box<ZeaPattern>),
-    /// `std:option:None => ...`
+    /// the pattern `std:option:None => ...`
     OptionNone,
-    /// `union:Variant(<pat>) => ...`
+    /// the pattern `union:Variant(<pat>) => ...`
     UnionVariant(String, Box<ZeaPattern>),
 }

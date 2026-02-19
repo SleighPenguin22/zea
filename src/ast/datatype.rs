@@ -28,7 +28,7 @@ pub enum ZeaUnionVariant {
 /// The Type that is bundled with a:
 /// - function parameter
 /// - identifier in declaration(-assignments)
-#[derive(PartialEq, PartialOrd, Eq)]
+#[derive(PartialEq, PartialOrd, Eq, Clone, Hash)]
 pub enum ZeaTypeIdent {
     /// Int, Bool, etc.
     Basic(String),
