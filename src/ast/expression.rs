@@ -1,5 +1,7 @@
 use crate::ast::patterns::ZeaPattern;
 use crate::ast::statement::{FuncCall, StatementBlock};
+use crate::eval::ZeaEvalError;
+use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone)]
 pub enum ZeaExpression {
     FuncCall(FuncCall),
@@ -26,6 +28,28 @@ pub enum ZeaExpression {
     ConditionMatch(Box<ZeaExpression>, Vec<ConditionMatchArm>),
     IfThenElse(Box<ZeaExpression>, Box<ZeaExpression>, Box<ZeaExpression>),
 }
+
+impl Display for ZeaExpression {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
+        let s = match self {
+            ZeaExpression::Literal(l) => format!("{:?}", l),
+            ZeaExpression::Add(l, r) => format!("{} + {}", l, r),
+            _ => todo!(),
+        };
+        f.write_str(&s)
+    }
+}
+
+impl ZeaExpression {
+    pub fn wrap_cascading_type_error(err: ZeaEvalError) -> ZeaEvalError {
+        err.wrap(|err| format!("namely in:\n{err}\n"))
+    }
+
+    pub fn wrap_outer_type_error(&self, err: ZeaEvalError) -> ZeaEvalError {
+        err.wrap(|err| format!("Type Error in expression\n{self}\n{err}\n"))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PatternMatchArm {
     pub pattern: ZeaPattern,

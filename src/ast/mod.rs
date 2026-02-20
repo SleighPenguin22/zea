@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub mod cformatting;
 pub mod datatype;
 pub mod expression;
@@ -5,19 +6,27 @@ pub mod patterns;
 pub mod statement;
 
 use crate::ast::datatype::{TypedIdentifier, ZeaTypeIdent};
-use crate::ast::statement::{StatementBlock, VarDeclAssignment};
+use crate::ast::expression::{Literal, ZeaExpression};
+use crate::ast::statement::{StatementBlock, VarDeclAssignment, ZeaStatement};
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub struct ZeaModule {
-    path: PathBuf,
-    imports: ImportList,
-    exports: ExportList,
-    symbols: HashSet<TopLevelStatement>,
+    pub path: PathBuf,
+    pub imports: ImportList,
+    pub exports: ExportList,
+    pub symbols: HashSet<TopLevelStatement>,
 }
-
+impl ZeaModule {
+    pub(crate) fn find_entry_point(&self) -> Option<FuncDefinition> {
+        self.iter_symbols().find_map(|symbol| match symbol {
+            TopLevelStatement::FuncDefinition(f) if f.declaration.name == "main" => Some(f.clone()),
+            _ => None,
+        })
+    }
+}
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum TopLevelStatement {
     FuncDefinition(FuncDefinition),
@@ -37,8 +46,8 @@ pub struct FuncDeclaration {
 /// Functions may be imported as many times as needed.
 #[derive(Debug, Clone)]
 pub struct FuncDefinition {
-    declaration: FuncDeclaration,
-    body: StatementBlock,
+    pub declaration: FuncDeclaration,
+    pub body: StatementBlock,
 }
 impl PartialEq for FuncDefinition {
     fn eq(&self, other: &Self) -> bool {
@@ -75,12 +84,43 @@ impl Hash for GlobalConst {
 pub type ImportList = Vec<ZeaImportStatement>;
 pub type ExportList = Vec<ZeaExportStatement>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ZeaImportStatement {
     path: String,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ZeaExportStatement {
     Func(String),
     GlobalConst(String),
+}
+
+pub fn basic_module(
+    name: impl Into<String>,
+    symbols: impl Iterator<Item = TopLevelStatement>,
+) -> ZeaModule {
+    ZeaModule {
+        path: name.into().into(),
+        imports: vec![],
+        exports: vec![],
+        symbols: symbols.collect(),
+    }
+}
+
+pub fn basic_main_returning(value: u8) -> FuncDefinition {
+    FuncDefinition {
+        declaration: FuncDeclaration {
+            name: "main".to_string(),
+            args: vec![],
+            returns: ZeaTypeIdent::Basic("u8".to_string()),
+        },
+        body: StatementBlock(vec![return_literal_u8(value)]),
+    }
+}
+
+pub fn return_literal_u8(value: u8) -> ZeaStatement {
+    ZeaStatement::ReturnValue(literal_u8(value))
+}
+
+pub fn literal_u8(value: u8) -> ZeaExpression {
+    ZeaExpression::Literal(Literal::Integer(value as u64))
 }

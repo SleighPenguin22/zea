@@ -1,6 +1,8 @@
+#![allow(dead_code)]
 mod ast;
 mod driver;
 mod parser;
+mod eval;
 
 use crate::driver::Args;
 use clap::Parser;

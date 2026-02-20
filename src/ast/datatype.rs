@@ -32,6 +32,7 @@ pub enum ZeaUnionVariant {
 pub enum ZeaTypeIdent {
     /// Int, Bool, etc.
     Basic(String),
+
     /// `<type>&`
     Ptr(Box<ZeaTypeIdent>),
     /// `[<type>]`
@@ -65,6 +66,28 @@ impl Into<ZeaTypeIdent> for &str {
 impl Into<ZeaTypeIdent> for String {
     fn into(self) -> ZeaTypeIdent {
         ZeaTypeIdent::Basic(self)
+    }
+}
+
+impl ZeaTypeIdent {
+    pub fn basic_str() -> ZeaTypeIdent {
+        ZeaTypeIdent::Basic("Str".into())
+    }
+
+    pub fn basic_int() -> ZeaTypeIdent {
+        ZeaTypeIdent::Basic("I32".into())
+    }
+
+    pub fn basic_uint() -> ZeaTypeIdent {
+        ZeaTypeIdent::Basic("U32".into())
+    }
+
+    pub fn basic_float() -> ZeaTypeIdent {
+        ZeaTypeIdent::Basic("F32".into())
+    }
+
+    pub fn basic_bool() -> ZeaTypeIdent {
+        ZeaTypeIdent::Basic("Bool".into())
     }
 }
 

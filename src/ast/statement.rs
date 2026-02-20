@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::ast::expression::ZeaExpression;
 use crate::ast::patterns::ZeaPattern;
 
@@ -60,4 +61,14 @@ impl Into<ZeaExpression> for FuncCall {
 }
 
 #[derive(Debug, Clone)]
-pub struct StatementBlock(Vec<ZeaStatement>);
+pub struct StatementBlock(pub Vec<ZeaStatement>);
+
+impl StatementBlock {
+    pub fn iter(&self) -> impl Iterator<Item = &ZeaStatement> {
+        self.0.iter()
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = ZeaStatement> {
+        self.0.into_iter()
+    }
+}
