@@ -7,7 +7,7 @@ pub struct ZeaStructDefinition {
     members: ZeaStructInner,
 }
 
-#[derive(PartialEq, PartialOrd, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct ZeaNamedStruct {
     name: String,
     members: ZeaStructInner,
@@ -108,4 +108,5 @@ impl ZeaTypeIdent {
     }
 }
 
-pub type TypedIdentifier = (String, ZeaTypeIdent);
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+pub struct TypedIdentifier(String, ZeaTypeIdent);

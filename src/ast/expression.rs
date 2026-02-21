@@ -1,7 +1,8 @@
+use crate::analysis::ZeaTypeError;
 use crate::ast::patterns::ZeaPattern;
 use crate::ast::statement::{FuncCall, StatementBlock};
-use crate::eval::ZeaEvalError;
 use std::fmt::{Display, Formatter};
+
 #[derive(Debug, Clone)]
 pub enum ZeaExpression {
     FuncCall(FuncCall),
@@ -41,11 +42,11 @@ impl Display for ZeaExpression {
 }
 
 impl ZeaExpression {
-    pub fn wrap_cascading_type_error(err: ZeaEvalError) -> ZeaEvalError {
+    pub fn wrap_cascading_type_error(err: ZeaTypeError) -> ZeaTypeError {
         err.wrap(|err| format!("namely in:\n{err}\n"))
     }
 
-    pub fn wrap_outer_type_error(&self, err: ZeaEvalError) -> ZeaEvalError {
+    pub fn wrap_outer_type_error(&self, err: ZeaTypeError) -> ZeaTypeError {
         err.wrap(|err| format!("Type Error in expression\n{self}\n{err}\n"))
     }
 }

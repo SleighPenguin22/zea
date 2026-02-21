@@ -2,7 +2,7 @@
 mod ast;
 mod driver;
 mod parser;
-mod eval;
+mod analysis;
 
 use crate::driver::Args;
 use clap::Parser;
