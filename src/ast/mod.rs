@@ -97,11 +97,13 @@ pub enum ZeaExportStatement {
     GlobalConst(String),
 }
 
-mod utils {
+pub mod utils {
+    use super::*;
     use crate::ast::{
         FuncDeclaration, FuncDefinition, Literal, StatementBlock, TopLevelStatement, ZeaExpression,
         ZeaModule, ZeaStatement, ZeaTypeIdent,
     };
+    use statements::return_literal_int;
 
     pub fn basic_module(
         name: impl Into<String>,
@@ -122,15 +124,79 @@ mod utils {
                 args: vec![],
                 returns: ZeaTypeIdent::Basic("u8".to_string()),
             },
-            body: StatementBlock(vec![return_literal_u8(value)]),
+            body: StatementBlock(vec![return_literal_int(value as u64)]),
         }
     }
 
-    pub fn return_literal_u8(value: u8) -> ZeaStatement {
-        ZeaStatement::ReturnValue(literal_u8(value))
+    mod statements {
+        use super::expressions::expr_literal_int;
+        use super::*;
+        pub fn return_literal_int(value: u64) -> ZeaStatement {
+            ZeaStatement::ReturnValue(expr_literal_int(value))
+        }
     }
 
-    pub fn literal_u8(value: u8) -> ZeaExpression {
-        ZeaExpression::Literal(Literal::Integer(value as u64))
+    pub mod expressions {
+       use super::*;
+        pub fn expr_literal_int(value: u64) -> ZeaExpression {
+            ZeaExpression::Literal(Literal::Integer(value))
+        }
+    }
+
+    pub mod literals {
+        use super::*;
+
+        pub fn literal_int(value: u64) -> Literal {
+            Literal::Integer(value)
+        }
+
+        pub fn literal_float(value: f64) -> Literal {
+            Literal::Float(value)
+        }
+
+        pub fn literal_bool(value: bool) -> Literal {
+            Literal::Boolean(value)
+        }
+        pub fn literal_string(value: impl Into<String>) -> Literal {
+            Literal::String(value.into())
+        }
+    }
+    pub mod types {
+        use crate::ast::ZeaTypeIdent;
+
+        pub fn ptr_to(typ: ZeaTypeIdent) -> ZeaTypeIdent {
+            ZeaTypeIdent::Ptr(Box::new(typ))
+        }
+        pub fn array_of(typ: ZeaTypeIdent) -> ZeaTypeIdent {
+            ZeaTypeIdent::ArrayOf(Box::new(typ))
+        }
+
+        pub fn slice_of(typ: ZeaTypeIdent) -> ZeaTypeIdent {
+            ZeaTypeIdent::Slice(Box::new(typ))
+        }
+
+        pub fn optional(typ: ZeaTypeIdent) -> ZeaTypeIdent {
+            ZeaTypeIdent::Option(Box::new(typ))
+        }
+
+        pub fn basic_str() -> ZeaTypeIdent {
+            ZeaTypeIdent::Basic("Str".into())
+        }
+
+        pub fn basic_int() -> ZeaTypeIdent {
+            ZeaTypeIdent::Basic("I32".into())
+        }
+
+        pub fn basic_uint() -> ZeaTypeIdent {
+            ZeaTypeIdent::Basic("U32".into())
+        }
+
+        pub fn basic_float() -> ZeaTypeIdent {
+            ZeaTypeIdent::Basic("F32".into())
+        }
+
+        pub fn basic_bool() -> ZeaTypeIdent {
+            ZeaTypeIdent::Basic("Bool".into())
+        }
     }
 }

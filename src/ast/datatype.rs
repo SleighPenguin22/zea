@@ -28,7 +28,7 @@ pub enum ZeaUnionVariant {
 /// The Type that is bundled with a:
 /// - function parameter
 /// - identifier in declaration(-assignments)
-#[derive(PartialEq, PartialOrd, Eq, Clone, Hash)]
+#[derive(PartialEq, Eq, Clone, Hash)]
 pub enum ZeaTypeIdent {
     /// Int, Bool, etc.
     Basic(String),
@@ -70,41 +70,14 @@ impl Into<ZeaTypeIdent> for String {
 }
 
 impl ZeaTypeIdent {
-    pub fn basic_str() -> ZeaTypeIdent {
-        ZeaTypeIdent::Basic("Str".into())
-    }
-
-    pub fn basic_int() -> ZeaTypeIdent {
-        ZeaTypeIdent::Basic("I32".into())
-    }
-
-    pub fn basic_uint() -> ZeaTypeIdent {
-        ZeaTypeIdent::Basic("U32".into())
-    }
-
-    pub fn basic_float() -> ZeaTypeIdent {
-        ZeaTypeIdent::Basic("F32".into())
-    }
-
-    pub fn basic_bool() -> ZeaTypeIdent {
-        ZeaTypeIdent::Basic("Bool".into())
-    }
-}
-
-impl ZeaTypeIdent {
-    pub fn ptr(typ: ZeaTypeIdent) -> ZeaTypeIdent {
-        ZeaTypeIdent::Ptr(Box::new(typ))
-    }
-    pub fn array(typ: ZeaTypeIdent) -> ZeaTypeIdent {
-        ZeaTypeIdent::ArrayOf(Box::new(typ))
-    }
-
-    pub fn slice(typ: ZeaTypeIdent) -> ZeaTypeIdent {
-        ZeaTypeIdent::Slice(Box::new(typ))
-    }
-
-    pub fn option(typ: ZeaTypeIdent) -> ZeaTypeIdent {
-        ZeaTypeIdent::Option(Box::new(typ))
+    pub fn get_basic(&self) -> &String {
+        match self {
+            ZeaTypeIdent::Basic(typ) => typ,
+            ZeaTypeIdent::ArrayOf(t) => t.get_basic(),
+            ZeaTypeIdent::Ptr(t) => t.get_basic(),
+            ZeaTypeIdent::Option(t) => t.get_basic(),
+            ZeaTypeIdent::Slice(t) => t.get_basic(),
+        }
     }
 }
 

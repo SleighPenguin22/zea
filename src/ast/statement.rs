@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use crate::ast::ZeaTypeIdent;
 use crate::ast::expression::ZeaExpression;
 use crate::ast::patterns::ZeaPattern;
 
@@ -13,6 +14,7 @@ pub enum ZeaStatement {
 }
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct VarDecl {
+    pub typ: ZeaTypeIdent,
     pub assignee: ZeaPattern,
     pub mutable: bool,
 }
