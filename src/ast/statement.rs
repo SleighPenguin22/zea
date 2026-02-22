@@ -3,7 +3,7 @@ use crate::ast::ZeaTypeIdent;
 use crate::ast::expression::ZeaExpression;
 use crate::ast::patterns::ZeaPattern;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ZeaStatement {
     VarDecl(VarDecl),
     VarDeclAssignment(VarDeclAssignment),
@@ -23,7 +23,7 @@ impl Into<ZeaStatement> for VarDecl {
         ZeaStatement::VarDecl(self)
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VarDeclAssignment {
     pub decl: VarDecl,
     pub value: ZeaExpression,
@@ -33,7 +33,7 @@ impl Into<ZeaStatement> for VarDeclAssignment {
         ZeaStatement::VarDeclAssignment(self)
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VarReassignment {
     pub assignee: ZeaPattern,
     pub value: ZeaExpression,
@@ -45,7 +45,7 @@ impl Into<ZeaStatement> for VarReassignment {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FuncCall {
     pub name: String,
     pub args: Vec<ZeaExpression>,
@@ -62,7 +62,7 @@ impl Into<ZeaExpression> for FuncCall {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StatementBlock(pub Vec<ZeaStatement>);
 
 impl StatementBlock {

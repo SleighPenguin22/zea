@@ -133,3 +133,4 @@ build-iPhoneSimulator/
 # .rubocop-https?--*
 
 /.idea/
+test.c

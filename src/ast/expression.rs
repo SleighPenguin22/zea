@@ -3,7 +3,7 @@ use crate::ast::patterns::ZeaPattern;
 use crate::ast::statement::{FuncCall, StatementBlock};
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ZeaExpression {
     FuncCall(FuncCall),
     Literal(Literal),
@@ -51,17 +51,17 @@ impl ZeaExpression {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PatternMatchArm {
     pub pattern: ZeaPattern,
     pub value: Box<ZeaExpression>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConditionMatchArm {
     pub condition: Box<ZeaExpression>,
     pub value: Box<ZeaExpression>,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Integer(u64),
     Float(f64),

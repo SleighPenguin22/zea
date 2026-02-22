@@ -99,11 +99,11 @@ pub enum ZeaExportStatement {
 
 pub mod utils {
     use super::*;
+    use crate::ast::utils::statements::return_literal_int;
     use crate::ast::{
         FuncDeclaration, FuncDefinition, Literal, StatementBlock, TopLevelStatement, ZeaExpression,
         ZeaModule, ZeaStatement, ZeaTypeIdent,
     };
-    use statements::return_literal_int;
 
     pub fn basic_module(
         name: impl Into<String>,
@@ -128,16 +128,68 @@ pub mod utils {
         }
     }
 
-    mod statements {
+    pub mod statements {
         use super::expressions::expr_literal_int;
         use super::*;
+        use crate::ast::patterns::ZeaPattern;
+        use crate::ast::statement::VarDecl;
         pub fn return_literal_int(value: u64) -> ZeaStatement {
             ZeaStatement::ReturnValue(expr_literal_int(value))
+        }
+
+        /// A basic declaration like
+        ///
+        /// `const int a;`
+        /// `char b;`
+        pub fn basic_declaration(typ: ZeaTypeIdent, name: impl Into<String>) -> ZeaStatement {
+            ZeaStatement::VarDecl(VarDecl {
+                mutable: true,
+                typ,
+                assignee: ZeaPattern::Ident(name.into()),
+            })
+        }
+
+        /// A basic declaration like
+        ///
+        /// `const int a = 3;`
+        /// `char b = 'b';`
+        pub fn basic_assignment_mut(
+            typ: ZeaTypeIdent,
+            name: impl Into<String>,
+            value: ZeaExpression,
+        ) -> ZeaStatement {
+            ZeaStatement::VarDeclAssignment(VarDeclAssignment {
+                decl: VarDecl {
+                    mutable: true,
+                    typ,
+                    assignee: ZeaPattern::Ident(name.into()),
+                },
+                value,
+            })
+        }
+
+        /// A basic declaration like
+        ///
+        /// `const int a = 3;`
+        /// `char b = 'b';`
+        pub fn basic_assignment_immut(
+            typ: ZeaTypeIdent,
+            name: impl Into<String>,
+            value: ZeaExpression,
+        ) -> ZeaStatement {
+            ZeaStatement::VarDeclAssignment(VarDeclAssignment {
+                decl: VarDecl {
+                    mutable: false,
+                    typ,
+                    assignee: ZeaPattern::Ident(name.into()),
+                },
+                value,
+            })
         }
     }
 
     pub mod expressions {
-       use super::*;
+        use super::*;
         pub fn expr_literal_int(value: u64) -> ZeaExpression {
             ZeaExpression::Literal(Literal::Integer(value))
         }

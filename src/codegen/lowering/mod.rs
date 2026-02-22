@@ -1,60 +1,67 @@
+mod error;
+
 use crate::ast::patterns::ZeaPattern;
 use crate::ast::statement::VarDecl;
-use crate::ast::{VarDeclAssignment, ZeaExpression, ZeaTypeIdent};
+use crate::ast::{VarDeclAssignment, ZeaExpression, ZeaStatement, ZeaTypeIdent};
 use crate::codegen::CodegenResult;
 use std::any::Any;
 use std::fmt::Debug;
 
-pub type LoweringResult<T> = Result<T, DesugaringError>;
+pub type LoweringResult<T> = Result<T, LoweringError>;
 
-mod error {
-    use crate::ast::patterns::ZeaPattern;
-
-    pub enum DesugaringError {
-        InvalidPattern(ZeaPattern),
-    }
-
-    impl std::fmt::Display for DesugaringError {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(f, "{:?}", self)
-        }
-    }
-
-    impl std::fmt::Debug for DesugaringError {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(
-                f,
-                "{:?}",
-                match self {
-                    DesugaringError::InvalidPattern(p) => format!("InvalidPattern: {:?}", p),
-                }
-            )
-        }
-    }
-}
 use crate::codegen::expr::CExpr;
-use error::DesugaringError;
+use error::LoweringError;
 
-pub trait DesugarInto {
+/// Define some transformation on a node that desugars/lowers it into some other node
+///
+/// i.e. a destructuring assignment into multiple assignments.
+pub trait LowerInto {
     type LoweredOutput;
 
-    fn desugar(self) -> LoweringResult<Self::LoweredOutput>;
+    fn lower_into(self) -> LoweringResult<Self::LoweredOutput>;
+}
+#[derive(Debug, PartialEq, Clone)]
+pub enum LoweredStatement {
+    DeclAssign(LoweredVarDeclAssignment),
+    Decl(LoweredVarDecl),
+    ReturnValue(ZeaExpression),
+    ReturnVoid,
 }
 
-pub trait CAssignment {
-    fn c_assignee(&self, rhs: &ZeaExpression) -> CodegenResult<String>;
-}
-
-impl CAssignment for VarDeclAssignment {
-    fn c_assignee(&self, rhs: &ZeaExpression) -> CodegenResult<String> {
-        let lowered = self.desugar().map_err(|err| Err(err.to_string()))?;
-        Ok(lowered
-            .iter()
-            .map(|assignment| assignment.c_stmt())
-            .join(";\n"))
+impl From<LoweredVarDeclAssignment> for LoweredStatement {
+    fn from(value: LoweredVarDeclAssignment) -> LoweredStatement {
+        LoweredStatement::DeclAssign(value)
     }
 }
 
+impl From<LoweredVarDecl> for LoweredStatement {
+    fn from(value: LoweredVarDecl) -> LoweredStatement {
+        LoweredStatement::Decl(value)
+    }
+}
+
+impl LowerInto for ZeaStatement {
+    type LoweredOutput = Vec<LoweredStatement>;
+
+    fn lower_into(self) -> LoweringResult<Self::LoweredOutput> {
+        match self {
+            ZeaStatement::VarDeclAssignment(vda) => Ok(vda
+                .lower_into()?
+                .into_iter()
+                .map(LoweredStatement::from)
+                .collect()),
+            ZeaStatement::VarDecl(vd) => Ok(vd
+                .lower_into()?
+                .into_iter()
+                .map(LoweredStatement::from)
+                .collect()),
+            _ => unimplemented!(
+                "lowering is only implemented for declarations and assignments for now"
+            ),
+        }
+    }
+}
+#[derive(Debug, PartialEq, Clone)]
 pub struct LoweredVarDeclAssignment {
     pub lowered_var_decl: LoweredVarDecl,
     pub value: ZeaExpression,
@@ -86,6 +93,7 @@ impl LoweredVarDeclAssignment {
     }
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub struct LoweredVarDecl {
     pub mutable: bool,
     pub typ: ZeaTypeIdent,
@@ -112,6 +120,16 @@ impl LoweredVarDecl {
     }
 }
 
+impl LowerInto for VarDecl {
+    type LoweredOutput = Vec<LoweredVarDecl>;
+    fn lower_into(self) -> LoweringResult<Vec<LoweredVarDecl>> {
+        match self.assignee {
+            ZeaPattern::Ident(_) => Ok(vec![self.lower_basic()?]),
+            _ => unimplemented!("only basic non-destructuring assignments are allowed for now"),
+        }
+    }
+}
+
 impl VarDeclAssignment {
     pub fn lower_basic_lhs(self) -> LoweringResult<LoweredVarDeclAssignment> {
         if let ZeaPattern::Ident(ref _ident) = self.decl.assignee {
@@ -120,7 +138,7 @@ impl VarDeclAssignment {
                 value: self.value,
             })
         } else {
-            Err(DesugaringError::InvalidPattern(self.decl.assignee.clone()))
+            Err(LoweringError::InvalidPattern(self.decl.assignee.clone()))
         }
     }
 }
@@ -134,14 +152,14 @@ impl VarDecl {
                 assignee: ident,
             })
         } else {
-            Err(DesugaringError::InvalidPattern(self.assignee.clone()))
+            Err(LoweringError::InvalidPattern(self.assignee.clone()))
         }
     }
 }
 
-impl DesugarInto for VarDeclAssignment {
+impl LowerInto for VarDeclAssignment {
     type LoweredOutput = Vec<LoweredVarDeclAssignment>;
-    fn desugar(self) -> LoweringResult<Self::LoweredOutput> {
+    fn lower_into(self) -> LoweringResult<Self::LoweredOutput> {
         match self.decl.assignee {
             ZeaPattern::Ident(_) => Ok(vec![self.lower_basic_lhs()?]),
             _ => todo!("desugaring of destructured bindings in assigment"),
