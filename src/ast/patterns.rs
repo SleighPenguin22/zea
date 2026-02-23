@@ -24,5 +24,26 @@ pub enum ZeaPattern {
     /// the pattern `std:option:None => ...`
     OptionNone,
     /// the pattern `union:Variant(<pat>) => ...`
-    UnionVariant(String, Box<ZeaPattern>),
+    UnionVariant(String, String, Box<ZeaPattern>),
+}
+
+impl std::fmt::Display for ZeaPattern {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s = match self {
+            ZeaPattern::Ident(s) => s.clone(),
+            ZeaPattern::ListHeadTail(head, tail) => {
+                format!("[{head}, {tail}..]")
+            }
+            ZeaPattern::TupleUnpack(tups) => {
+                let s: Vec<String> = tups.iter().map(|pat| pat.to_string()).collect();
+                format!("({})", s.join(", "))
+            }
+            ZeaPattern::OptionSome(p) => format!("Some({p})"),
+            ZeaPattern::OptionNone => "None".to_string(),
+            ZeaPattern::UnionVariant(union, variant, pat) => {
+                format!("{union}:{variant}({pat})")
+            }
+        };
+        write!(f, "{}", s)
+    }
 }
