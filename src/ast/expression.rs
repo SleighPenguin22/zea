@@ -69,24 +69,26 @@ pub enum Literal {
     String(String),
 }
 
-impl Into<Literal> for u64 {
-    fn into(self) -> Literal {
-        Literal::Integer(self)
-    }
-}
-impl Into<Literal> for f64 {
-    fn into(self) -> Literal {
-        Literal::Float(self)
-    }
-}
-impl Into<Literal> for bool {
-    fn into(self) -> Literal {
-        Literal::Boolean(self)
+impl From<u64> for Literal {
+    fn from(value: u64) -> Self {
+        Literal::Integer(value)
     }
 }
 
-impl Into<Literal> for String {
-    fn into(self) -> Literal {
-        Literal::String(self)
+impl From<f64> for Literal {
+    fn from(value: f64) -> Self {
+        Literal::Float(value)
+    }
+}
+
+impl From<bool> for Literal {
+    fn from(value: bool) -> Self {
+        Literal::Boolean(value)
+    }
+}
+
+impl From<String> for Literal {
+    fn from(value: String) -> Self {
+        Literal::String(value)
     }
 }

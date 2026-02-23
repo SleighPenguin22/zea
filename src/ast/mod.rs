@@ -193,6 +193,15 @@ pub mod utils {
         pub fn expr_literal_int(value: u64) -> ZeaExpression {
             ZeaExpression::Literal(Literal::Integer(value))
         }
+        
+        macro_rules! expr_return {
+            (return $l:literal) => {
+                {
+                    ZeaExpression::Literal(Literal::from($l))
+
+                }
+            };
+        }
     }
 
     pub mod literals {
