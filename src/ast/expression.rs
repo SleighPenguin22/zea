@@ -2,6 +2,8 @@ use crate::analysis::ZeaTypeError;
 use crate::ast::patterns::ZeaPattern;
 use crate::ast::statement::{FuncCall, StatementBlock};
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
+use std::hint::unreachable_unchecked;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ZeaExpression {
@@ -30,27 +32,6 @@ pub enum ZeaExpression {
     IfThenElse(Box<ZeaExpression>, Box<ZeaExpression>, Box<ZeaExpression>),
 }
 
-impl Display for ZeaExpression {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        let s = match self {
-            ZeaExpression::Literal(l) => format!("{:?}", l),
-            ZeaExpression::Add(l, r) => format!("{} + {}", l, r),
-            _ => todo!(),
-        };
-        f.write_str(&s)
-    }
-}
-
-impl ZeaExpression {
-    pub fn wrap_cascading_type_error(err: ZeaTypeError) -> ZeaTypeError {
-        err.wrap(|err| format!("namely in:\n{err}\n"))
-    }
-
-    pub fn wrap_outer_type_error(&self, err: ZeaTypeError) -> ZeaTypeError {
-        err.wrap(|err| format!("Type Error in expression\n{self}\n{err}\n"))
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct PatternMatchArm {
     pub pattern: ZeaPattern,
@@ -61,12 +42,42 @@ pub struct ConditionMatchArm {
     pub condition: Box<ZeaExpression>,
     pub value: Box<ZeaExpression>,
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Literal {
     Integer(u64),
     Float(f64),
     Boolean(bool),
     String(String),
+}
+
+impl PartialEq for Literal {
+    fn eq(&self, other: &Self) -> bool {
+        if let (Self::Float(a), Self::Float(b)) = (self, other) {
+            if a.is_nan() && b.is_nan() {
+                return true;
+            }
+        }
+        match (self, other) {
+            (Self::Integer(a), Self::Integer(b)) => a == b,
+            (Self::Boolean(a), Self::Boolean(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Eq for Literal {}
+
+impl Hash for Literal {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Float(f) if f.is_nan() => state.write(&*f64::NAN.to_ne_bytes().as_ref()),
+            Self::Float(f) => state.write(&*f.to_ne_bytes().as_ref()),
+            Self::Boolean(b) => b.hash(state),
+            Self::String(s) => s.hash(state),
+            Self::Integer(i) => i.hash(state),
+        }
+    }
 }
 
 impl From<u64> for Literal {

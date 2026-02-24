@@ -1,9 +1,8 @@
 #![allow(dead_code)]
+mod analysis;
 mod ast;
 mod driver;
 mod parser;
-mod analysis;
-mod codegen;
 
 use crate::driver::Args;
 use clap::Parser;

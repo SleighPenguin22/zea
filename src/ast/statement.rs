@@ -5,8 +5,7 @@ use crate::ast::patterns::ZeaPattern;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ZeaStatement {
-    VarDecl(VarDecl),
-    VarDeclAssignment(VarDeclAssignment),
+    VarInitialisation(VarInitialisation),
     VarReassignment(VarReassignment),
     FuncCall(FuncCall),
     ReturnVoid,
@@ -18,31 +17,29 @@ pub struct VarDecl {
     pub assignee: ZeaPattern,
     pub mutable: bool,
 }
-impl Into<ZeaStatement> for VarDecl {
-    fn into(self) -> ZeaStatement {
-        ZeaStatement::VarDecl(self)
-    }
-}
+
 #[derive(Debug, Clone, PartialEq)]
-pub struct VarDeclAssignment {
+pub struct VarInitialisation {
     pub decl: VarDecl,
     pub value: ZeaExpression,
 }
-impl Into<ZeaStatement> for VarDeclAssignment {
-    fn into(self) -> ZeaStatement {
-        ZeaStatement::VarDeclAssignment(self)
+
+impl From<VarReassignment> for ZeaStatement {
+    fn from(var: VarReassignment) -> Self {
+        ZeaStatement::VarReassignment(var)
     }
 }
+
+impl From<VarInitialisation> for ZeaStatement {
+    fn from(var: VarInitialisation) -> Self {
+        ZeaStatement::VarInitialisation(var)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarReassignment {
     pub assignee: ZeaPattern,
     pub value: ZeaExpression,
-}
-
-impl Into<ZeaStatement> for VarReassignment {
-    fn into(self) -> ZeaStatement {
-        ZeaStatement::VarReassignment(self)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -51,26 +48,16 @@ pub struct FuncCall {
     pub args: Vec<ZeaExpression>,
 }
 
-impl Into<ZeaStatement> for FuncCall {
-    fn into(self) -> ZeaStatement {
-        ZeaStatement::FuncCall(self)
-    }
-}
-impl Into<ZeaExpression> for FuncCall {
-    fn into(self) -> ZeaExpression {
-        ZeaExpression::FuncCall(self)
+impl From<FuncCall> for ZeaStatement {
+    fn from(func: FuncCall) -> Self {
+        ZeaStatement::FuncCall(func)
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct StatementBlock(pub Vec<ZeaStatement>);
-
-impl StatementBlock {
-    pub fn iter(&self) -> impl Iterator<Item = &ZeaStatement> {
-        self.0.iter()
-    }
-
-    pub fn into_iter(self) -> impl Iterator<Item = ZeaStatement> {
-        self.0.into_iter()
+impl From<FuncCall> for ZeaExpression {
+    fn from(func: FuncCall) -> Self {
+        ZeaExpression::FuncCall(func)
     }
 }
+
+pub type StatementBlock = Vec<ZeaStatement>;
