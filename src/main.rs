@@ -1,14 +1,15 @@
-use std::fs;
-use std::fmt;
+#![allow(dead_code)]
+mod analysis;
+mod ast;
+mod driver;
+mod parser;
+
+use crate::driver::Args;
 use clap::Parser;
+use std::fmt;
+use std::fs;
 
 /// Zea compiler
-#[derive(Parser, Debug)]
-#[command(version, about)]
-struct Args {
-    #[arg(short, long)]
-    filename: String,
-}
 
 enum Token {
     Plus,
@@ -22,7 +23,7 @@ fn tokenize(input: &String) -> Vec<Token> {
     let mut tokens: Vec<Token> = vec![];
     for c in input.chars() {
         if c.is_whitespace() {
-            continue
+            continue;
         }
 
         match c {
@@ -30,7 +31,7 @@ fn tokenize(input: &String) -> Vec<Token> {
             '-' => tokens.push(Token::Minus),
             '*' => tokens.push(Token::Times),
             '/' => tokens.push(Token::Divide),
-            _ => todo!()
+            _ => todo!(),
         }
     }
     tokens
