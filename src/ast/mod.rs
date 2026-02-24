@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_imports)]
 pub mod datatype;
 pub mod expression;
 pub mod patterns;
@@ -6,7 +6,7 @@ pub mod statement;
 pub mod utils;
 
 pub use crate::ast::{
-    datatype::{TypedIdentifier, ZeaTypeIdent, ZeaNamedStruct, ZeaStructDefinition},
+    datatype::{TypedIdentifier, ZeaNamedStruct, ZeaStructDefinition, ZeaTypeIdent},
     expression::{Literal, ZeaExpression},
     statement::{StatementBlock, VarInitialisation, ZeaStatement},
 };
