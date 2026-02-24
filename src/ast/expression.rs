@@ -32,16 +32,9 @@ pub enum ZeaExpression {
     IfThenElse(Box<ZeaExpression>, Box<ZeaExpression>, Box<ZeaExpression>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct PatternMatchArm {
-    pub pattern: ZeaPattern,
-    pub value: Box<ZeaExpression>,
-}
-#[derive(Debug, Clone, PartialEq)]
-pub struct ConditionMatchArm {
-    pub condition: Box<ZeaExpression>,
-    pub value: Box<ZeaExpression>,
-}
+pub type PatternMatchArm = (ZeaPattern, Box<ZeaExpression>);
+
+pub type ConditionMatchArm = (Box<ZeaExpression>, Box<ZeaExpression>);
 #[derive(Debug, Clone)]
 pub enum Literal {
     Integer(u64),

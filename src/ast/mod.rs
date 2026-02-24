@@ -6,7 +6,7 @@ pub mod statement;
 pub mod utils;
 
 pub use crate::ast::{
-    datatype::{TypedIdentifier, ZeaTypeIdent},
+    datatype::{TypedIdentifier, ZeaTypeIdent, ZeaNamedStruct, ZeaStructDefinition},
     expression::{Literal, ZeaExpression},
     statement::{StatementBlock, VarInitialisation, ZeaStatement},
 };
