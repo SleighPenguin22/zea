@@ -1,11 +1,10 @@
-pub mod codegen;
-
-use crate::ast::expression::{ConditionMatchArm, PatternMatchArm};
-use crate::ast::statement::{FunctionCall, VarInitialisation};
+use crate::ast::datatype::TupleSignature;
+use crate::ast::expression::PatternMatchArm;
+use crate::ast::statement::VarInitialisation;
 use crate::ast::{
-    AssignmentPattern, ConstInitialisation, Expression, Literal, StatementBlock, Type,
+    ConstInitialisation, Expression, StatementBlock, StructDefinition, Type, TypedIdentifier,
 };
-use crate::lowering::codegen::CNode;
+use std::collections::HashSet;
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq, Hash)]
@@ -15,10 +14,6 @@ pub enum LoweringError {
 }
 pub type LoweringResult<T> = Result<T, LoweringError>;
 
-pub trait LowerInto<T> {
-    fn lower_into(self) -> LoweringResult<T>;
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct LoweredVarInitialisation {
     pub typ: Type,
@@ -26,24 +21,52 @@ pub struct LoweredVarInitialisation {
     pub value: Expression,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct LoweredConstInitialisation {
-    pub typ: Type,
-    pub assignee: String,
-    pub value: Expression,
+pub trait DesugarDestructuring {
+    type Output;
+    fn desugar_destructuring(&mut self) -> LoweringResult<Self::Output>;
 }
 
-impl LowerInto<Vec<LoweredVarInitialisation>> for VarInitialisation {
-    fn lower_into(self) -> LoweringResult<Vec<LoweredVarInitialisation>> {
-        match self.assignee {
-            AssignmentPattern::Identifier(assignee) => Ok(vec![LoweredVarInitialisation {
-                assignee,
-                typ: self.typ,
-                value: self.value,
-            }]),
-            AssignmentPattern::Tuple(_) => {
-                unimplemented!("remaining lowerings for assignment patterns")
-            }
+#[derive(Debug, PartialEq, Clone)]
+pub struct DesugaredConstInitialisation {
+    pub temporary: ConstInitialisation,
+    pub unpacked_assignments: Vec<ConstInitialisation>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct DesugaredVarInitialisation {
+    pub temporary: ConstInitialisation,
+    pub unpacked_assignments: Vec<VarInitialisation>,
+}
+
+pub trait DesugarMatchExpression {
+    type MatchArmOutput;
+    type MatchArm;
+    fn desugar_match_arm(arm: PatternMatchArm) -> LoweringResult<StatementBlock>;
+    fn desugar_match_expression(&self) -> LoweringResult<StatementBlock> {}
+}
+
+pub struct TupleNamer {
+    current_id: usize,
+    cache: HashSet<StructDefinition>,
+}
+
+pub struct TupleWithNamedMembers {
+    members: Vec<TypedIdentifier>,
+}
+
+impl TupleNamer {
+    pub fn new() -> Self {
+        Self {
+            current_id: 0,
+            cache: HashSet::new(),
         }
+    }
+
+    pub fn name_tuple(&mut self, tuple: TupleSignature) -> StructDefinition {
+        todo!()
+    }
+
+    pub fn has_named_tuple(tuple: &TupleSignature) -> bool {
+        todo!()
     }
 }

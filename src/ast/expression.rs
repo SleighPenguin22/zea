@@ -1,9 +1,6 @@
-use crate::analysis::ZeaTypeError;
 use crate::ast::patterns::AssignmentPattern;
 use crate::ast::statement::{FunctionCall, StatementBlock};
-use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::hint::unreachable_unchecked;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -28,9 +25,27 @@ pub enum Expression {
 
     Block(StatementBlock),
 
-    PatternMatch(Box<Expression>, Vec<PatternMatchArm>),
-    ConditionMatch(Vec<ConditionMatchArm>),
-    IfThenElse(Box<Expression>, Box<Expression>, Box<Expression>),
+    PatternMatch(PatternMatch),
+    ConditionMatch(ConditionMatch),
+    IfThenElse(IfThenElse),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConditionMatch {
+    conditions: Vec<ConditionMatchArm>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PatternMatch {
+    subject: Box<Expression>,
+    patterns: Vec<PatternMatchArm>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct IfThenElse {
+    condition: Box<Expression>,
+    true_case: Box<Expression>,
+    false_case: Option<Box<Expression>>,
 }
 
 pub type PatternMatchArm = (AssignmentPattern, Box<Expression>);

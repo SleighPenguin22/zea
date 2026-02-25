@@ -1,31 +1,31 @@
-/// Lhs's of decl-assignments, reassignments and match-arms
+/// the left hand side of an assignment
 ///
 /// The simplest is a basic identifier
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum AssignmentPattern {
-    /// the pattern `a => ...`
+    /// the pattern
+    ///
+    /// `var a: ...`
+    ///
     /// or
-    /// `const a := ...`
+    ///
+    /// `a := ...`
     Identifier(String),
-    /// the pattern `(<pat>, <pat>, <pat>) => ...`
+    /// the pattern
+    ///
+    /// `(<pat>, <pat>, <pat>) := ...`
     ///
     /// or
     ///
-    /// `const (a,b,c) = ...`
+    /// `var (a,b,c) := ...`
     Tuple(Vec<AssignmentPattern>),
 }
 
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum MatchPattern {
     /// the pattern `a => ...`
-    /// or
-    /// `const a := ...`
     Identifier(String),
-    /// the pattern `(<pat>, <pat>, <pat>) => ...`
-    ///
-    /// or
-    ///
-    /// `const (a,b,c) = ...`
+    /// the pattern `(<pat>, <pat>, ...) => ...`
     Tuple(Vec<AssignmentPattern>),
 
     UnionVariant(String, String, Box<AssignmentPattern>),

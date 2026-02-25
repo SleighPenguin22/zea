@@ -4,6 +4,7 @@ mod ast;
 mod driver;
 mod parser;
 pub mod lowering;
+pub mod codegen;
 
 use crate::driver::Args;
 use clap::Parser;

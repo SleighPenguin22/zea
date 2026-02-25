@@ -6,6 +6,11 @@ pub struct StructDefinition {
     name: String,
     members: Vec<TypedIdentifier>,
 }
+
+pub struct TupleSignature {
+    members: Vec<Type>,
+}
+
 pub struct Union {
     pub name: String,
     pub members: Vec<UnionVariant>,
