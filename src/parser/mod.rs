@@ -31,24 +31,18 @@ enum Token {
     Identifier(String),
 }
 
-impl<'a> ParsingState<'a> {
-    pub fn parse(&self) -> ParseResult<'a, u8> {
-        let state = ParsingState { line: 42, column: 32, input: self.input, index: 10000 };
-        Ok((42, state))
-    }
+pub fn parse<'a> (state: &'a ParsingState) -> ParseResult<'a, u8> {
+    let state = ParsingState { line: 42, column: 32, input: self.input, index: 10000 };
+    Ok((42, state))
+}
 
-    pub fn peek(&self) -> char {
-        self.input[self.index];
+impl<'a> ParsingState<'a> {
+    pub fn peek(&self) -> Option<char> {
+        self.input.chars().nth(index)
     }
 
     pub fn advance(&self) -> Option<ParsingState<'a>> {
-        assert!(self.index < self.input.len());
-
-        if self.index == self.input.len() {
-            return None;
-        }
-
-        let (line, column) = if self.peek().is_newline() {
+        let (line, column) = if self.peek()?.is_newline() {
             (self.line + 1, 1)
         } else {
             (self.line, self.column + 1)
