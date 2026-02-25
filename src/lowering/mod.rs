@@ -39,11 +39,10 @@ pub struct DesugaredVarInitialisation {
 }
 
 pub trait DesugarMatchExpression {
-    type MatchArmOutput;
-    type MatchArm;
     fn desugar_match_arm(arm: PatternMatchArm) -> LoweringResult<StatementBlock>;
     fn desugar_match_expression(&self) -> LoweringResult<StatementBlock> {}
 }
+
 
 pub struct TupleNamer {
     current_id: usize,

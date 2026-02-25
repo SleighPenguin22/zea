@@ -30,7 +30,7 @@ pub enum Type {
     Basic(String),
 
     /// `<type>&`
-    Ptr(Box<Type>),
+    Pointer(Box<Type>),
     /// `[<type>]`
     ArrayOf(Box<Type>),
     // /// `&[<type>]`
@@ -45,7 +45,7 @@ impl Debug for Type {
             Type::Basic(typ) => typ,
             Type::ArrayOf(arr) => &format!("[{arr:?}]"),
             // Type::Option(opt) => &format!("?{opt:?}"),
-            Type::Ptr(ptr) => &format!("&{ptr:?}"),
+            Type::Pointer(ptr) => &format!("&{ptr:?}"),
             // Type::Slice(slice) => &format!("&[{slice:?}]"),
         };
 

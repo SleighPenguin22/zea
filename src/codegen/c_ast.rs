@@ -1,22 +1,24 @@
+use std::hash::{Hash, Hasher};
+
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
+pub enum CExpression {
     FuncCall(FunctionCall),
-    Literal(Literal),
-    Add(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    Sub(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    Mul(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    Div(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    Mod(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    Neg(Box<crate::ast::Expression>),
+    Literal(CLiteral),
+    Add(Box<CExpression>, Box<CExpression>),
+    Sub(Box<CExpression>, Box<CExpression>),
+    Mul(Box<CExpression>, Box<CExpression>),
+    Div(Box<CExpression>, Box<CExpression>),
+    Mod(Box<CExpression>, Box<CExpression>),
+    Neg(Box<CExpression>),
 
-    LogAnd(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    LogOr(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    LogNot(Box<crate::ast::Expression>),
+    LogAnd(Box<CExpression>, Box<CExpression>),
+    LogOr(Box<CExpression>, Box<CExpression>),
+    LogNot(Box<CExpression>),
 
-    BitAnd(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    BitOr(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    BitXor(Box<crate::ast::Expression>, Box<crate::ast::Expression>),
-    BitNot(Box<crate::ast::Expression>),
+    BitAnd(Box<CExpression>, Box<CExpression>),
+    BitOr(Box<CExpression>, Box<CExpression>),
+    BitXor(Box<CExpression>, Box<CExpression>),
+    BitNot(Box<CExpression>),
 
     IfThenElse(Box<IfThenElse>),
 }
@@ -29,9 +31,51 @@ pub struct IfThenElse {
 }
 
 #[derive(Debug, Clone)]
-pub enum Literal {
+pub enum CLiteral {
     Integer(u64),
     Float(f64),
     Boolean(bool),
     String(String),
+}
+impl PartialEq for CLiteral {
+    fn eq(&self, other: &Self) -> bool {
+        if let (Self::Float(a), Self::Float(b)) = (self, other) {
+            if a.is_nan() && b.is_nan() {
+                return true;
+            }
+        }
+        match (self, other) {
+            (Self::Integer(a), Self::Integer(b)) => a == b,
+            (Self::Boolean(a), Self::Boolean(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Eq for CLiteral {}
+
+impl Hash for CLiteral {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Float(f) if f.is_nan() => state.write(&*f64::NAN.to_ne_bytes().as_ref()),
+            Self::Float(f) => state.write(&*f.to_ne_bytes().as_ref()),
+            Self::Boolean(b) => b.hash(state),
+            Self::String(s) => s.hash(state),
+            Self::Integer(i) => i.hash(state),
+        }
+    }
+}
+
+pub struct CStructDeclaration(String);
+pub struct CEnumDeclaration(String);
+pub struct CUnionDeclaration(String);
+
+pub struct CFunctionDeclaration(String, Vec<CTypedIdentifier>);
+
+pub struct CTypedIdentifier(CType, String);
+
+pub enum CType {
+    Basic(String),
+    Pointer(Box<CType>),
 }

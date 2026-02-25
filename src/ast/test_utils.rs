@@ -30,7 +30,7 @@ pub mod types {
     use crate::ast::Type;
 
     pub fn ptr_to(typ: Type) -> Type {
-        Type::Ptr(Box::new(typ))
+        Type::Pointer(Box::new(typ))
     }
     pub fn array_of(typ: Type) -> Type {
         Type::ArrayOf(Box::new(typ))

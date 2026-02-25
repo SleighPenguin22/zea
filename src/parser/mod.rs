@@ -1,7 +1,3 @@
-use crate::ast::Expression;
-use crate::ast::Literal;
-use thiserror::Error;
-
 #[derive(Copy, Clone)]
 struct ParsingState<'a> {
     input: &'a str,
@@ -56,8 +52,6 @@ pub fn parse<'a>(input: &'a str) -> ParseResult<'a, u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn something_runs() {
         for test in ["Hello", "World"] {
