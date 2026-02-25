@@ -3,6 +3,7 @@ mod analysis;
 mod ast;
 mod driver;
 mod parser;
+pub mod lowering;
 
 use crate::driver::Args;
 use clap::Parser;

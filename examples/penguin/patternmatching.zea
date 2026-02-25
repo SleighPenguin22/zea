@@ -62,3 +62,6 @@ const b = Bob {
 }
 
 import std:optional
+
+a := 3
+var b := 3

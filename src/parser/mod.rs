@@ -1,11 +1,13 @@
-use crate::ast::ZeaExpression;
+use crate::ast::Expression;
 use crate::ast::Literal;
+use thiserror::Error;
 
+#[derive(Copy, Clone)]
 struct ParsingState<'a> {
     input: &'a str,
     line: usize,
     column: usize,
-    index: usize
+    index: usize,
 }
 
 struct ParseError {
@@ -19,11 +21,11 @@ struct ParseError {
 /// back and get the last column and line state.
 ///
 /// All our recursive-descent parsing function return this struct. It is either:
-/// 
+///
 ///    1. A parsing error, together with the line, column and a custom message.
 ///    2. A tuple consisting of the desired result (integer, AST node etc.)
 ///       and the new parsing state.
-type ParseResult<'a, T> =  Result<(T, ParsingState<'a>), ParseError>;
+type ParseResult<'a, T> = Result<(T, ParsingState<'a>), ParseError>;
 
 enum Token {
     Import,
@@ -31,25 +33,14 @@ enum Token {
     Identifier(String),
 }
 
-pub fn parse<'a> (state: &'a ParsingState) -> ParseResult<'a, u8> {
-    let state = ParsingState { line: 42, column: 32, input: self.input, index: 10000 };
+pub fn parse_module<'a>(state: ParsingState<'a>) -> ParseResult<'a, u8> {
+    let state = ParsingState {
+        line: 42,
+        column: 32,
+        input: state.input,
+        index: 10000,
+    };
     Ok((42, state))
-}
-
-impl<'a> ParsingState<'a> {
-    pub fn peek(&self) -> Option<char> {
-        self.input.chars().nth(index)
-    }
-
-    pub fn advance(&self) -> Option<ParsingState<'a>> {
-        let (line, column) = if self.peek()?.is_newline() {
-            (self.line + 1, 1)
-        } else {
-            (self.line, self.column + 1)
-        }
-
-        ParsingState { self.input, line, column, self.index + 1 }
-    }
 }
 
 pub fn parse<'a>(input: &'a str) -> ParseResult<'a, u8> {
@@ -60,7 +51,7 @@ pub fn parse<'a>(input: &'a str) -> ParseResult<'a, u8> {
         index: 0,
     };
 
-    state.parse()
+    parse_module(state)
 }
 
 #[cfg(test)]
@@ -69,10 +60,7 @@ mod tests {
 
     #[test]
     fn something_runs() {
-        for test in [
-            "Hello",
-            "World",
-        ] {
+        for test in ["Hello", "World"] {
             assert_eq!(test, "Hello");
         }
     }

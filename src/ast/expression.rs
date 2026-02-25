@@ -1,40 +1,41 @@
 use crate::analysis::ZeaTypeError;
-use crate::ast::patterns::ZeaPattern;
-use crate::ast::statement::{FuncCall, StatementBlock};
+use crate::ast::patterns::AssignmentPattern;
+use crate::ast::statement::{FunctionCall, StatementBlock};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::hint::unreachable_unchecked;
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ZeaExpression {
-    FuncCall(FuncCall),
+pub enum Expression {
+    FuncCall(FunctionCall),
     Literal(Literal),
-    Add(Box<ZeaExpression>, Box<ZeaExpression>),
-    Sub(Box<ZeaExpression>, Box<ZeaExpression>),
-    Mul(Box<ZeaExpression>, Box<ZeaExpression>),
-    Div(Box<ZeaExpression>, Box<ZeaExpression>),
-    Mod(Box<ZeaExpression>, Box<ZeaExpression>),
-    Neg(Box<ZeaExpression>),
+    Add(Box<Expression>, Box<Expression>),
+    Sub(Box<Expression>, Box<Expression>),
+    Mul(Box<Expression>, Box<Expression>),
+    Div(Box<Expression>, Box<Expression>),
+    Mod(Box<Expression>, Box<Expression>),
+    Neg(Box<Expression>),
 
-    LogAnd(Box<ZeaExpression>, Box<ZeaExpression>),
-    LogOr(Box<ZeaExpression>, Box<ZeaExpression>),
-    LogXor(Box<ZeaExpression>, Box<ZeaExpression>),
-    LogNot(Box<ZeaExpression>),
+    LogAnd(Box<Expression>, Box<Expression>),
+    LogOr(Box<Expression>, Box<Expression>),
+    LogXor(Box<Expression>, Box<Expression>),
+    LogNot(Box<Expression>),
 
-    BitAnd(Box<ZeaExpression>, Box<ZeaExpression>),
-    BitOr(Box<ZeaExpression>, Box<ZeaExpression>),
-    BitXor(Box<ZeaExpression>, Box<ZeaExpression>),
-    BitNot(Box<ZeaExpression>),
+    BitAnd(Box<Expression>, Box<Expression>),
+    BitOr(Box<Expression>, Box<Expression>),
+    BitXor(Box<Expression>, Box<Expression>),
+    BitNot(Box<Expression>),
+
     Block(StatementBlock),
 
-    PatternMatch(Box<ZeaExpression>, Vec<PatternMatchArm>),
-    ConditionMatch(Box<ZeaExpression>, Vec<ConditionMatchArm>),
-    IfThenElse(Box<ZeaExpression>, Box<ZeaExpression>, Box<ZeaExpression>),
+    PatternMatch(Box<Expression>, Vec<PatternMatchArm>),
+    ConditionMatch(Vec<ConditionMatchArm>),
+    IfThenElse(Box<Expression>, Box<Expression>, Box<Expression>),
 }
 
-pub type PatternMatchArm = (ZeaPattern, Box<ZeaExpression>);
+pub type PatternMatchArm = (AssignmentPattern, Box<Expression>);
 
-pub type ConditionMatchArm = (Box<ZeaExpression>, Box<ZeaExpression>);
+pub type ConditionMatchArm = (Box<Expression>, Box<Expression>);
 #[derive(Debug, Clone)]
 pub enum Literal {
     Integer(u64),

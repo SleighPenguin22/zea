@@ -2,25 +2,16 @@ use std::fmt::{Debug, Formatter};
 
 /// The Zea named Struct type / product type
 
-pub struct ZeaStructDefinition {
+pub struct StructDefinition {
     name: String,
-    members: ZeaStructInner,
+    members: Vec<TypedIdentifier>,
 }
-
-#[derive(PartialEq, Eq)]
-pub struct ZeaNamedStruct {
-    name: String,
-    members: ZeaStructInner,
-}
-
-pub type ZeaStructInner = Vec<TypedIdentifier>;
-
-pub struct ZeaUnion {
+pub struct Union {
     pub name: String,
-    pub members: Vec<ZeaUnionVariant>,
+    pub members: Vec<UnionVariant>,
 }
 
-pub enum ZeaUnionVariant {
+pub enum UnionVariant {
     Tag(String),
     Type(TypedIdentifier),
 }
@@ -29,57 +20,44 @@ pub enum ZeaUnionVariant {
 /// - function parameter
 /// - identifier in declaration(-assignments)
 #[derive(PartialEq, Eq, Clone, Hash)]
-pub enum ZeaTypeIdent {
+pub enum Type {
     /// Int, Bool, etc.
     Basic(String),
 
     /// `<type>&`
-    Ptr(Box<ZeaTypeIdent>),
+    Ptr(Box<Type>),
     /// `[<type>]`
-    ArrayOf(Box<ZeaTypeIdent>),
-    /// `[<type>]&`
-    Slice(Box<ZeaTypeIdent>),
-    /// `<type>?`
-    Option(Box<ZeaTypeIdent>),
+    ArrayOf(Box<Type>),
+    // /// `&[<type>]`
+    // Slice(Box<Type>),
+    // /// `?<type>`
+    // Option(Box<Type>),
 }
 
-impl Debug for ZeaTypeIdent {
+impl Debug for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            ZeaTypeIdent::Basic(typ) => typ,
-            ZeaTypeIdent::ArrayOf(arr) => &format!("[{arr:?}]"),
-            ZeaTypeIdent::Option(opt) => &format!("{opt:?}?"),
-            ZeaTypeIdent::Ptr(ptr) => &format!("{ptr:?}&"),
-            ZeaTypeIdent::Slice(slice) => &format!("[{slice:?}]&"),
+            Type::Basic(typ) => typ,
+            Type::ArrayOf(arr) => &format!("[{arr:?}]"),
+            // Type::Option(opt) => &format!("?{opt:?}"),
+            Type::Ptr(ptr) => &format!("&{ptr:?}"),
+            // Type::Slice(slice) => &format!("&[{slice:?}]"),
         };
 
         write!(f, "{}", str)
     }
 }
 
-impl Into<ZeaTypeIdent> for &str {
-    fn into(self) -> ZeaTypeIdent {
-        ZeaTypeIdent::Basic(self.into())
+impl Into<Type> for &str {
+    fn into(self) -> Type {
+        Type::Basic(self.into())
     }
 }
 
-impl Into<ZeaTypeIdent> for String {
-    fn into(self) -> ZeaTypeIdent {
-        ZeaTypeIdent::Basic(self)
+impl Into<Type> for String {
+    fn into(self) -> Type {
+        Type::Basic(self)
     }
 }
-
-impl ZeaTypeIdent {
-    pub fn get_basic(&self) -> &String {
-        match self {
-            ZeaTypeIdent::Basic(typ) => typ,
-            ZeaTypeIdent::ArrayOf(t) => t.get_basic(),
-            ZeaTypeIdent::Ptr(t) => t.get_basic(),
-            ZeaTypeIdent::Option(t) => t.get_basic(),
-            ZeaTypeIdent::Slice(t) => t.get_basic(),
-        }
-    }
-}
-
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct TypedIdentifier(String, ZeaTypeIdent);
+pub struct TypedIdentifier(String, Type);

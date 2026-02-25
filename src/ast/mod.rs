@@ -3,12 +3,15 @@ pub mod datatype;
 pub mod expression;
 pub mod patterns;
 pub mod statement;
-pub mod utils;
+
+#[cfg(test)]
+pub mod test_utils;
 
 pub use crate::ast::{
-    datatype::{TypedIdentifier, ZeaNamedStruct, ZeaStructDefinition, ZeaTypeIdent},
-    expression::{Literal, ZeaExpression},
-    statement::{StatementBlock, VarInitialisation, ZeaStatement},
+    datatype::{StructDefinition, Type, TypedIdentifier},
+    expression::{Expression, Literal},
+    patterns::AssignmentPattern,
+    statement::{ConstInitialisation, Statement, StatementBlock},
 };
 
 use std::{
@@ -18,16 +21,15 @@ use std::{
 };
 
 #[derive(Debug, Default, Clone)]
-pub struct ZeaModule {
-    pub path: PathBuf,
+pub struct Module {
     pub imports: ImportList,
     pub exports: ExportList,
     pub symbols: HashSet<TopLevelStatement>,
 }
-impl ZeaModule {
-    pub fn find_entry_point(&self) -> Option<FuncDefinition> {
+impl Module {
+    pub fn find_entry_point(&self) -> Option<Function> {
         self.iter_symbols().find_map(|symbol| match symbol {
-            TopLevelStatement::FuncDefinition(f) if f.declaration.name == "main" => Some(f.clone()),
+            TopLevelStatement::FuncDefinition(f) if f.name == "main" => Some(f.clone()),
             _ => None,
         })
     }
@@ -38,15 +40,8 @@ impl ZeaModule {
 }
 #[derive(Debug, PartialEq, Clone)]
 pub enum TopLevelStatement {
-    FuncDefinition(FuncDefinition),
-    GlobalConst(GlobalConst),
-}
-
-#[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct FuncDeclaration {
-    pub name: String,
-    pub args: Vec<TypedIdentifier>,
-    pub returns: ZeaTypeIdent,
+    FuncDefinition(Function),
+    GlobalConst(ConstInitialisation),
 }
 
 /// A top-level function definition
@@ -54,27 +49,32 @@ pub struct FuncDeclaration {
 /// Function may be defined only once within a module, They are compared and [`Hash`]'ed against their signature.
 /// Functions may be imported as many times as needed.
 #[derive(Debug, Clone)]
-pub struct FuncDefinition {
-    pub declaration: FuncDeclaration,
+pub struct Function {
+    pub name: String,
+    pub args: Vec<TypedIdentifier>,
+    pub returns: Type,
     pub body: StatementBlock,
 }
-impl PartialEq for FuncDefinition {
+impl PartialEq for Function {
     fn eq(&self, other: &Self) -> bool {
-        self.declaration == other.declaration
+        self.name == other.name
     }
 }
-impl Eq for FuncDefinition {}
-impl Hash for FuncDefinition {
+impl Eq for Function {}
+
+impl Hash for Function {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.declaration.hash(state)
+        self.name.hash(state);
+        self.args.hash(state);
+        self.returns.hash(state);
     }
 }
 
-/// A global Constant value, this is a variable declaration-assignment at the module level.
-///
-/// These declaration are compared and [`Hash`]'ed against their signature/declaration.
-/// And may only be defined once.
-pub type GlobalConst = VarInitialisation;
+pub struct TopLevelConstant {
+    pub typ: Type,
+    pub assignee: AssignmentPattern,
+    pub value: Expression,
+}
 
 pub type ImportList = Vec<ZeaImportStatement>;
 pub type ExportList = Vec<ZeaExportStatement>;
