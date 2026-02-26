@@ -1,7 +1,7 @@
 #![allow(dead_code)]
-use crate::ast::Type;
 use crate::ast::expression::Expression;
 use crate::ast::patterns::AssignmentPattern;
+use crate::ast::Type;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -19,12 +19,30 @@ pub struct ConstInitialisation {
     pub assignee: AssignmentPattern,
     pub value: Expression,
 }
-
+impl From<VarInitialisation> for ConstInitialisation {
+    fn from(var_initialisation: VarInitialisation) -> Self {
+        Self {
+            typ: var_initialisation.typ,
+            assignee: var_initialisation.assignee,
+            value: var_initialisation.value,
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq)]
 pub struct VarInitialisation {
     pub typ: Type,
     pub assignee: AssignmentPattern,
     pub value: Expression,
+}
+
+impl From<ConstInitialisation> for VarInitialisation {
+    fn from(const_initialisation: ConstInitialisation) -> Self {
+        Self {
+            typ: const_initialisation.typ,
+            assignee: const_initialisation.assignee,
+            value: const_initialisation.value,
+        }
+    }
 }
 
 impl From<Reassignment> for Statement {

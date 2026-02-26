@@ -1,8 +1,9 @@
+use crate::ast::Expression;
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CExpression {
-    FuncCall(FunctionCall),
+    FuncCall(CFunctionCall),
     Literal(CLiteral),
     Add(Box<CExpression>, Box<CExpression>),
     Sub(Box<CExpression>, Box<CExpression>),
@@ -25,9 +26,9 @@ pub enum CExpression {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct IfThenElse {
-    pub condition: Expression,
-    pub true_branch: Expression,
-    pub false_branch: Expression,
+    pub condition: CExpression,
+    pub true_branch: CExpression,
+    pub false_branch: CExpression,
 }
 
 #[derive(Debug, Clone)]
@@ -78,4 +79,10 @@ pub struct CTypedIdentifier(CType, String);
 pub enum CType {
     Basic(String),
     Pointer(Box<CType>),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CFunctionCall {
+    pub name: String,
+    pub args: Vec<Expression>,
 }
