@@ -11,7 +11,7 @@ pub use crate::ast::{
     datatype::{StructDefinition, Type, TypedIdentifier},
     expression::{Expression, Literal},
     patterns::AssignmentPattern,
-    statement::{ConstInitialisation, Statement, StatementBlock},
+    statement::{Initialisation, Statement, StatementBlock},
 };
 
 use std::{
@@ -40,7 +40,7 @@ impl Module {
 #[derive(Debug, PartialEq, Clone)]
 pub enum TopLevelStatement {
     FuncDefinition(Function),
-    GlobalConst(ConstInitialisation),
+    GlobalConst(Initialisation),
 }
 
 /// A top-level function definition

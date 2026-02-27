@@ -3,7 +3,7 @@
 use crate::ast::{Expression, Literal, Statement, Type};
 pub mod statements {
     use super::*;
-    use crate::ast::ConstInitialisation;
+    use crate::ast::Initialisation;
     use crate::ast::patterns::AssignmentPattern;
 }
 
