@@ -91,7 +91,6 @@ impl DesugarDestructuring for DesugaredConstInitialisation {
 
         for unpacked in self.unpacked_assignments {
             let unpacked = unpacked.desugar_destructuring()?;
-
         }
 
         todo!()

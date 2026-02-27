@@ -17,13 +17,12 @@ pub use crate::ast::{
 use std::{
     collections::HashSet,
     hash::{Hash, Hasher},
-    path::PathBuf,
 };
 
 #[derive(Debug, Default, Clone)]
 pub struct Module {
-    pub imports: ImportList,
-    pub exports: ExportList,
+    pub imports: Vec<String>,
+    pub exports: Vec<String>,
     pub symbols: HashSet<TopLevelStatement>,
 }
 impl Module {
@@ -68,23 +67,4 @@ impl Hash for Function {
         self.args.hash(state);
         self.returns.hash(state);
     }
-}
-
-pub struct TopLevelConstant {
-    pub typ: Type,
-    pub assignee: AssignmentPattern,
-    pub value: Expression,
-}
-
-pub type ImportList = Vec<ZeaImportStatement>;
-pub type ExportList = Vec<ZeaExportStatement>;
-
-#[derive(Debug, Clone)]
-pub struct ZeaImportStatement {
-    path: String,
-}
-#[derive(Debug, Clone)]
-pub enum ZeaExportStatement {
-    Func(String),
-    GlobalConst(String),
 }

@@ -65,3 +65,8 @@ import std:optional
 
 a := 3
 var b := 3
+
+export {
+    fn add
+
+}
