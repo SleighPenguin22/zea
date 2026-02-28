@@ -99,5 +99,71 @@ const j: Int = i_ptr2 ?* 1 // j = 1
 
 
 
+class Printer {
+    def print(string) {
+        print(string
+    }
+}
+
+class FormatPrinter extends Printer {
+    def formatPrint(template) {
+        ...
+    }
+
+    def construct() {
+        self.__super__.construct()
+        ...
+    }
+}
+
+
+class FormatPrinter {
+    member printer: Printer
+
+    def construct() {
+        self.printer = printer.construct()
+        ...
+    }
+
+    def formatPrint(template) {
+        string = blabla(template)
+
+        self.printer.print(string)
+
+    }
+}
+
+def print_list(list, printer) {
+
+
+}
+
+formatprinter = ...
+
+print_list([1,2,3], formatprinter.printer)
+
+print_list([1,2,3], formatprinter)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

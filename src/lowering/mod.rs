@@ -16,45 +16,32 @@ pub type LoweringResult<T> = Result<T, LoweringError>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct LoweredInitialisation {
-    pub mutable: bool,
-    pub typ: Type,
+    pub typ: Option<Type>,
     pub assignee: String,
     pub value: Expression,
 }
 impl LoweredInitialisation {
-    pub fn mutable(typ: Type, assignee: String, value: Expression) -> Self {
+    pub fn new(typ: Option<Type>, assignee: impl Into<String>, value: Expression) -> Self {
         Self {
-            mutable: true,
             typ,
-            assignee,
-            value,
-        }
-    }
-    pub fn constant(typ: Type, assignee: String, value: Expression) -> Self {
-        Self {
-            mutable: false,
-            typ,
-            assignee,
+            assignee: assignee.into(),
             value,
         }
     }
 }
-
-pub trait DesugarDestructuring {
-    type Output;
-    fn desugar_destructuring(self) -> LoweringResult<Self::Output>;
+#[derive(Debug, PartialEq, Clone)]
+pub struct DesugaredInitialisation {
+    pub temporary: LoweredInitialisation,
+    pub unpacked_assignments: Vec<LoweredInitialisation>,
 }
 
-impl DesugarDestructuring for Initialisation {
-    type Output = Vec<DesugaredInitialisation>;
-    fn desugar_destructuring(self) -> LoweringResult<Self::Output> {
+impl Initialisation {
+    pub fn desugar_destructuring(self) -> LoweringResult<Vec<LoweredInitialisation>> {
         Ok(match self.assignee {
             AssignmentPattern::Identifier(assignee) => {
-                vec![DesugaredInitialisation {
-                    temporary: LoweredInitialisation::constant(self.typ, assignee, self.value),
-                    unpacked_assignments: vec![],
-                }]
+                vec![LoweredInitialisation::new(self.typ, assignee, self.value)]
             }
+
             AssignmentPattern::Tuple(_tuple) => {
                 unimplemented!("implement tuple pattern assignment destructuring blabla")
             }
@@ -62,10 +49,13 @@ impl DesugarDestructuring for Initialisation {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct DesugaredInitialisation {
-    pub temporary: LoweredInitialisation,
-    pub unpacked_assignments: Vec<LoweredInitialisation>,
+impl From<DesugaredInitialisation> for Vec<LoweredInitialisation> {
+    fn from(initialiser: DesugaredInitialisation) -> Self {
+        let mut v = Vec::with_capacity(initialiser.unpacked_assignments.len() + 1);
+        v.push(initialiser.temporary);
+        v.extend(initialiser.unpacked_assignments);
+        v
+    }
 }
 
 pub trait DesugarMatchExpression {

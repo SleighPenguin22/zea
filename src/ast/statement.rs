@@ -14,7 +14,7 @@ pub enum Statement {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Initialisation {
-    pub typ: Type,
+    pub typ: Option<Type>,
     pub assignee: AssignmentPattern,
     pub value: Expression,
 }

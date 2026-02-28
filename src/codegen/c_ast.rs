@@ -38,6 +38,7 @@ pub enum CLiteral {
     Boolean(bool),
     String(String),
 }
+
 impl PartialEq for CLiteral {
     fn eq(&self, other: &Self) -> bool {
         if let (Self::Float(a), Self::Float(b)) = (self, other) {
