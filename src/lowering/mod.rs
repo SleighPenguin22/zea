@@ -1,7 +1,6 @@
 use crate::ast::datatype::TupleSignature;
-use crate::ast::expression::PatternMatchArm;
 use crate::ast::{
-    AssignmentPattern, Expression, Initialisation, StatementBlock, StructDefinition, Type,
+    AssignmentPattern, Expression, Initialisation, Literal, StructDefinition, Type,
     TypedIdentifier,
 };
 use std::collections::HashSet;
@@ -13,15 +12,68 @@ pub enum LoweringError {
     Other(String),
 }
 pub type LoweringResult<T> = Result<T, LoweringError>;
+pub trait LoweringExpression {}
+impl LoweringExpression for Expression {}
+impl LoweringExpression for LoweredExpression {}
+pub enum LoweredStatement<Expr: LoweringExpression> {
+    Initialisation(LoweredInitialisation<Expr>),
+    Reassignment(LoweredReassignment<Expr>),
+    FunctionCall(LoweredFunctionCall<Expr>),
+    VoidReturn,
+    Return(LoweredExpression),
+}
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LoweredInitialisation {
+pub struct LoweredReassignment<Expr: LoweringExpression> {
+    pub assignee: String,
+    pub value: Expr,
+}
+#[derive(Debug, PartialEq, Clone)]
+pub struct LoweredFunctionCall<Expr: LoweringExpression> {
+    pub name: String,
+    pub arguments: Vec<Expr>,
+}
+#[derive(Debug, PartialEq, Clone)]
+pub enum LoweredExpression {
+    FuncCall(LoweredFunctionCall<LoweredExpression>),
+    Literal(Literal),
+    Add(Box<LoweredExpression>, Box<LoweredExpression>),
+    Sub(Box<LoweredExpression>, Box<LoweredExpression>),
+    Mul(Box<LoweredExpression>, Box<LoweredExpression>),
+    Div(Box<LoweredExpression>, Box<LoweredExpression>),
+    Mod(Box<LoweredExpression>, Box<LoweredExpression>),
+    Neg(Box<LoweredExpression>),
+
+    LogAnd(Box<LoweredExpression>, Box<LoweredExpression>),
+    LogOr(Box<LoweredExpression>, Box<LoweredExpression>),
+    LogNot(Box<LoweredExpression>),
+
+    BitAnd(Box<LoweredExpression>, Box<LoweredExpression>),
+    BitOr(Box<LoweredExpression>, Box<LoweredExpression>),
+    BitXor(Box<LoweredExpression>, Box<LoweredExpression>),
+    BitNot(Box<LoweredExpression>),
+
+    IfThenElse(
+        Box<LoweredExpression>,
+        Box<LoweredExpression>,
+        Box<LoweredExpression>,
+    ),
+}
+
+impl From<Literal> for LoweredExpression {
+    fn from(value: Literal) -> Self {
+        Self::Literal(value)
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct LoweredInitialisation<Expr: LoweringExpression> {
     pub typ: Option<Type>,
     pub assignee: String,
-    pub value: Expression,
+    pub value: Expr,
 }
-impl LoweredInitialisation {
-    pub fn new(typ: Option<Type>, assignee: impl Into<String>, value: Expression) -> Self {
+impl<Expr: LoweringExpression> LoweredInitialisation<Expr> {
+    pub fn new(typ: Option<Type>, assignee: impl Into<String>, value: Expr) -> Self {
         Self {
             typ,
             assignee: assignee.into(),
@@ -30,13 +82,13 @@ impl LoweredInitialisation {
     }
 }
 #[derive(Debug, PartialEq, Clone)]
-pub struct DesugaredInitialisation {
-    pub temporary: LoweredInitialisation,
-    pub unpacked_assignments: Vec<LoweredInitialisation>,
+pub struct DesugaredInitialisation<Expr: LoweringExpression> {
+    pub temporary: LoweredInitialisation<Expr>,
+    pub unpacked_assignments: Vec<LoweredInitialisation<Expr>>,
 }
 
 impl Initialisation {
-    pub fn desugar_destructuring(self) -> LoweringResult<Vec<LoweredInitialisation>> {
+    pub fn desugar_destructuring(self) -> LoweringResult<Vec<LoweredInitialisation<Expression>>> {
         Ok(match self.assignee {
             AssignmentPattern::Identifier(assignee) => {
                 vec![LoweredInitialisation::new(self.typ, assignee, self.value)]
@@ -49,19 +101,15 @@ impl Initialisation {
     }
 }
 
-impl From<DesugaredInitialisation> for Vec<LoweredInitialisation> {
-    fn from(initialiser: DesugaredInitialisation) -> Self {
-        let mut v = Vec::with_capacity(initialiser.unpacked_assignments.len() + 1);
+impl<Expr: LoweringExpression> From<DesugaredInitialisation<Expr>>
+    for Vec<LoweredInitialisation<Expr>>
+{
+    fn from(initialiser: DesugaredInitialisation<Expr>) -> Self {
+        let mut v: Vec<LoweredInitialisation<Expr>> =
+            Vec::with_capacity(initialiser.unpacked_assignments.len() + 1);
         v.push(initialiser.temporary);
         v.extend(initialiser.unpacked_assignments);
         v
-    }
-}
-
-pub trait DesugarMatchExpression {
-    fn desugar_match_arm(arm: PatternMatchArm) -> LoweringResult<StatementBlock>;
-    fn desugar_match_expression(&self) -> LoweringResult<StatementBlock> {
-        todo!()
     }
 }
 

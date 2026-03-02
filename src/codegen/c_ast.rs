@@ -1,6 +1,4 @@
-use crate::ast::Expression;
 use std::hash::{Hash, Hasher};
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum CExpression {
     FuncCall(CFunctionCall),
@@ -69,7 +67,17 @@ impl Hash for CLiteral {
     }
 }
 
+pub enum CDeclaration {
+    Struct(CStructDeclaration),
+    Union(CUnionDeclaration),
+    Enum(CEnumDeclaration),
+}
+
 pub struct CStructDeclaration(String);
+pub struct CStructDefinition {
+    pub name: String,
+    pub members: Vec<CTypedIdentifier>,
+}
 pub struct CEnumDeclaration(String);
 pub struct CUnionDeclaration(String);
 
@@ -85,5 +93,5 @@ pub enum CType {
 #[derive(Debug, Clone, PartialEq)]
 pub struct CFunctionCall {
     pub name: String,
-    pub args: Vec<Expression>,
+    pub args: Vec<CExpression>,
 }
