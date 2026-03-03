@@ -2,6 +2,7 @@
 use crate::ast::expression::Expression;
 use crate::ast::patterns::AssignmentPattern;
 use crate::ast::Type;
+use crate::lowering::DesugaredCondMatch;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -10,6 +11,7 @@ pub enum Statement {
     FunctionCall(FunctionCall),
     Return(Expression),
     Block(Vec<Statement>),
+    CondMatch(Box<DesugaredCondMatch>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

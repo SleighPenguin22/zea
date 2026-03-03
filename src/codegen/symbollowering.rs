@@ -1,11 +1,14 @@
 #![allow(unused)]
-use crate::ast::{Function, Statement, StatementBlock, Type, TypedIdentifier};
-use crate::lowering::{DesugaredBlockExpr, LoweredExpression, LoweredStatement};
+use crate::ast::{
+    AssignmentPattern, Expression, Function, Initialisation, Statement, StatementBlock, Type,
+    TypedIdentifier,
+};
+use crate::lowering::{
+    DesugaredBlockExpr, DesugaredInitialisation, LoweredExpression, LoweredStatement,
+};
 use std::collections::HashSet;
 
-pub struct ModuleNamedTupleCache {
-    named_tuples: HashSet<TupleWithNamedMembers>,
-}
+pub type ModuleNamedTupleCache = HashSet<TupleWithNamedMembers>;
 
 pub struct TupleWithNamedMembers {
     members: Vec<TypedIdentifier>,
@@ -47,22 +50,90 @@ impl DesugaredConstructLabelFactory {
     pub fn lower_statement(&mut self, statement: Statement) -> LoweredStatement {
         match statement {
             Statement::Block(b) => LoweredStatement::LoweredBlock(self.name_block(b)),
-            _ => unimplemented!("lowering of remaining statements"),
+            Statement::Initialisation(assignment) => {
+                LoweredStatement::Initialisation(self.lower_assignment(assignment))
+            }
+            Statement::Return(expr) => LoweredStatement::Return(self.lower_expression(expr)),
+            _ => unimplemented!("lowering of remaining statements variants"),
+        }
+    }
+
+    pub fn lower_assignment(&mut self, assignment: Initialisation) -> DesugaredInitialisation {
+        match assignment.assignee {
+            AssignmentPattern::Identifier(assignee) => DesugaredInitialisation::simple(
+                assignment.typ,
+                assignee,
+                self.lower_expression(assignment.value),
+            ),
+            _ => unimplemented!("lowering of tuple unpacking assignments"),
+        }
+    }
+
+    pub fn lower_expression(&mut self, expression: Expression) -> LoweredExpression {
+        match expression {
+            Expression::Block(block) => LoweredExpression::Block(Box::new(self.name_block(block))),
+            Expression::Literal(l) => LoweredExpression::Literal(l),
+            Expression::Ident(i) => LoweredExpression::Ident(i),
+            _ => unimplemented!("lower remaining expressions"),
         }
     }
 }
 
+#[derive(Debug)]
 pub struct LoweredFunction {
     pub name: String,
     pub args: Vec<TypedIdentifier>,
     pub returns: Type,
-    pub body: Vec<LoweredExpression>,
+    pub body: Vec<LoweredStatement>,
 }
 
 pub fn lower_function(
     function: Function,
     module_named_tuple_cache: &mut ModuleNamedTupleCache,
 ) -> LoweredFunction {
-    let label_generator = DesugaredConstructLabelFactory::new();
-    todo!()
+    let mut label_generator = DesugaredConstructLabelFactory::new();
+    let body: Vec<LoweredStatement> = function
+        .body
+        .into_iter()
+        .map(|stmt| label_generator.lower_statement(stmt))
+        .collect();
+
+    LoweredFunction {
+        name: function.name,
+        args: function.args,
+        returns: function.returns,
+        body,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::ast::test_utils::types::int_type;
+    use crate::ast::{AssignmentPattern, Expression, Function, Initialisation, Literal, Statement};
+    use crate::codegen::symbollowering::{lower_function, ModuleNamedTupleCache};
+
+    #[test]
+    fn lower_basic_main() {
+        let assigna = Statement::Initialisation(Initialisation {
+            typ: Some(int_type()),
+            assignee: AssignmentPattern::Identifier("a".to_string()),
+            value: Expression::Literal(Literal::Integer(4)),
+        });
+        let return3 = Statement::Return(Expression::Ident("a".to_string()));
+        let main = Function {
+            name: "main".to_string(),
+            args: vec![],
+            returns: int_type(),
+            body: vec![assigna, return3],
+        };
+
+        // fn main() -> int {
+        //  a: int = 4;
+        // return a;
+        // }
+
+        let mut cache = ModuleNamedTupleCache::new();
+
+        let main = dbg!(&lower_function(main, &mut cache));
+    }
 }

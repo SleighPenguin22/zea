@@ -32,6 +32,7 @@ pub struct LoweringFunctionCall {
 pub enum LoweredExpression {
     Unit,
     FuncCall(Box<LoweringFunctionCall>),
+    Ident(String),
     Literal(Literal),
     Add(Box<LoweredExpression>, Box<LoweredExpression>),
     Sub(Box<LoweredExpression>, Box<LoweredExpression>),
@@ -125,6 +126,29 @@ impl SimpleInitialisation {
 pub struct DesugaredInitialisation {
     pub temporary: SimpleInitialisation,
     pub unpacked_assignments: Vec<DesugaredInitialisation>,
+}
+
+impl DesugaredInitialisation {
+    pub(crate) fn new(
+        temporary: SimpleInitialisation,
+        unpacked_assignments: Vec<DesugaredInitialisation>,
+    ) -> DesugaredInitialisation {
+        Self {
+            temporary,
+            unpacked_assignments,
+        }
+    }
+
+    pub fn simple(typ: Option<Type>, assignee: String, value: LoweredExpression) -> Self {
+        Self {
+            temporary: SimpleInitialisation {
+                typ,
+                assignee,
+                value,
+            },
+            unpacked_assignments: vec![],
+        }
+    }
 }
 
 impl From<SimpleInitialisation> for DesugaredInitialisation {

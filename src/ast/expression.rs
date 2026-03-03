@@ -6,6 +6,7 @@ use std::hash::{Hash, Hasher};
 pub enum Expression {
     Unit,
     FuncCall(FunctionCall),
+    Ident(String),
     Literal(Literal),
     Add(Box<Expression>, Box<Expression>),
     Sub(Box<Expression>, Box<Expression>),
