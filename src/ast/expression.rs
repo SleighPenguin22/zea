@@ -4,6 +4,7 @@ use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
+    Unit,
     FuncCall(FunctionCall),
     Literal(Literal),
     Add(Box<Expression>, Box<Expression>),

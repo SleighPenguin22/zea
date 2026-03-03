@@ -1,20 +1,5 @@
-///
-/// This file contains all the nodes relating to the lowering of syntactic sugar
-/// That is required before being able to translate to valid C code.
-///
-/// Any node with the `Desugared` prefix denotes some higher-level construct that is lowered
-/// into the general structure of its C representation
-/// Such a node is not yet able to be translated, because its actual C representation
-/// might depends on the context in which it exists.
-///
-/// Any enum with the `Lowering` prefix represents some node
-/// which had one or more of its variants converted to their `Desugared` form
-///
-use crate::ast::datatype::TupleSignature;
-use crate::ast::{Literal, Statement, StructDefinition, Type, TypedIdentifier};
-use std::collections::HashSet;
+use crate::ast::{Literal, Statement, Type};
 use thiserror::Error;
-
 
 #[derive(Error, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LoweringError {
@@ -28,7 +13,8 @@ pub enum LoweredStatement {
     Initialisation(DesugaredInitialisation),
     Reassignment(LoweringReassignment),
     FunctionCall(LoweringFunctionCall),
-    VoidReturn,
+    LoweredBlock(DesugaredBlockExpr),
+    UnitReturn,
     Return(LoweredExpression),
 }
 
@@ -44,6 +30,7 @@ pub struct LoweringFunctionCall {
 }
 #[derive(Debug, PartialEq, Clone)]
 pub enum LoweredExpression {
+    Unit,
     FuncCall(Box<LoweringFunctionCall>),
     Literal(Literal),
     Add(Box<LoweredExpression>, Box<LoweredExpression>),
@@ -67,8 +54,8 @@ pub enum LoweredExpression {
         Box<LoweredExpression>,
         Box<LoweredExpression>,
     ),
-    Block(DesugaredBlockExpr),
-    CondMatch(DesugaredCondMatch),
+    Block(Box<DesugaredBlockExpr>),
+    CondMatch(Box<DesugaredCondMatch>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -85,9 +72,30 @@ pub struct DesugaredBlockExpr {
     /// The label that the block expression has its value assigned to
     /// i.e. `__block0`, `__block1` etc.
     /// This label must be unique to the scope of the function in which it exists
-    label: usize,
-    statements: Vec<Statement>,
+    label: String,
+    statements: Vec<LoweredStatement>,
     last: LoweredExpression,
+}
+impl DesugaredBlockExpr {
+    pub fn insert_return_unit(
+        statements: Vec<LoweredStatement>,
+    ) -> (Vec<LoweredStatement>, LoweredExpression) {
+        match statements.last() {
+            Some(LoweredStatement::Return(expr)) => {
+                (statements[..(statements.len() - 1)].to_vec(), expr.clone())
+            }
+            _ => (statements, LoweredExpression::Unit),
+        }
+    }
+
+    pub fn new(label: String, statement_block: Vec<LoweredStatement>) -> Self {
+        let (statements, last) = Self::insert_return_unit(statement_block);
+        Self {
+            label,
+            statements,
+            last,
+        }
+    }
 }
 
 impl From<Literal> for LoweredExpression {
@@ -134,27 +142,4 @@ impl From<SimpleInitialisation> for LoweredStatement {
     }
 }
 
-pub struct TupleNamer {
-    current_id: usize,
-    cache: HashSet<StructDefinition>,
-}
-
-pub struct TupleWithNamedMembers {
-    members: Vec<TypedIdentifier>,
-}
-impl TupleNamer {
-    pub fn new() -> Self {
-        Self {
-            current_id: 0,
-            cache: HashSet::new(),
-        }
-    }
-
-    pub fn name_tuple(&mut self, _tuple: TupleSignature) -> StructDefinition {
-        todo!()
-    }
-
-    pub fn tuple_is_named(_tuple: &TupleSignature) -> bool {
-        todo!()
-    }
-}
+impl Statement {}

@@ -9,7 +9,7 @@ pub enum Statement {
     Reassignment(Reassignment),
     FunctionCall(FunctionCall),
     Return(Expression),
-    VoidReturn,
+    Block(Vec<Statement>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::hash::{Hash, Hasher};
 #[derive(Debug, Clone, PartialEq)]
 pub enum CExpression {

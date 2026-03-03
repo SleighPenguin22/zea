@@ -1,7 +1,6 @@
+#![allow(unused)]
 use crate::ast::{Literal, Type};
-use crate::lowering::{
-    LoweredExpression, LoweringExpression, LoweringStatement, SimpleInitialisation,
-};
+use crate::lowering::{LoweredExpression, LoweredStatement, SimpleInitialisation};
 
 pub struct CondMatchFormatter {
     typ: Option<Type>,
@@ -10,6 +9,8 @@ pub struct CondMatchFormatter {
 }
 
 pub mod c_ast;
+pub mod symbollowering;
+
 pub fn canoncalize_zea_identifier(identifier: &str) -> String {
     identifier
         .replace("-", "_")
@@ -30,15 +31,15 @@ impl<T: CNode> CNode for Box<T> {
     }
 }
 
-impl CNode for LoweringStatement {
+impl CNode for LoweredStatement {
     fn emit_c(&self) -> String {
         match self {
-            LoweringStatement::Initialisation(init) => init.emit_c(),
-            LoweringStatement::Return(expr) => format!("return ({});", expr.emit_c()),
+            // LoweredStatement::Initialisation(init) => init.emit_c(),
+            LoweredStatement::Return(expr) => format!("return ({});", expr.emit_c()),
             _ => unimplemented!("implement remaining lowered statement code generation"),
-            // LoweringStatement::VoidReturn => "return;".to_string(),
-            // LoweringStatement::FunctionCall(call) => call.emit_c() + ";",
-            // LoweringStatement::Reassignment(reassignment) => reassignment.emit_c()
+            // LoweredStatement::VoidReturn => "return;".to_string(),
+            // LoweredStatement::FunctionCall(call) => call.emit_c() + ";",
+            // LoweredStatement::Reassignment(reassignment) => reassignment.emit_c()
         }
     }
 }
@@ -52,15 +53,6 @@ impl CNode for SimpleInitialisation {
             .emit_c();
 
         format!("{typ} {} = {};", self.assignee, self.value.emit_c())
-    }
-}
-
-impl CNode for LoweringExpression {
-    fn emit_c(&self) -> String {
-        match self {
-            LoweringExpression::Desugared(expr) => expr.emit_c(),
-            _ => unimplemented!("cannot emit C code for sugared expressions"),
-        }
     }
 }
 
