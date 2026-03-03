@@ -1,10 +1,20 @@
+///
+/// This file contains all the nodes relating to the lowering of syntactic sugar
+/// That is required before being able to translate to valid C code.
+///
+/// Any node with the `Desugared` prefix denotes some higher-level construct that is lowered
+/// into the general structure of its C representation
+/// Such a node is not yet able to be translated, because its actual C representation
+/// might depends on the context in which it exists.
+///
+/// Any enum with the `Lowering` prefix represents some node
+/// which had one or more of its variants converted to their `Desugared` form
+///
 use crate::ast::datatype::TupleSignature;
-use crate::ast::{
-    AssignmentPattern, Expression, Initialisation, Literal, StructDefinition, Type,
-    TypedIdentifier,
-};
+use crate::ast::{Literal, Statement, StructDefinition, Type, TypedIdentifier};
 use std::collections::HashSet;
 use thiserror::Error;
+
 
 #[derive(Error, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LoweringError {
@@ -12,30 +22,29 @@ pub enum LoweringError {
     Other(String),
 }
 pub type LoweringResult<T> = Result<T, LoweringError>;
-pub trait LoweringExpression {}
-impl LoweringExpression for Expression {}
-impl LoweringExpression for LoweredExpression {}
-pub enum LoweredStatement<Expr: LoweringExpression> {
-    Initialisation(LoweredInitialisation<Expr>),
-    Reassignment(LoweredReassignment<Expr>),
-    FunctionCall(LoweredFunctionCall<Expr>),
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum LoweredStatement {
+    Initialisation(DesugaredInitialisation),
+    Reassignment(LoweringReassignment),
+    FunctionCall(LoweringFunctionCall),
     VoidReturn,
     Return(LoweredExpression),
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LoweredReassignment<Expr: LoweringExpression> {
+pub struct LoweringReassignment {
     pub assignee: String,
-    pub value: Expr,
+    pub value: LoweredExpression,
 }
 #[derive(Debug, PartialEq, Clone)]
-pub struct LoweredFunctionCall<Expr: LoweringExpression> {
+pub struct LoweringFunctionCall {
     pub name: String,
-    pub arguments: Vec<Expr>,
+    pub arguments: LoweredExpression,
 }
 #[derive(Debug, PartialEq, Clone)]
 pub enum LoweredExpression {
-    FuncCall(LoweredFunctionCall<LoweredExpression>),
+    FuncCall(Box<LoweringFunctionCall>),
     Literal(Literal),
     Add(Box<LoweredExpression>, Box<LoweredExpression>),
     Sub(Box<LoweredExpression>, Box<LoweredExpression>),
@@ -58,6 +67,27 @@ pub enum LoweredExpression {
         Box<LoweredExpression>,
         Box<LoweredExpression>,
     ),
+    Block(DesugaredBlockExpr),
+    CondMatch(DesugaredCondMatch),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DesugaredCondMatch {
+    /// The label that the condmatch value gets i.e. `__cmatch0`, `__cmatch1` etc.
+    /// This label must be unique to the scope of the function in which it exists
+    label: usize,
+    /// All of its cases, which may or may not contain a default arm.
+    arms: Vec<LoweredExpression>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DesugaredBlockExpr {
+    /// The label that the block expression has its value assigned to
+    /// i.e. `__block0`, `__block1` etc.
+    /// This label must be unique to the scope of the function in which it exists
+    label: usize,
+    statements: Vec<Statement>,
+    last: LoweredExpression,
 }
 
 impl From<Literal> for LoweredExpression {
@@ -66,14 +96,16 @@ impl From<Literal> for LoweredExpression {
     }
 }
 
+/// An assignment to a simple, totally unpacked variable.
 #[derive(Debug, PartialEq, Clone)]
-pub struct LoweredInitialisation<Expr: LoweringExpression> {
+pub struct SimpleInitialisation {
     pub typ: Option<Type>,
     pub assignee: String,
-    pub value: Expr,
+    pub value: LoweredExpression,
 }
-impl<Expr: LoweringExpression> LoweredInitialisation<Expr> {
-    pub fn new(typ: Option<Type>, assignee: impl Into<String>, value: Expr) -> Self {
+
+impl SimpleInitialisation {
+    pub fn new(typ: Option<Type>, assignee: impl Into<String>, value: LoweredExpression) -> Self {
         Self {
             typ,
             assignee: assignee.into(),
@@ -82,34 +114,23 @@ impl<Expr: LoweringExpression> LoweredInitialisation<Expr> {
     }
 }
 #[derive(Debug, PartialEq, Clone)]
-pub struct DesugaredInitialisation<Expr: LoweringExpression> {
-    pub temporary: LoweredInitialisation<Expr>,
-    pub unpacked_assignments: Vec<LoweredInitialisation<Expr>>,
+pub struct DesugaredInitialisation {
+    pub temporary: SimpleInitialisation,
+    pub unpacked_assignments: Vec<DesugaredInitialisation>,
 }
 
-impl Initialisation {
-    pub fn desugar_destructuring(self) -> LoweringResult<Vec<LoweredInitialisation<Expression>>> {
-        Ok(match self.assignee {
-            AssignmentPattern::Identifier(assignee) => {
-                vec![LoweredInitialisation::new(self.typ, assignee, self.value)]
-            }
-
-            AssignmentPattern::Tuple(_tuple) => {
-                unimplemented!("implement tuple pattern assignment destructuring blabla")
-            }
-        })
+impl From<SimpleInitialisation> for DesugaredInitialisation {
+    fn from(value: SimpleInitialisation) -> Self {
+        Self {
+            temporary: value,
+            unpacked_assignments: vec![],
+        }
     }
 }
 
-impl<Expr: LoweringExpression> From<DesugaredInitialisation<Expr>>
-    for Vec<LoweredInitialisation<Expr>>
-{
-    fn from(initialiser: DesugaredInitialisation<Expr>) -> Self {
-        let mut v: Vec<LoweredInitialisation<Expr>> =
-            Vec::with_capacity(initialiser.unpacked_assignments.len() + 1);
-        v.push(initialiser.temporary);
-        v.extend(initialiser.unpacked_assignments);
-        v
+impl From<SimpleInitialisation> for LoweredStatement {
+    fn from(value: SimpleInitialisation) -> Self {
+        Self::Initialisation(value.into())
     }
 }
 

@@ -1,5 +1,13 @@
 use crate::ast::{Literal, Type};
-use crate::lowering::{LoweredExpression, LoweredInitialisation, LoweredStatement};
+use crate::lowering::{
+    LoweredExpression, LoweringExpression, LoweringStatement, SimpleInitialisation,
+};
+
+pub struct CondMatchFormatter {
+    typ: Option<Type>,
+    assignee: String,
+    arms: Vec<LoweredExpression>,
+}
 
 pub mod c_ast;
 pub fn canoncalize_zea_identifier(identifier: &str) -> String {
@@ -22,29 +30,37 @@ impl<T: CNode> CNode for Box<T> {
     }
 }
 
-impl CNode for LoweredStatement<LoweredExpression> {
+impl CNode for LoweringStatement {
     fn emit_c(&self) -> String {
         match self {
-            LoweredStatement::Initialisation(init) => init.emit_c(),
-            LoweredStatement::Return(expr) => format!("return ({});", expr.emit_c()),
+            LoweringStatement::Initialisation(init) => init.emit_c(),
+            LoweringStatement::Return(expr) => format!("return ({});", expr.emit_c()),
             _ => unimplemented!("implement remaining lowered statement code generation"),
-            // LoweredStatement::VoidReturn => "return;".to_string(),
-            // LoweredStatement::FunctionCall(call) => call.emit_c() + ";",
-            // LoweredStatement::Reassignment(reassignment) => reassignment.emit_c()
+            // LoweringStatement::VoidReturn => "return;".to_string(),
+            // LoweringStatement::FunctionCall(call) => call.emit_c() + ";",
+            // LoweringStatement::Reassignment(reassignment) => reassignment.emit_c()
         }
     }
 }
 
-impl CNode for LoweredInitialisation<LoweredExpression> {
+impl CNode for SimpleInitialisation {
     fn emit_c(&self) -> String {
-        format!(
-            "{} {} = {};",
-            self.typ.as_ref().map(|typ| typ.emit_c()).expect(
-                "initialisation\n`{self:?}`\nshould have its type known before formatting."
-            ),
-            self.assignee,
-            self.value.emit_c()
-        )
+        let typ = self
+            .typ
+            .as_ref()
+            .expect("initialisation\n`{self:?}`\nshould have its type known before formatting.")
+            .emit_c();
+
+        format!("{typ} {} = {};", self.assignee, self.value.emit_c())
+    }
+}
+
+impl CNode for LoweringExpression {
+    fn emit_c(&self) -> String {
+        match self {
+            LoweringExpression::Desugared(expr) => expr.emit_c(),
+            _ => unimplemented!("cannot emit C code for sugared expressions"),
+        }
     }
 }
 
@@ -80,7 +96,7 @@ impl CNode for Type {
 #[cfg(test)]
 mod tests {
     use crate::codegen::CNode;
-    use crate::lowering::{LoweredExpression, LoweredInitialisation};
+    use crate::lowering::{LoweredExpression, SimpleInitialisation};
 
     #[test]
     fn canonicalize_zea_identifier() {
@@ -94,7 +110,7 @@ mod tests {
         assert_eq!(c(s2), "kebab_case");
         assert_eq!(c(s3), "map_bang");
         assert_eq!(c(s4), "unify_types_maybe__bang");
-        assert_eq!(c(s5), "unify_types_maybe__bang");
+        assert_eq!(c(s5), "unify_types_maybe___bang");
     }
 
     #[test]
@@ -103,7 +119,7 @@ mod tests {
         let typ = types::int_type();
         let value: LoweredExpression = literals::int_lit(3).into();
 
-        let init = LoweredInitialisation::new(Some(typ), "a", value);
+        let init = SimpleInitialisation::new(Some(typ), "a", value);
 
         assert_eq!(init.emit_c(), "I32 a = 3ull;")
     }

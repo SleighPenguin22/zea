@@ -85,7 +85,7 @@ struct __tuple2_int_int {
 }
 
 int length_squared(__tuple2_int_int point) {
-    let __unpack = point;
+    __tuple2_int_int __unpack = point;
     int x = __unpack._0;
     int y = __unpack._1;
     return x * x + y * y;
@@ -98,9 +98,9 @@ fn f(tup: ((int,int),int,bool)) {
 }
 
 struct __tuple2_int_int;
-struct __tuple2_int_int {int _0; int _1;}
-
 struct __tuple3_tuple2_int_int_int_bool
+
+struct __tuple2_int_int {int _0; int _1;}
 struct __tuple3_tuple2_int_int_int_bool {__tuple2_int_int _0; int _1; bool _2}
 
 void f(__tuple3_tuple2_int_int_int_bool tup) {
