@@ -1,3 +1,4 @@
+use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 
 /// The Zea named Struct type / product type
@@ -66,3 +67,12 @@ impl Into<Type> for String {
 }
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct TypedIdentifier(String, Type);
+
+impl TypedIdentifier {
+    pub fn ident(&self) -> &str {
+        &self.0
+    }
+    pub fn typ(&self) -> &Type {
+        &self.1
+    }
+}
