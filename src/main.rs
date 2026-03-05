@@ -1,6 +1,8 @@
 #![allow(unused)]
+
 use crate::ast::{
-    AssignmentPattern, Expression, Function, Initialisation, Literal, Statement, Type,
+    AssignmentPattern, Expression, Function, Initialisation, Module, Statement, TopLevelStatement,
+    Type, TypedIdentifier,
 };
 
 mod analysis;
@@ -14,31 +16,55 @@ pub mod visualize_parse_tree;
 
 #[cfg(feature = "visualisation")]
 fn main() {
+    macro_rules! set {
+        () => {{use std::collections::HashSet;HashSet::new()}};
+        ($($e:expr),+) => {{
+            use std::collections::HashSet;
+            HashSet::from_iter(vec![$($e),+])
+        }}
+    }
     let assigna = Statement::Initialisation(Initialisation {
         typ: Some(Type::Pointer(Box::new(Type::Basic("I32".to_string())))),
-        assignee: AssignmentPattern::Identifier("a".to_string()),
-        value: Expression::Literal(Literal::Integer(4)),
+        assignee: AssignmentPattern::Tuple(vec![
+            AssignmentPattern::Identifier("x".to_string()),
+            AssignmentPattern::Identifier("y".to_string()),
+        ]),
+        value: Expression::Ident("point".to_string()),
     });
     let return3 = Statement::Return(Expression::Ident("a".to_string()));
-    let main = Function {
-        name: "main".to_string(),
+
+    let retexpr = Statement::Return(Expression::Unit);
+    let square = Function {
+        name: "square".to_string(),
+        args: vec![TypedIdentifier::new(
+            Type::Basic("I32".to_string()),
+            "n".to_string(),
+        )],
+        returns: Type::Basic("I32".to_string()),
+        body: vec![Statement::Return(Expression::Mul(
+            Box::new(Expression::Ident("n".to_string())),
+            Box::new(Expression::Ident("n".to_string())),
+        ))],
+    };
+    let main2 = Function {
+        name: "main2".to_string(),
         args: vec![],
         returns: Type::Basic("I32".to_string()),
         body: vec![assigna, return3],
     };
+    let module = Module {
+        imports: vec![],
+        exports: vec![],
+        symbols: set![
+            TopLevelStatement::FuncDefinition(square),
+            TopLevelStatement::FuncDefinition(main2)
+        ],
+    };
 
-    let expr = Expression::LogXor(
-        Box::new(Expression::LogNot(Box::new(Expression::Sub(
-            Box::new(Expression::Literal(Literal::String("bob".to_string()))),
-            Box::new(Expression::Literal(Literal::Boolean(true))),
-        )))),
-        Box::new(Expression::Add(
-            Box::new(Expression::Literal(Literal::Integer(3))),
-            Box::new(Expression::Literal(Literal::Float(3.14))),
-        )),
-    );
-
-    visualize_parse_tree::graphify(main, "pt.png")
+    match visualize_parse_tree::graphify(&module, "renders/pt.png") {
+        Err(e) => eprintln!("could not form graph for AST: {e}"),
+        Ok(()) => {}
+    }
 }
 
 #[cfg(not(feature = "visualisation"))]

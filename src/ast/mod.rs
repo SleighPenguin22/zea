@@ -8,7 +8,7 @@ pub mod statement;
 pub mod test_utils;
 
 pub use crate::ast::{
-    datatype::{StructDefinition, Type, TypedIdentifier},
+    datatype::{Type, TypedIdentifier},
     expression::{Expression, Literal},
     patterns::AssignmentPattern,
     statement::{Initialisation, Statement, StatementBlock},
@@ -41,6 +41,19 @@ impl Module {
 pub enum TopLevelStatement {
     FuncDefinition(Function),
     GlobalConst(Initialisation),
+}
+
+impl Eq for TopLevelStatement {}
+impl Hash for TopLevelStatement {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            TopLevelStatement::GlobalConst(init) => init.assignee.hash(state),
+            TopLevelStatement::FuncDefinition(func) => {
+                func.name.hash(state);
+                func.returns.hash(state);
+            }
+        }
+    }
 }
 
 /// A top-level function definition

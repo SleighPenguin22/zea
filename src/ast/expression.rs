@@ -49,6 +49,15 @@ pub struct IfThenElse {
     true_case: Box<Expression>,
     false_case: Option<Box<Expression>>,
 }
+impl IfThenElse {
+    pub fn new(condition: Expression, true_case: Expression, false_case: Expression) -> IfThenElse {
+        IfThenElse {
+            condition: Box::new(condition),
+            true_case: Box::new(true_case),
+            false_case: Some(Box::new(false_case)),
+        }
+    }
+}
 
 pub type PatternMatchArm = (AssignmentPattern, Box<Expression>);
 
