@@ -24,18 +24,21 @@ fn main() {
         name: "main".to_string(),
         args: vec![],
         returns: Type::Basic("I32".to_string()),
-        body: vec![assigna, return3],
+        body: vec![],
     };
 
-    let expr = Expression::Add(
+    let expr = Expression::LogXor(
+        Box::new(Expression::LogNot(Box::new(Expression::Sub(
+            Box::new(Expression::Literal(Literal::String("bob".to_string()))),
+            Box::new(Expression::Literal(Literal::Boolean(true))),
+        )))),
         Box::new(Expression::Add(
-            Box::new(Expression::Literal(Literal::Boolean(true))),
-            Box::new(Expression::Literal(Literal::Boolean(true))),
+            Box::new(Expression::Literal(Literal::Integer(3))),
+            Box::new(Expression::Literal(Literal::Float(3.14))),
         )),
-        Box::new(Expression::Literal(Literal::Boolean(true))),
     );
 
-    visualize_parse_tree::graphify_expression(expr, "pt.png")
+    visualize_parse_tree::graphify(assigna, "pt.png")
 }
 
 #[cfg(not(feature = "visualisation"))]
