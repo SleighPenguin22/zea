@@ -13,23 +13,12 @@ pub type ModuleNamedTupleCache = HashSet<TupleWithNamedMembers>;
 pub struct TupleWithNamedMembers {
     members: Vec<TypedIdentifier>,
 }
-
+#[derive(Default)]
 pub struct DesugaredConstructLabelFactory {
     block_label: usize,
     cond_match_label: usize,
     pattern_match_label: usize,
     named_tuple_cache: HashSet<TupleWithNamedMembers>,
-}
-
-impl Default for DesugaredConstructLabelFactory {
-    fn default() -> Self {
-        Self {
-            block_label: 0,
-            cond_match_label: 0,
-            pattern_match_label: 0,
-            named_tuple_cache: HashSet::new(),
-        }
-    }
 }
 
 impl DesugaredConstructLabelFactory {

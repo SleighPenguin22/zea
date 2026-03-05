@@ -2,7 +2,6 @@ use std::ffi::CString;
 use std::fmt::{Debug, Formatter};
 
 /// The Zea named Struct type / product type
-
 pub struct StructDefinition {
     name: String,
     members: Vec<TypedIdentifier>,

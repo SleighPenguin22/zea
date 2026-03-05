@@ -72,10 +72,11 @@ pub enum Literal {
 
 impl PartialEq for Literal {
     fn eq(&self, other: &Self) -> bool {
-        if let (Self::Float(a), Self::Float(b)) = (self, other) {
-            if a.is_nan() && b.is_nan() {
-                return true;
-            }
+        if let (Self::Float(a), Self::Float(b)) = (self, other)
+            && a.is_nan()
+            && b.is_nan()
+        {
+            return true;
         }
         match (self, other) {
             (Self::Integer(a), Self::Integer(b)) => a == b,
@@ -91,8 +92,8 @@ impl Eq for Literal {}
 impl Hash for Literal {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
-            Self::Float(f) if f.is_nan() => state.write(&*f64::NAN.to_ne_bytes().as_ref()),
-            Self::Float(f) => state.write(&*f.to_ne_bytes().as_ref()),
+            Self::Float(f) if f.is_nan() => state.write(f64::NAN.to_ne_bytes().as_ref()),
+            Self::Float(f) => state.write(f.to_ne_bytes().as_ref()),
             Self::Boolean(b) => b.hash(state),
             Self::String(s) => s.hash(state),
             Self::Integer(i) => i.hash(state),
