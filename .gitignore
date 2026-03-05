@@ -41,7 +41,6 @@
 *.dSYM/
 *.su
 *.idb
-*.pdb
 
 # Kernel Module Compile Results
 *.mod*
@@ -133,4 +132,7 @@ build-iPhoneSimulator/
 # .rubocop-https?--*
 
 /.idea/
+
 test.c
+/renders/
+/renders/*.png
