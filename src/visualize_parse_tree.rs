@@ -1,4 +1,7 @@
-use crate::ast::{AssignmentPattern, Expression, Initialisation, Literal, Statement, Type};
+use crate::ast::{
+    AssignmentPattern, Expression, Function, Initialisation, Literal, Statement, Type,
+    TypedIdentifier,
+};
 use vizoxide::attr::node::SHAPE as NODE_SHAPE;
 use vizoxide::attr::node::{COLOR, FILLCOLOR, LABEL as dot_node_label};
 use vizoxide::layout::{apply_layout, Engine};
@@ -59,11 +62,32 @@ fn render_block<'a>(
         .build()
         .unwrap();
 
-    for statement in block {
-        let (stmt_id, stmt) = statement.render(graph, labeler);
-        graph.create_edge(&node, &stmt, None).build().unwrap();
-    }
+    render_block_next(graph, labeler, &block[..], &node, id);
+
     (id, node)
+}
+
+fn render_block_next<'a>(
+    graph: &'a Graph,
+    labeler: &mut Labeler,
+    block: &[Statement],
+    prev: &Node<'a>,
+    block_id: usize,
+) {
+    match block {
+        [stmt, rest @ ..] => {
+            let edge_label = "block".to_string();
+            let (id, node) = stmt.render(graph, labeler);
+            graph
+                .create_edge(prev, &node, None)
+                .attribute(vizoxide::attr::edge::COLOR, "pink")
+                .attribute(vizoxide::attr::edge::LABEL, &edge_label)
+                .build()
+                .unwrap();
+            render_block_next(graph, labeler, rest, &node, block_id);
+        }
+        [] => return,
+    }
 }
 
 impl Literal {
@@ -211,6 +235,7 @@ impl DotNode for Expression {
             }
             Expression::Literal(l) => l.render(graph, labeler),
             Expression::Ident(i) => i.render(graph, labeler),
+            Expression::Block(block) => render_block(graph, labeler, block),
             _ => unimplemented!("render expression\n{self:?}\n"),
         }
     }
@@ -227,6 +252,29 @@ impl Type {
 }
 
 impl DotNode for Option<Type> {
+    fn render<'a>(&self, graph: &'a Graph, labeler: &mut Labeler) -> (usize, Node<'a>) {
+        let id = labeler.get();
+        let builder = graph
+            .create_node(&id.to_string())
+            .attribute(vizoxide::attr::node::COLOR, "green")
+            .attribute(vizoxide::attr::node::FILLCOLOR, "green")
+            .attribute(NODE_SHAPE, "diamond");
+        let node = match self {
+            None => builder
+                .attribute(dot_node_label, "TO BE INFERRED")
+                .build()
+                .unwrap(),
+            Some(t) => builder
+                .attribute(dot_node_label, &t.recurse_format())
+                .build()
+                .unwrap(),
+        };
+
+        (id, node)
+    }
+}
+
+impl DotNode for Option<&Type> {
     fn render<'a>(&self, graph: &'a Graph, labeler: &mut Labeler) -> (usize, Node<'a>) {
         let id = labeler.get();
         let builder = graph
@@ -347,5 +395,77 @@ impl DotNode for Statement {
             Statement::Block(block) => render_block(graph, labeler, block),
             _ => unimplemented!("cannot yet render statement:\n {self:?}\n"),
         }
+    }
+}
+
+impl Function {
+    fn render_paramlist<'a>(
+        graph: &'a Graph,
+        labeler: &mut Labeler,
+        params: &Vec<TypedIdentifier>,
+    ) -> (usize, Node<'a>) {
+        let id = labeler.get();
+        let paramlist_node = graph
+            .create_node(&id.to_string())
+            .attribute(dot_node_label, "params")
+            .attribute(FILLCOLOR, "grey")
+            .attribute(COLOR, "grey")
+            .build()
+            .unwrap();
+
+        for param in params {
+            Self::render_param(graph, labeler, param, &paramlist_node)
+        }
+
+        (id, paramlist_node)
+    }
+    fn render_param<'a>(
+        graph: &'a Graph,
+        labeler: &mut Labeler,
+        param: &TypedIdentifier,
+        paramlist_node: &Node<'a>,
+    ) {
+        let id = labeler.get();
+        let node = graph
+            .create_node(&id.to_string())
+            .attribute(dot_node_label, "param")
+            .build()
+            .unwrap();
+
+        let (_, typ) = Some(param.typ()).render(graph, labeler);
+        graph.create_edge(&node, &typ, None).build().unwrap();
+        let (_, name) = param.ident().to_string().render(graph, labeler);
+        graph.create_edge(&node, &name, None).build().unwrap();
+        graph
+            .create_edge(paramlist_node, &node, None)
+            .build()
+            .unwrap();
+    }
+}
+impl DotNode for Function {
+    fn render<'a>(&self, graph: &'a Graph, labeler: &mut Labeler) -> (usize, Node<'a>) {
+        let id = labeler.get();
+        let label = self.name.clone() + "()";
+        let node = graph
+            .create_node(&id.to_string())
+            .attribute(dot_node_label, &label)
+            .attribute(COLOR, "grey")
+            .attribute(FILLCOLOR, "grey")
+            .build()
+            .unwrap();
+
+        let (_, returns) = Some(&self.returns).render(graph, labeler);
+        graph
+            .create_edge(&node, &returns, Some("returns"))
+            .build()
+            .unwrap();
+
+        let (_, params) = Self::render_paramlist(graph, labeler, &self.args);
+        graph.create_edge(&node, &params, None).build().unwrap();
+
+        let (_, body) = render_block(graph, labeler, &self.body);
+        graph.create_edge(&node, &body, None).build().unwrap();
+
+        (id, node)
     }
 }

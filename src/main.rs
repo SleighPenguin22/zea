@@ -15,7 +15,7 @@ pub mod visualize_parse_tree;
 #[cfg(feature = "visualisation")]
 fn main() {
     let assigna = Statement::Initialisation(Initialisation {
-        typ: Some(Type::Basic("I32".to_string())),
+        typ: Some(Type::Pointer(Box::new(Type::Basic("I32".to_string())))),
         assignee: AssignmentPattern::Identifier("a".to_string()),
         value: Expression::Literal(Literal::Integer(4)),
     });
@@ -24,7 +24,7 @@ fn main() {
         name: "main".to_string(),
         args: vec![],
         returns: Type::Basic("I32".to_string()),
-        body: vec![],
+        body: vec![assigna, return3],
     };
 
     let expr = Expression::LogXor(
@@ -38,7 +38,7 @@ fn main() {
         )),
     );
 
-    visualize_parse_tree::graphify(assigna, "pt.png")
+    visualize_parse_tree::graphify(main, "pt.png")
 }
 
 #[cfg(not(feature = "visualisation"))]
