@@ -3,11 +3,54 @@ use crate::ast::{
     TopLevelStatement, Type, TypedIdentifier,
 };
 use vizoxide::attr::edge::LABEL;
+use vizoxide::attr::graph::STYLE;
 use vizoxide::attr::node::SHAPE as NODE_SHAPE;
 use vizoxide::attr::node::{COLOR, FILLCOLOR, LABEL as dot_node_label};
 use vizoxide::layout::{apply_layout, Engine};
 use vizoxide::render::{render_to_file, Format};
-use vizoxide::{Context, Graph, GraphBuilder, Node};
+use vizoxide::{Context, Graph, GraphBuilder, Node, NodeBuilder};
+
+#[derive(Debug)]
+pub struct Labeler(usize);
+impl Labeler {
+    pub fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn get(&mut self) -> usize {
+        let n = self.0;
+        self.0 += 1;
+        n
+    }
+}
+struct RenderingNodeBuilder<'graph>(NodeBuilder<'graph>);
+impl<'graph> RenderingNodeBuilder<'graph> {
+    pub fn new(graph: &'graph Graph, id: usize) -> RenderingNodeBuilder<'graph> {
+        RenderingNodeBuilder(NodeBuilder::new(graph, &id.to_string()))
+    }
+
+    pub fn filled(mut self) -> RenderingNodeBuilder<'graph> {
+        Self(self.0.attribute("style", "filled"))
+    }
+    pub fn label<'a>(mut self, label: &'a str) -> RenderingNodeBuilder<'graph> {
+        Self(self.0.attribute("label", label))
+    }
+    pub fn color<'a>(mut self, color: &'a str) -> RenderingNodeBuilder<'graph> {
+        Self(self.0.attribute("color", color))
+    }
+
+    pub fn fillcolor<'a>(mut self, color: &'a str) -> RenderingNodeBuilder<'graph> {
+        Self(self.0.attribute("fillcolor", color))
+    }
+
+    pub fn shape<'a>(mut self, shape: &'a str) -> RenderingNodeBuilder<'graph> {
+        Self(self.0.attribute("shape", shape))
+    }
+
+    pub fn build(self) -> Node<'graph> {
+        self.0.build().unwrap()
+    }
+}
 
 macro_rules! err_unimplemented {
     ($lit:literal) => {{
@@ -26,17 +69,19 @@ fn basic_labeled_node<'graph>(
     label: &str,
 ) -> VisualizeResult<'graph> {
     let id = labeler.get();
-    let node = graph
-        .create_node(&id.to_string())
-        .attribute(dot_node_label, label)
-        .build()
-        .unwrap();
+    let node = RenderingNodeBuilder::new(graph, id).label(label).build();
     Ok((id, node))
 }
 pub fn graphify(dot_node: &impl DotNode, path: &str) -> Result<(), String> {
     let context = Context::new().unwrap();
     let mut g = GraphBuilder::new("expression")
         .attribute(vizoxide::attr::graph::RANKDIR, "TB")
+        // .attribute(BGCOLOR, "black")
+        .attribute(vizoxide::attr::graph::EDGE_COLOR, "white")
+        .attribute(vizoxide::attr::graph::FONTCOLOR, "black")
+        .attribute(vizoxide::attr::graph::NODE_COLOR, "blue")
+        .attribute(STYLE, "filled")
+        // .attribute(vizoxide::attr::graph::, "white")
         // .attribute(vizoxide::attr::graph::FONTNAME, "Helvetica")
         // .attribute(vizoxide::attr::graph::NODE_SHAPE, "box")
         .directed(true)
@@ -47,24 +92,9 @@ pub fn graphify(dot_node: &impl DotNode, path: &str) -> Result<(), String> {
     dot_node.render(&mut g, &mut labeler)?;
     apply_layout(&context, &mut g, Engine::Dot);
     render_to_file(&context, &g, Format::Png, path).unwrap();
-    println!("{labeler:?}");
     Ok(())
 }
 
-#[repr(transparent)]
-#[derive(Debug)]
-pub struct Labeler(usize);
-impl Labeler {
-    pub fn new() -> Self {
-        Self(0)
-    }
-
-    pub fn get(&mut self) -> usize {
-        let n = self.0;
-        self.0 += 1;
-        n
-    }
-}
 pub trait DotNode {
     fn render<'graph>(
         &self,
@@ -84,13 +114,12 @@ fn render_block<'graph>(
     } else {
         "block"
     };
-    let node = graph
-        .create_node(&id.to_string())
-        .attribute(dot_node_label, label)
-        .attribute(COLOR, "grey")
-        .attribute(FILLCOLOR, "grey")
-        .build()
-        .unwrap();
+    let node = RenderingNodeBuilder::new(graph, id)
+        .label(label)
+        .filled()
+        .fillcolor("grey")
+        .color("grey")
+        .build();
 
     render_block_next(graph, labeler, &block[..], &node)?;
 
@@ -112,7 +141,7 @@ fn render_block_next<'graph>(
     let (id, node) = stmt.render(graph, labeler)?;
     graph
         .create_edge(prev, &node, None)
-        .attribute(vizoxide::attr::edge::COLOR, "pink")
+        .attribute(vizoxide::attr::edge::COLOR, "orange")
         .attribute(vizoxide::attr::edge::LABEL, &edge_label)
         .build()
         .unwrap();
@@ -304,24 +333,7 @@ impl DotNode for Option<Type> {
         graph: &'graph Graph,
         labeler: &mut Labeler,
     ) -> VisualizeResult<'graph> {
-        let id = labeler.get();
-        let builder = graph
-            .create_node(&id.to_string())
-            .attribute(vizoxide::attr::node::COLOR, "green")
-            .attribute(vizoxide::attr::node::FILLCOLOR, "green")
-            .attribute(NODE_SHAPE, "diamond");
-        let node = match self {
-            None => builder
-                .attribute(dot_node_label, "TO BE INFERRED")
-                .build()
-                .unwrap(),
-            Some(t) => builder
-                .attribute(dot_node_label, &t.recurse_format())
-                .build()
-                .unwrap(),
-        };
-
-        Ok((id, node))
+        self.as_ref().render(graph, labeler)
     }
 }
 
@@ -336,8 +348,9 @@ impl DotNode for Option<&Type> {
             .create_node(&id.to_string())
             .attribute(vizoxide::attr::node::COLOR, "green")
             .attribute(vizoxide::attr::node::FILLCOLOR, "green")
+            .attribute("style", "filled")
             .attribute(NODE_SHAPE, "diamond");
-        let node = match self {
+        let node = match *self {
             None => builder
                 .attribute(dot_node_label, "TO BE INFERRED")
                 .build()
@@ -371,6 +384,7 @@ impl AssignmentPattern {
                 let unpacking_node = graph
                     .create_node(&id.to_string())
                     .attribute(dot_node_label, "unpack")
+                    .attribute(COLOR, "blue")
                     .build()
                     .unwrap();
                 for (i, assignee) in tup.iter().enumerate() {
@@ -378,6 +392,7 @@ impl AssignmentPattern {
                     graph
                         .create_edge(&unpacking_node, &node, None)
                         .attribute(LABEL, &("_".to_string() + &i.to_string()))
+                        .attribute(vizoxide::attr::edge::COLOR, "blue")
                         .build()
                         .unwrap();
                 }
@@ -428,6 +443,7 @@ impl DotNode for Initialisation {
         graph
             .create_edge(&node, &typ, Some("type"))
             .attribute(LABEL, "type")
+            .attribute(vizoxide::attr::edge::COLOR, "green")
             .build()
             .unwrap();
 
@@ -463,6 +479,8 @@ impl DotNode for Statement {
                     .create_node(&id.to_string())
                     .attribute(dot_node_label, "return")
                     .attribute(NODE_SHAPE, "box")
+                    .attribute(COLOR, "red")
+                    .attribute("style", "filled")
                     .build()
                     .unwrap();
 
@@ -516,7 +534,11 @@ impl Function {
             .unwrap();
 
         let (_, typ) = Some(param.typ()).render(graph, labeler)?;
-        graph.create_edge(&node, &typ, None).build().unwrap();
+        graph
+            .create_edge(&node, &typ, None)
+            .attribute(vizoxide::attr::edge::COLOR, "green")
+            .build()
+            .unwrap();
         let (_, name) = param.ident().to_string().render(graph, labeler)?;
         graph.create_edge(&node, &name, None).build().unwrap();
         graph
@@ -546,6 +568,7 @@ impl DotNode for Function {
         graph
             .create_edge(&node, &returns, Some("returns"))
             .attribute(LABEL, "returns")
+            .attribute(vizoxide::attr::edge::COLOR, "green")
             .build()
             .unwrap();
 

@@ -24,7 +24,7 @@ fn main() {
         }}
     }
     let assigna = Statement::Initialisation(Initialisation {
-        typ: Some(Type::Pointer(Box::new(Type::Basic("I32".to_string())))),
+        typ: None,
         assignee: AssignmentPattern::Tuple(vec![
             AssignmentPattern::Identifier("x".to_string()),
             AssignmentPattern::Identifier("y".to_string()),
