@@ -1,4 +1,6 @@
-use crate::ast::{Literal, Statement, Type};
+use crate::ast::zea::expression::Literal;
+use crate::ast::zea::statement::Statement;
+use crate::ast::zea::Type;
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq, Hash)]

@@ -1,4 +1,4 @@
-use crate::ast::Expression;
+use crate::ast::zea::expression::Expression;
 use crate::lowering::{
     ExpandedBlockExpr, ExpandedExpression, ExpandedInitialisation, ExpandedStatement,
     SimpleInitialisation,

@@ -1,16 +1,9 @@
-
-
-use crate::ast::{Expression, Literal, Statement, Type};
-pub mod statements {
-    use super::*;
-    use crate::ast::Initialisation;
-    use crate::ast::patterns::AssignmentPattern;
-}
+pub mod statements {}
 
 pub mod expressions {}
 
 pub mod literals {
-    use super::*;
+    use crate::ast::zea::expression::Literal;
     pub fn int_lit(value: u64) -> Literal {
         Literal::Integer(value)
     }
@@ -27,7 +20,7 @@ pub mod literals {
     }
 }
 pub mod types {
-    use crate::ast::Type;
+    use crate::ast::zea::Type;
 
     pub fn ptr_to(typ: Type) -> Type {
         Type::Pointer(Box::new(typ))

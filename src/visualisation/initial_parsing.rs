@@ -1,6 +1,8 @@
-use crate::ast::{
-    AssignmentPattern, Expression, Function, Initialisation, Literal, Module, Statement,
-    TopLevelStatement, Type, TypedIdentifier,
+use crate::ast::zea::expression::Expression;
+use crate::ast::zea::statement::Statement;
+use crate::ast::zea::{
+    expression::Literal, patterns::AssignmentPattern, Function, Initialisation, Module, TopLevelStatement,
+    Type, TypedIdentifier,
 };
 use crate::visualisation::{Labeler, RenderingNodeBuilder, Visualise, VisualizeResult};
 use vizoxide::attr::edge::LABEL;

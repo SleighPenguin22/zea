@@ -1,7 +1,7 @@
 #![allow(dead_code)]
-use crate::ast::expression::Expression;
-use crate::ast::patterns::AssignmentPattern;
-use crate::ast::Type;
+use crate::ast::zea::expression::Expression;
+use crate::ast::zea::patterns::AssignmentPattern;
+use crate::ast::zea::Type;
 use crate::lowering::DesugaredCondMatch;
 
 #[derive(Debug, Clone, PartialEq)]

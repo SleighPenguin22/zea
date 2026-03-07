@@ -1,5 +1,6 @@
 #![allow(unused)]
-use crate::ast::{Literal, Type};
+use crate::ast::zea::expression::Literal;
+use crate::ast::zea::Type;
 use crate::lowering::{ExpandedExpression, ExpandedStatement, SimpleInitialisation};
 
 pub struct CondMatchFormatter {
@@ -8,7 +9,6 @@ pub struct CondMatchFormatter {
     arms: Vec<ExpandedExpression>,
 }
 
-pub mod c_ast;
 pub mod symbollowering;
 
 pub fn canoncalize_zea_identifier(identifier: &str) -> String {
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn format_basic_init() {
-        use crate::ast::test_utils::*;
+        use crate::ast::zea::test_utils::*;
         let typ = types::int_type();
         let value: ExpandedExpression = literals::int_lit(3).into();
 

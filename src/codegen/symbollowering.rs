@@ -1,10 +1,11 @@
 #![allow(unused)]
-use crate::ast::{
-    AssignmentPattern, Expression, Function, Initialisation, Statement, StatementBlock, Type,
-    TypedIdentifier,
-};
+
+use crate::ast::zea::expression::Expression;
+use crate::ast::zea::patterns::AssignmentPattern;
+use crate::ast::zea::statement::Statement;
+use crate::ast::zea::{Function, Initialisation, StatementBlock, Type, TypedIdentifier};
 use crate::lowering::{
-    ExpandedBlockExpr, ExpandedInitialisation, ExpandedExpression, ExpandedStatement,
+    ExpandedBlockExpr, ExpandedExpression, ExpandedInitialisation, ExpandedStatement,
 };
 use std::collections::HashSet;
 
@@ -97,8 +98,11 @@ pub fn lower_function(
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::test_utils::types::int_type;
-    use crate::ast::{AssignmentPattern, Expression, Function, Initialisation, Literal, Statement};
+    use crate::ast::zea::expression::{Expression, Literal};
+    use crate::ast::zea::patterns::AssignmentPattern;
+    use crate::ast::zea::statement::Statement;
+    use crate::ast::zea::test_utils::types::int_type;
+    use crate::ast::zea::{Function, Initialisation};
     use crate::codegen::symbollowering::{lower_function, ModuleNamedTupleCache};
 
     #[test]

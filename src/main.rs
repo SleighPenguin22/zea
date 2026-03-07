@@ -1,14 +1,5 @@
 #![allow(unused)]
 
-use crate::ast::{
-    AssignmentPattern, Expression, Function, Initialisation, Module, Statement, TopLevelStatement,
-    Type, TypedIdentifier,
-};
-use crate::lowering::{
-    ExpandedBlockExpr, ExpandedExpression, ExpandedInitialisation, ExpandedStatement,
-    SimpleInitialisation,
-};
-
 mod analysis;
 mod ast;
 mod codegen;
@@ -21,6 +12,18 @@ pub mod visualisation;
 #[cfg(feature = "visualisation")]
 fn main() {
     use crate::visualisation::block_chainer;
+
+    use crate::ast::zea::expression::Expression;
+    use crate::ast::zea::patterns::AssignmentPattern;
+    use crate::ast::zea::statement::Statement;
+    use crate::ast::zea::{
+        Function, Initialisation, Module, TopLevelStatement, Type, TypedIdentifier,
+    };
+    use crate::lowering::{
+        ExpandedBlockExpr, ExpandedExpression, ExpandedInitialisation, ExpandedStatement,
+        SimpleInitialisation,
+    };
+
     macro_rules! set {
         () => {{use std::collections::HashSet;HashSet::new()}};
         ($($e:expr),+) => {{

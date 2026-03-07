@@ -1,5 +1,5 @@
-use crate::ast::patterns::AssignmentPattern;
-use crate::ast::statement::{FunctionCall, StatementBlock};
+use crate::ast::zea::patterns::AssignmentPattern;
+use crate::ast::zea::statement::{FunctionCall, StatementBlock};
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, PartialEq)]
