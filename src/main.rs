@@ -4,6 +4,10 @@ use crate::ast::{
     AssignmentPattern, Expression, Function, Initialisation, Module, Statement, TopLevelStatement,
     Type, TypedIdentifier,
 };
+use crate::lowering::{
+    ExpandedBlockExpr, ExpandedExpression, ExpandedInitialisation, ExpandedStatement,
+    SimpleInitialisation,
+};
 
 mod analysis;
 mod ast;
@@ -12,10 +16,11 @@ mod driver;
 mod lowering;
 mod parser;
 #[cfg(feature = "visualisation")]
-pub mod visualize_parse_tree;
+pub mod visualisation;
 
 #[cfg(feature = "visualisation")]
 fn main() {
+    use crate::visualisation::block_chainer;
     macro_rules! set {
         () => {{use std::collections::HashSet;HashSet::new()}};
         ($($e:expr),+) => {{
@@ -61,7 +66,26 @@ fn main() {
         ],
     };
 
-    match visualize_parse_tree::graphify(&module, "renders/pt.png") {
+    let lowered_blocka = vec![
+        ExpandedStatement::Initialisation(ExpandedInitialisation::new(
+            SimpleInitialisation::new(None, "bob", ExpandedExpression::Unit),
+            vec![],
+        )),
+        ExpandedStatement::Initialisation(ExpandedInitialisation::new(
+            SimpleInitialisation::new(None, "cat", ExpandedExpression::Unit),
+            vec![],
+        )),
+    ];
+
+    let lowered_blockb = ExpandedBlockExpr::new("block0", lowered_blocka.clone());
+
+    // eprintln!("{module:?}");
+    match visualisation::graphify_list(&lowered_blocka, block_chainer, "renders/pt1.png") {
+        Err(e) => eprintln!("could not form graph for AST: {e}"),
+        Ok(()) => {}
+    }
+
+    match visualisation::graphify(&lowered_blockb, "renders/pt2.png") {
         Err(e) => eprintln!("could not form graph for AST: {e}"),
         Ok(()) => {}
     }

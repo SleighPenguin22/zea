@@ -2,108 +2,14 @@ use crate::ast::{
     AssignmentPattern, Expression, Function, Initialisation, Literal, Module, Statement,
     TopLevelStatement, Type, TypedIdentifier,
 };
+use crate::visualisation::{
+    Labeler, RenderingNodeBuilder, Visualise, VisualizeResult,
+};
 use vizoxide::attr::edge::LABEL;
-use vizoxide::attr::graph::STYLE;
-use vizoxide::attr::node::SHAPE as NODE_SHAPE;
-use vizoxide::attr::node::{COLOR, FILLCOLOR, LABEL as dot_node_label};
-use vizoxide::layout::{apply_layout, Engine};
-use vizoxide::render::{render_to_file, Format};
-use vizoxide::{Context, Graph, GraphBuilder, Node, NodeBuilder};
+use vizoxide::attr::node::{COLOR, FILLCOLOR, SHAPE};
+use vizoxide::{Graph, Node};
 
-#[derive(Debug)]
-pub struct Labeler(usize);
-impl Labeler {
-    pub fn new() -> Self {
-        Self(0)
-    }
-
-    pub fn get(&mut self) -> usize {
-        let n = self.0;
-        self.0 += 1;
-        n
-    }
-}
-struct RenderingNodeBuilder<'graph>(NodeBuilder<'graph>);
-impl<'graph> RenderingNodeBuilder<'graph> {
-    pub fn new(graph: &'graph Graph, id: usize) -> RenderingNodeBuilder<'graph> {
-        RenderingNodeBuilder(NodeBuilder::new(graph, &id.to_string()))
-    }
-
-    pub fn filled(mut self) -> RenderingNodeBuilder<'graph> {
-        Self(self.0.attribute("style", "filled"))
-    }
-    pub fn label<'a>(mut self, label: &'a str) -> RenderingNodeBuilder<'graph> {
-        Self(self.0.attribute("label", label))
-    }
-    pub fn color<'a>(mut self, color: &'a str) -> RenderingNodeBuilder<'graph> {
-        Self(self.0.attribute("color", color))
-    }
-
-    pub fn fillcolor<'a>(mut self, color: &'a str) -> RenderingNodeBuilder<'graph> {
-        Self(self.0.attribute("fillcolor", color))
-    }
-
-    pub fn shape<'a>(mut self, shape: &'a str) -> RenderingNodeBuilder<'graph> {
-        Self(self.0.attribute("shape", shape))
-    }
-
-    pub fn build(self) -> Node<'graph> {
-        self.0.build().unwrap()
-    }
-}
-
-macro_rules! err_unimplemented {
-    ($lit:literal) => {{
-        VisualizeResult::Err(format!($lit))
-    }};
-    ($lit:literal, $($e:expr),+) => {
-        VisualizeResult::Err(format!($lit, $($e),+))
-    }
-}
-
-pub type VisualizeResult<'graph> = Result<(usize, Node<'graph>), String>;
-
-fn basic_labeled_node<'graph>(
-    graph: &'graph Graph,
-    labeler: &mut Labeler,
-    label: &str,
-) -> VisualizeResult<'graph> {
-    let id = labeler.get();
-    let node = RenderingNodeBuilder::new(graph, id).label(label).build();
-    Ok((id, node))
-}
-pub fn graphify(dot_node: &impl DotNode, path: &str) -> Result<(), String> {
-    let context = Context::new().unwrap();
-    let mut g = GraphBuilder::new("expression")
-        .attribute(vizoxide::attr::graph::RANKDIR, "TB")
-        // .attribute(BGCOLOR, "black")
-        .attribute(vizoxide::attr::graph::EDGE_COLOR, "white")
-        .attribute(vizoxide::attr::graph::FONTCOLOR, "black")
-        .attribute(vizoxide::attr::graph::NODE_COLOR, "blue")
-        .attribute(STYLE, "filled")
-        // .attribute(vizoxide::attr::graph::, "white")
-        // .attribute(vizoxide::attr::graph::FONTNAME, "Helvetica")
-        // .attribute(vizoxide::attr::graph::NODE_SHAPE, "box")
-        .directed(true)
-        .strict(true)
-        .build()
-        .unwrap();
-    let mut labeler = Labeler::new();
-    dot_node.render(&mut g, &mut labeler)?;
-    apply_layout(&context, &mut g, Engine::Dot);
-    render_to_file(&context, &g, Format::Png, path).unwrap();
-    Ok(())
-}
-
-pub trait DotNode {
-    fn render<'graph>(
-        &self,
-        graph: &'graph Graph,
-        labeler: &mut Labeler,
-    ) -> VisualizeResult<'graph>;
-}
-
-fn render_block<'graph>(
+pub(crate) fn render_block<'graph>(
     graph: &'graph Graph,
     labeler: &mut Labeler,
     block: &Vec<Statement>,
@@ -160,7 +66,7 @@ impl Literal {
     }
 }
 
-impl DotNode for Literal {
+impl Visualise for Literal {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -171,57 +77,29 @@ impl DotNode for Literal {
             .create_node(&s.to_string())
             .attribute(vizoxide::attr::node::FILLCOLOR, "blue")
             .attribute(vizoxide::attr::node::COLOR, "blue")
-            .attribute(NODE_SHAPE, "box")
-            .attribute(dot_node_label, &self.node_label())
+            .attribute(SHAPE, "box")
+            .attribute(LABEL, &self.node_label())
             .build()
             .unwrap();
         Ok((s, node))
     }
 }
 
-impl DotNode for String {
-    fn render<'graph>(
-        &self,
-        graph: &'graph Graph,
-        labeler: &mut Labeler,
-    ) -> VisualizeResult<'graph> {
-        basic_labeled_node(graph, labeler, self)
-    }
-}
-
 impl Expression {
-    fn is_binary_operation(&self) -> bool {
-        use Expression as E;
-        match self {
-            E::Unit
-            | E::Literal(_)
-            | E::Ident(_)
-            | E::Neg(_)
-            | E::LogNot(_)
-            | E::BitNot(_)
-            | E::IfThenElse(..)
-            | E::FuncCall(_)
-            | E::ConditionMatch(_)
-            | E::PatternMatch(_)
-            | E::Block(_) => false,
-            _ => true,
-        }
-    }
-
-    fn is_unary_operation(&self) -> bool {
-        match self {
-            Expression::BitNot(_) | Expression::LogNot(_) | Expression::Neg(_) => true,
-            _ => false,
-        }
-    }
-    fn render_unit<'graph>(
-        &self,
+    pub fn render_unit<'graph>(
         graph: &'graph Graph,
         labeler: &mut Labeler,
     ) -> VisualizeResult<'graph> {
-        basic_labeled_node(graph, labeler, "unit")
+        let id = labeler.get();
+        let node = RenderingNodeBuilder::new(graph, id)
+            .label("unit")
+            .filled()
+            .fillcolor("purple")
+            .shape("box")
+            .build();
+        Ok((id, node))
     }
-    fn render_binary_operation<'graph>(
+    pub fn render_binary_operation<'graph>(
         &self,
         a: &Expression,
         b: &Expression,
@@ -245,8 +123,8 @@ impl Expression {
         };
         let node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, operator_label)
-            .attribute(NODE_SHAPE, "diamond")
+            .attribute(LABEL, operator_label)
+            .attribute(SHAPE, "diamond")
             .build()
             .unwrap();
         let (a_id, a) = a.render(graph, labeler)?;
@@ -257,7 +135,7 @@ impl Expression {
         Ok((id, node))
     }
 
-    fn render_unary_operation<'graph>(
+    pub fn render_unary_operation<'graph>(
         &self,
         arg: &Expression,
         graph: &'graph Graph,
@@ -272,7 +150,7 @@ impl Expression {
         };
         let node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, operator_label)
+            .attribute(LABEL, operator_label)
             .build()
             .unwrap();
         let (arg_id, arg) = arg.render(graph, labeler)?;
@@ -282,7 +160,7 @@ impl Expression {
     }
 }
 
-impl DotNode for Expression {
+impl Visualise for Expression {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -308,7 +186,7 @@ impl DotNode for Expression {
             Expression::Literal(l) => l.render(graph, labeler),
             Expression::Ident(i) => i.render(graph, labeler),
             Expression::Block(block) => render_block(graph, labeler, block),
-            Expression::Unit => self.render_unit(graph, labeler),
+            Expression::Unit => Self::render_unit(graph, labeler),
             _ => {
                 println!("bob");
                 Err(format!("cannot yet render expression\n{self:?}\n"))
@@ -327,7 +205,7 @@ impl Type {
     }
 }
 
-impl DotNode for Option<Type> {
+impl Visualise for Option<Type> {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -337,7 +215,7 @@ impl DotNode for Option<Type> {
     }
 }
 
-impl DotNode for Option<&Type> {
+impl Visualise for Option<&Type> {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -349,14 +227,11 @@ impl DotNode for Option<&Type> {
             .attribute(vizoxide::attr::node::COLOR, "green")
             .attribute(vizoxide::attr::node::FILLCOLOR, "green")
             .attribute("style", "filled")
-            .attribute(NODE_SHAPE, "diamond");
+            .attribute(SHAPE, "diamond");
         let node = match *self {
-            None => builder
-                .attribute(dot_node_label, "TO BE INFERRED")
-                .build()
-                .unwrap(),
+            None => builder.attribute(LABEL, "TBI").build().unwrap(),
             Some(t) => builder
-                .attribute(dot_node_label, &t.recurse_format())
+                .attribute(LABEL, &t.recurse_format())
                 .build()
                 .unwrap(),
         };
@@ -377,13 +252,13 @@ impl AssignmentPattern {
         let node = match self {
             AssignmentPattern::Identifier(i) => graph
                 .create_node(&id.to_string())
-                .attribute(dot_node_label, i)
+                .attribute(LABEL, i)
                 .build()
                 .unwrap(),
             AssignmentPattern::Tuple(tup) => {
                 let unpacking_node = graph
                     .create_node(&id.to_string())
-                    .attribute(dot_node_label, "unpack")
+                    .attribute(LABEL, "unpack")
                     .attribute(COLOR, "blue")
                     .build()
                     .unwrap();
@@ -404,7 +279,7 @@ impl AssignmentPattern {
     }
 }
 
-impl DotNode for AssignmentPattern {
+impl Visualise for AssignmentPattern {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -414,7 +289,7 @@ impl DotNode for AssignmentPattern {
 
         let node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, "assign to")
+            .attribute(LABEL, "assign to")
             .build()
             .unwrap();
 
@@ -424,7 +299,7 @@ impl DotNode for AssignmentPattern {
     }
 }
 
-impl DotNode for Initialisation {
+impl Visualise for Initialisation {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -434,8 +309,8 @@ impl DotNode for Initialisation {
 
         let node = graph
             .create_node(&id.to_string())
-            .attribute(NODE_SHAPE, "box")
-            .attribute(dot_node_label, "initialise")
+            .attribute(SHAPE, "box")
+            .attribute(LABEL, "initialise")
             .build()
             .unwrap();
 
@@ -465,7 +340,7 @@ impl DotNode for Initialisation {
     }
 }
 
-impl DotNode for Statement {
+impl Visualise for Statement {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -477,8 +352,8 @@ impl DotNode for Statement {
                 let id = labeler.get();
                 let node = graph
                     .create_node(&id.to_string())
-                    .attribute(dot_node_label, "return")
-                    .attribute(NODE_SHAPE, "box")
+                    .attribute(LABEL, "return")
+                    .attribute(SHAPE, "box")
                     .attribute(COLOR, "red")
                     .attribute("style", "filled")
                     .build()
@@ -508,7 +383,7 @@ impl Function {
         };
         let paramlist_node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, label)
+            .attribute(LABEL, label)
             .attribute(FILLCOLOR, "grey")
             .attribute(COLOR, "grey")
             .build()
@@ -529,7 +404,7 @@ impl Function {
         let id = labeler.get();
         let node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, "param")
+            .attribute(LABEL, "param")
             .build()
             .unwrap();
 
@@ -548,7 +423,7 @@ impl Function {
         Ok(())
     }
 }
-impl DotNode for Function {
+impl Visualise for Function {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -558,7 +433,7 @@ impl DotNode for Function {
         let label = self.name.clone() + "()";
         let node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, &label)
+            .attribute(LABEL, &label)
             .attribute(COLOR, "grey")
             .attribute(FILLCOLOR, "grey")
             .build()
@@ -595,7 +470,7 @@ impl Module {
         };
         let node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, label)
+            .attribute(LABEL, label)
             .build()
             .unwrap();
         for import in self.imports.iter() {
@@ -621,7 +496,7 @@ impl Module {
         };
         let node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, label)
+            .attribute(LABEL, label)
             .build()
             .unwrap();
         for export in self.exports.iter() {
@@ -635,7 +510,7 @@ impl Module {
     }
 }
 
-impl DotNode for TopLevelStatement {
+impl Visualise for TopLevelStatement {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -648,7 +523,7 @@ impl DotNode for TopLevelStatement {
     }
 }
 
-impl DotNode for Module {
+impl Visualise for Module {
     fn render<'graph>(
         &self,
         graph: &'graph Graph,
@@ -657,7 +532,7 @@ impl DotNode for Module {
         let id = labeler.get();
         let node = graph
             .create_node(&id.to_string())
-            .attribute(dot_node_label, "module")
+            .attribute(LABEL, "module")
             .attribute(FILLCOLOR, "purple")
             .build()
             .unwrap();

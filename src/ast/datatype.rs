@@ -52,15 +52,15 @@ impl Debug for Type {
     }
 }
 
-impl Into<Type> for &str {
-    fn into(self) -> Type {
-        Type::Basic(self.into())
+impl From<&str> for Type {
+    fn from(val: &str) -> Self {
+        Type::Basic(val.into())
     }
 }
 
-impl Into<Type> for String {
-    fn into(self) -> Type {
-        Type::Basic(self)
+impl From<String> for Type {
+    fn from(val: String) -> Self {
+        Type::Basic(val)
     }
 }
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
