@@ -1,7 +1,6 @@
 pub mod first_lowering;
 pub mod initial_parsing;
 
-use crate::visualisation::first_lowering::chain_nodes;
 use vizoxide::attr::edge::LABEL;
 use vizoxide::attr::graph::STYLE;
 use vizoxide::attr::node::COLOR;
@@ -147,6 +146,51 @@ pub trait Visualise {
         graph: &'graph Graph,
         labeler: &mut Labeler,
     ) -> VisualizeResult<'graph>;
+}
+
+/// Construct a chain of nodes.
+///
+/// # Arguments
+///
+/// * `graph`: the graph to construct the chain in
+/// * `labeler`: the id generator
+/// * `nodes`: the list of renderable objects to link
+/// * `chainer`: a function that constructs and styles an edge between two adjacent nodes.
+///
+/// returns: Option<Result<(Node, Node), String>>
+/// - `None` if `nodes` is empty
+/// - `Some(Ok((first: Node, last: Node)))` if `nodes` is not empty
+///     and every object was rendered succesfully.
+/// - `Some(Err(String))` if `nodes` is not empty
+///     and there was some object that could not be rendered
+///
+pub fn chain_nodes<'graph>(
+    graph: &'graph Graph,
+    labeler: &mut Labeler,
+    nodes: &[impl Visualise],
+    chainer: impl for<'chainer> Fn(&'chainer Graph, &Node<'chainer>, &Node<'chainer>),
+) -> Option<Result<(Node<'graph>, Node<'graph>), String>> {
+    let (head, tail) = nodes.split_first()?;
+    let (head_id, head) = match head.render(graph, labeler) {
+        Ok(tup) => tup,
+        Err(e) => return Some(Err(e)),
+    };
+
+    let last = tail.iter().fold(
+        Ok(head),
+        |prev_node: Result<Node<'graph>, String>, cur_node| {
+            let (_, cur_node) = cur_node.render(graph, labeler)?;
+            chainer(graph, &prev_node?, &cur_node);
+            Ok(cur_node)
+        },
+    );
+    let last = match last {
+        Ok(node) => node,
+        Err(e) => return Some(Err(e)),
+    };
+    let head = graph.get_node(&head_id.to_string()).unwrap().unwrap();
+
+    Some(Ok((head, last)))
 }
 
 pub fn basic_chainer<'graph>(graph: &'graph Graph, frm: &Node<'graph>, to: &Node<'graph>) {

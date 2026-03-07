@@ -4,40 +4,12 @@ use crate::lowering::{
     SimpleInitialisation,
 };
 use crate::visualisation::{
-    assignment_chainer, block_chainer, Labeler, RenderingNodeBuilder, Visualise, VisualizeResult,
+    assignment_chainer, block_chainer, chain_nodes, Labeler, RenderingNodeBuilder, Visualise,
+    VisualizeResult,
 };
 use vizoxide::attr::edge::LABEL;
 use vizoxide::attr::node::{COLOR, SHAPE};
-use vizoxide::{Graph, Node};
-
-pub fn chain_nodes<'graph>(
-    graph: &'graph Graph,
-    labeler: &mut Labeler,
-    nodes: &[impl Visualise],
-    chainer: impl Fn(&'graph Graph, &Node<'graph>, &Node<'graph>),
-) -> Option<Result<(Node<'graph>, Node<'graph>), String>> {
-    let (head, tail) = nodes.split_first()?;
-    let (head_id, head) = match head.render(graph, labeler) {
-        Ok(tup) => tup,
-        Err(e) => return Some(Err(e)),
-    };
-
-    let last = tail.iter().fold(
-        Ok(head),
-        |prev_node: Result<Node<'graph>, String>, cur_node| {
-            let (_, cur_node) = cur_node.render(graph, labeler)?;
-            chainer(graph, &prev_node?, &cur_node);
-            Ok(cur_node)
-        },
-    );
-    let last = match last {
-        Ok(node) => node,
-        Err(e) => return Some(Err(e)),
-    };
-    let head = graph.get_node(&head_id.to_string()).unwrap().unwrap();
-
-    Some(Ok((head, last)))
-}
+use vizoxide::Graph;
 
 impl ExpandedExpression {
     pub fn render_unit<'graph>(
@@ -187,7 +159,7 @@ impl Visualise for ExpandedBlockExpr {
 
         if let Some((head, tail)) = self.statements.split_first() {
             let (head, last) =
-                chain_nodes(graph, labeler, &self.statements[..], block_chainer).unwrap()?;
+                chain_nodes(graph, labeler, self.statements.as_slice(), block_chainer).unwrap()?;
 
             block_chainer(graph, &b, &head);
             graph
