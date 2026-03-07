@@ -2,9 +2,7 @@ use crate::ast::{
     AssignmentPattern, Expression, Function, Initialisation, Literal, Module, Statement,
     TopLevelStatement, Type, TypedIdentifier,
 };
-use crate::visualisation::{
-    Labeler, RenderingNodeBuilder, Visualise, VisualizeResult,
-};
+use crate::visualisation::{Labeler, RenderingNodeBuilder, Visualise, VisualizeResult};
 use vizoxide::attr::edge::LABEL;
 use vizoxide::attr::node::{COLOR, FILLCOLOR, SHAPE};
 use vizoxide::{Graph, Node};

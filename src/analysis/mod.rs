@@ -1,5 +1,3 @@
-pub use error::ZeaTypeError;
-
 /// Errors relating to AST analysis
 mod error {
     use std::error::Error;
