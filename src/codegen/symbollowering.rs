@@ -4,7 +4,7 @@ use crate::ast::{
     TypedIdentifier,
 };
 use crate::lowering::{
-    DesugaredBlockExpr, DesugaredInitialisation, LoweredExpression, LoweredStatement,
+    ExpandedBlockExpr, ExpandedInitialisation, ExpandedExpression, ExpandedStatement,
 };
 use std::collections::HashSet;
 
@@ -26,30 +26,30 @@ impl DesugaredConstructLabelFactory {
         Self::default()
     }
 
-    pub fn name_block(&mut self, block: StatementBlock) -> DesugaredBlockExpr {
+    pub fn name_block(&mut self, block: StatementBlock) -> ExpandedBlockExpr {
         let block = block
             .into_iter()
             .map(|stmt| self.lower_statement(stmt))
             .collect();
         let label = "__block".to_string() + &self.block_label.to_string();
         self.block_label += 1;
-        DesugaredBlockExpr::new(label, block)
+        ExpandedBlockExpr::new(label, block)
     }
 
-    pub fn lower_statement(&mut self, statement: Statement) -> LoweredStatement {
+    pub fn lower_statement(&mut self, statement: Statement) -> ExpandedStatement {
         match statement {
-            Statement::Block(b) => LoweredStatement::LoweredBlock(self.name_block(b)),
+            Statement::Block(b) => ExpandedStatement::LoweredBlock(self.name_block(b)),
             Statement::Initialisation(assignment) => {
-                LoweredStatement::Initialisation(self.lower_assignment(assignment))
+                ExpandedStatement::Initialisation(self.lower_assignment(assignment))
             }
-            Statement::Return(expr) => LoweredStatement::Return(self.lower_expression(expr)),
+            Statement::Return(expr) => ExpandedStatement::Return(self.lower_expression(expr)),
             _ => unimplemented!("lowering of remaining statements variants"),
         }
     }
 
-    pub fn lower_assignment(&mut self, assignment: Initialisation) -> DesugaredInitialisation {
+    pub fn lower_assignment(&mut self, assignment: Initialisation) -> ExpandedInitialisation {
         match assignment.assignee {
-            AssignmentPattern::Identifier(assignee) => DesugaredInitialisation::simple(
+            AssignmentPattern::Identifier(assignee) => ExpandedInitialisation::simple(
                 assignment.typ,
                 assignee,
                 self.lower_expression(assignment.value),
@@ -58,11 +58,11 @@ impl DesugaredConstructLabelFactory {
         }
     }
 
-    pub fn lower_expression(&mut self, expression: Expression) -> LoweredExpression {
+    pub fn lower_expression(&mut self, expression: Expression) -> ExpandedExpression {
         match expression {
-            Expression::Block(block) => LoweredExpression::Block(Box::new(self.name_block(block))),
-            Expression::Literal(l) => LoweredExpression::Literal(l),
-            Expression::Ident(i) => LoweredExpression::Ident(i),
+            Expression::Block(block) => ExpandedExpression::Block(Box::new(self.name_block(block))),
+            Expression::Literal(l) => ExpandedExpression::Literal(l),
+            Expression::Ident(i) => ExpandedExpression::Ident(i),
             _ => unimplemented!("lower remaining expressions"),
         }
     }
@@ -73,7 +73,7 @@ pub struct LoweredFunction {
     pub name: String,
     pub args: Vec<TypedIdentifier>,
     pub returns: Type,
-    pub body: Vec<LoweredStatement>,
+    pub body: Vec<ExpandedStatement>,
 }
 
 pub fn lower_function(
@@ -81,7 +81,7 @@ pub fn lower_function(
     module_named_tuple_cache: &mut ModuleNamedTupleCache,
 ) -> LoweredFunction {
     let mut label_generator = DesugaredConstructLabelFactory::new();
-    let body: Vec<LoweredStatement> = function
+    let body: Vec<ExpandedStatement> = function
         .body
         .into_iter()
         .map(|stmt| label_generator.lower_statement(stmt))

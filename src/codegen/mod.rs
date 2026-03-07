@@ -1,11 +1,11 @@
 #![allow(unused)]
 use crate::ast::{Literal, Type};
-use crate::lowering::{LoweredExpression, LoweredStatement, SimpleInitialisation};
+use crate::lowering::{ExpandedExpression, ExpandedStatement, SimpleInitialisation};
 
 pub struct CondMatchFormatter {
     typ: Option<Type>,
     assignee: String,
-    arms: Vec<LoweredExpression>,
+    arms: Vec<ExpandedExpression>,
 }
 
 pub mod c_ast;
@@ -31,11 +31,11 @@ impl<T: CNode> CNode for Box<T> {
     }
 }
 
-impl CNode for LoweredStatement {
+impl CNode for ExpandedStatement {
     fn emit_c(&self) -> String {
         match self {
             // LoweredStatement::Initialisation(init) => init.emit_c(),
-            LoweredStatement::Return(expr) => format!("return ({});", expr.emit_c()),
+            ExpandedStatement::Return(expr) => format!("return ({});", expr.emit_c()),
             _ => unimplemented!("implement remaining lowered statement code generation"),
             // LoweredStatement::VoidReturn => "return;".to_string(),
             // LoweredStatement::FunctionCall(call) => call.emit_c() + ";",
@@ -56,10 +56,10 @@ impl CNode for SimpleInitialisation {
     }
 }
 
-impl CNode for LoweredExpression {
+impl CNode for ExpandedExpression {
     fn emit_c(&self) -> String {
         match self {
-            LoweredExpression::Literal(l) => l.emit_c(),
+            ExpandedExpression::Literal(l) => l.emit_c(),
             _ => unimplemented!("remaining code generation for expressions"),
         }
     }
@@ -88,7 +88,7 @@ impl CNode for Type {
 #[cfg(test)]
 mod tests {
     use crate::codegen::CNode;
-    use crate::lowering::{LoweredExpression, SimpleInitialisation};
+    use crate::lowering::{ExpandedExpression, SimpleInitialisation};
 
     #[test]
     fn canonicalize_zea_identifier() {
@@ -109,7 +109,7 @@ mod tests {
     fn format_basic_init() {
         use crate::ast::test_utils::*;
         let typ = types::int_type();
-        let value: LoweredExpression = literals::int_lit(3).into();
+        let value: ExpandedExpression = literals::int_lit(3).into();
 
         let init = SimpleInitialisation::new(Some(typ), "a", value);
 

@@ -9,53 +9,53 @@ pub enum LoweringError {
 pub type LoweringResult<T> = Result<T, LoweringError>;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum LoweredStatement {
-    Initialisation(DesugaredInitialisation),
+pub enum ExpandedStatement {
+    Initialisation(ExpandedInitialisation),
     Reassignment(LoweringReassignment),
     FunctionCall(LoweringFunctionCall),
-    LoweredBlock(DesugaredBlockExpr),
+    LoweredBlock(ExpandedBlockExpr),
     UnitReturn,
-    Return(LoweredExpression),
+    Return(ExpandedExpression),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct LoweringReassignment {
     pub assignee: String,
-    pub value: LoweredExpression,
+    pub value: ExpandedExpression,
 }
 #[derive(Debug, PartialEq, Clone)]
 pub struct LoweringFunctionCall {
     pub name: String,
-    pub arguments: LoweredExpression,
+    pub arguments: Vec<ExpandedExpression>,
 }
 #[derive(Debug, PartialEq, Clone)]
-pub enum LoweredExpression {
+pub enum ExpandedExpression {
     Unit,
     FuncCall(Box<LoweringFunctionCall>),
     Ident(String),
     Literal(Literal),
-    Add(Box<LoweredExpression>, Box<LoweredExpression>),
-    Sub(Box<LoweredExpression>, Box<LoweredExpression>),
-    Mul(Box<LoweredExpression>, Box<LoweredExpression>),
-    Div(Box<LoweredExpression>, Box<LoweredExpression>),
-    Mod(Box<LoweredExpression>, Box<LoweredExpression>),
-    Neg(Box<LoweredExpression>),
+    Add(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    Sub(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    Mul(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    Div(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    Mod(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    Neg(Box<ExpandedExpression>),
 
-    LogAnd(Box<LoweredExpression>, Box<LoweredExpression>),
-    LogOr(Box<LoweredExpression>, Box<LoweredExpression>),
-    LogNot(Box<LoweredExpression>),
+    LogAnd(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    LogOr(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    LogNot(Box<ExpandedExpression>),
 
-    BitAnd(Box<LoweredExpression>, Box<LoweredExpression>),
-    BitOr(Box<LoweredExpression>, Box<LoweredExpression>),
-    BitXor(Box<LoweredExpression>, Box<LoweredExpression>),
-    BitNot(Box<LoweredExpression>),
+    BitAnd(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    BitOr(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    BitXor(Box<ExpandedExpression>, Box<ExpandedExpression>),
+    BitNot(Box<ExpandedExpression>),
 
     IfThenElse(
-        Box<LoweredExpression>,
-        Box<LoweredExpression>,
-        Box<LoweredExpression>,
+        Box<ExpandedExpression>,
+        Box<ExpandedExpression>,
+        Box<ExpandedExpression>,
     ),
-    Block(Box<DesugaredBlockExpr>),
+    Block(Box<ExpandedBlockExpr>),
     CondMatch(Box<DesugaredCondMatch>),
 }
 
@@ -65,41 +65,41 @@ pub struct DesugaredCondMatch {
     /// This label must be unique to the scope of the function in which it exists
     label: usize,
     /// All of its cases, which may or may not contain a default arm.
-    arms: Vec<LoweredExpression>,
+    arms: Vec<ExpandedExpression>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DesugaredBlockExpr {
+pub struct ExpandedBlockExpr {
     /// The label that the block expression has its value assigned to
     /// i.e. `__block0`, `__block1` etc.
     /// This label must be unique to the scope of the function in which it exists
-    label: String,
-    statements: Vec<LoweredStatement>,
-    last: LoweredExpression,
+    pub label: String,
+    pub statements: Vec<ExpandedStatement>,
+    pub last: ExpandedExpression,
 }
-impl DesugaredBlockExpr {
+impl ExpandedBlockExpr {
     pub fn insert_return_unit(
-        statements: Vec<LoweredStatement>,
-    ) -> (Vec<LoweredStatement>, LoweredExpression) {
+        statements: Vec<ExpandedStatement>,
+    ) -> (Vec<ExpandedStatement>, ExpandedExpression) {
         match statements.last() {
-            Some(LoweredStatement::Return(expr)) => {
+            Some(ExpandedStatement::Return(expr)) => {
                 (statements[..(statements.len() - 1)].to_vec(), expr.clone())
             }
-            _ => (statements, LoweredExpression::Unit),
+            _ => (statements, ExpandedExpression::Unit),
         }
     }
 
-    pub fn new(label: String, statement_block: Vec<LoweredStatement>) -> Self {
+    pub fn new(label: impl Into<String>, statement_block: Vec<ExpandedStatement>) -> Self {
         let (statements, last) = Self::insert_return_unit(statement_block);
         Self {
-            label,
+            label: label.into(),
             statements,
             last,
         }
     }
 }
 
-impl From<Literal> for LoweredExpression {
+impl From<Literal> for ExpandedExpression {
     fn from(value: Literal) -> Self {
         Self::Literal(value)
     }
@@ -110,11 +110,11 @@ impl From<Literal> for LoweredExpression {
 pub struct SimpleInitialisation {
     pub typ: Option<Type>,
     pub assignee: String,
-    pub value: LoweredExpression,
+    pub value: ExpandedExpression,
 }
 
 impl SimpleInitialisation {
-    pub fn new(typ: Option<Type>, assignee: impl Into<String>, value: LoweredExpression) -> Self {
+    pub fn new(typ: Option<Type>, assignee: impl Into<String>, value: ExpandedExpression) -> Self {
         Self {
             typ,
             assignee: assignee.into(),
@@ -123,23 +123,23 @@ impl SimpleInitialisation {
     }
 }
 #[derive(Debug, PartialEq, Clone)]
-pub struct DesugaredInitialisation {
+pub struct ExpandedInitialisation {
     pub temporary: SimpleInitialisation,
-    pub unpacked_assignments: Vec<DesugaredInitialisation>,
+    pub unpacked_assignments: Vec<ExpandedInitialisation>,
 }
 
-impl DesugaredInitialisation {
+impl ExpandedInitialisation {
     pub(crate) fn new(
         temporary: SimpleInitialisation,
-        unpacked_assignments: Vec<DesugaredInitialisation>,
-    ) -> DesugaredInitialisation {
+        unpacked_assignments: Vec<ExpandedInitialisation>,
+    ) -> ExpandedInitialisation {
         Self {
             temporary,
             unpacked_assignments,
         }
     }
 
-    pub fn simple(typ: Option<Type>, assignee: String, value: LoweredExpression) -> Self {
+    pub fn simple(typ: Option<Type>, assignee: String, value: ExpandedExpression) -> Self {
         Self {
             temporary: SimpleInitialisation {
                 typ,
@@ -151,7 +151,7 @@ impl DesugaredInitialisation {
     }
 }
 
-impl From<SimpleInitialisation> for DesugaredInitialisation {
+impl From<SimpleInitialisation> for ExpandedInitialisation {
     fn from(value: SimpleInitialisation) -> Self {
         Self {
             temporary: value,
@@ -160,7 +160,7 @@ impl From<SimpleInitialisation> for DesugaredInitialisation {
     }
 }
 
-impl From<SimpleInitialisation> for LoweredStatement {
+impl From<SimpleInitialisation> for ExpandedStatement {
     fn from(value: SimpleInitialisation) -> Self {
         Self::Initialisation(value.into())
     }

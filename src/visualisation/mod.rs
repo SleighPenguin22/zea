@@ -1,0 +1,171 @@
+pub mod first_lowering;
+pub mod initial_parsing;
+
+use crate::visualisation::first_lowering::chain_nodes;
+use vizoxide::attr::edge::LABEL;
+use vizoxide::attr::graph::STYLE;
+use vizoxide::attr::node::COLOR;
+use vizoxide::layout::{apply_layout, Engine};
+use vizoxide::render::{render_to_file, Format};
+use vizoxide::{Context, Graph, GraphBuilder, Node, NodeBuilder};
+
+#[derive(Debug)]
+pub struct Labeler(usize);
+impl Labeler {
+    pub fn new() -> Self {
+        Self(0)
+    }
+
+    pub fn get(&mut self) -> usize {
+        let n = self.0;
+        self.0 += 1;
+        n
+    }
+}
+struct RenderingNodeBuilder<'graph>(usize, NodeBuilder<'graph>);
+impl<'graph> RenderingNodeBuilder<'graph> {
+    pub fn fresh(graph: &'graph Graph, labeler: &mut Labeler) -> RenderingNodeBuilder<'graph> {
+        let id = labeler.get();
+        RenderingNodeBuilder(id, NodeBuilder::new(graph, &id.to_string()))
+    }
+
+    pub fn new(graph: &'graph Graph, id: usize) -> RenderingNodeBuilder<'graph> {
+        RenderingNodeBuilder(id, NodeBuilder::new(graph, &id.to_string()))
+    }
+
+    pub fn filled(mut self) -> RenderingNodeBuilder<'graph> {
+        Self(self.0, self.1.attribute("style", "filled"))
+    }
+    pub fn label<'a>(mut self, label: &'a str) -> RenderingNodeBuilder<'graph> {
+        Self(self.0, self.1.attribute("label", label))
+    }
+    pub fn color<'a>(mut self, color: &'a str) -> RenderingNodeBuilder<'graph> {
+        Self(self.0, self.1.attribute("color", color))
+    }
+
+    pub fn fillcolor<'a>(mut self, color: &'a str) -> RenderingNodeBuilder<'graph> {
+        Self(self.0, self.1.attribute("fillcolor", color))
+    }
+
+    pub fn shape<'a>(mut self, shape: &'a str) -> RenderingNodeBuilder<'graph> {
+        Self(self.0, self.1.attribute("shape", shape))
+    }
+
+    pub fn build(self) -> Node<'graph> {
+        self.1.build().unwrap()
+    }
+
+    pub fn build_vis(self) -> VisualizeResult<'graph> {
+        Ok((self.0, self.1.build().unwrap()))
+    }
+}
+
+macro_rules! err_unimplemented {
+    ($lit:literal) => {{
+        VisualizeResult::Err(format!($lit))
+    }};
+    ($lit:literal, $($e:expr),+) => {
+        VisualizeResult::Err(format!($lit, $($e),+))
+    }
+}
+
+pub type VisualizeResult<'graph> = Result<(usize, Node<'graph>), String>;
+
+fn basic_labeled_node<'graph>(
+    graph: &'graph Graph,
+    labeler: &mut Labeler,
+    label: &str,
+) -> VisualizeResult<'graph> {
+    let id = labeler.get();
+    let node = RenderingNodeBuilder::new(graph, id).label(label).build();
+    Ok((id, node))
+}
+
+impl Visualise for String {
+    fn render<'graph>(
+        &self,
+        graph: &'graph Graph,
+        labeler: &mut Labeler,
+    ) -> VisualizeResult<'graph> {
+        basic_labeled_node(graph, labeler, self)
+    }
+}
+
+pub fn graphify(dot_node: &impl Visualise, path: &str) -> Result<(), String> {
+    let context = Context::new().unwrap();
+    let mut g = GraphBuilder::new("expression")
+        .attribute(vizoxide::attr::graph::RANKDIR, "TB")
+        // .attribute(BGCOLOR, "black")
+        .attribute(vizoxide::attr::graph::EDGE_COLOR, "white")
+        .attribute(vizoxide::attr::graph::FONTCOLOR, "black")
+        .attribute(vizoxide::attr::graph::NODE_COLOR, "blue")
+        .attribute(STYLE, "filled")
+        // .attribute(vizoxide::attr::graph::, "white")
+        // .attribute(vizoxide::attr::graph::FONTNAME, "Helvetica")
+        // .attribute(vizoxide::attr::graph::NODE_SHAPE, "box")
+        .directed(true)
+        .strict(true)
+        .build()
+        .unwrap();
+    let mut labeler = Labeler::new();
+    dot_node.render(&mut g, &mut labeler)?;
+    apply_layout(&context, &mut g, Engine::Dot);
+    render_to_file(&context, &g, Format::Png, path).unwrap();
+    Ok(())
+}
+
+pub fn graphify_list(
+    dot_node: &[impl Visualise],
+    chainer: impl for<'graph> Fn(&'graph Graph, &Node<'graph>, &Node<'graph>),
+    path: &str,
+) -> Result<(), String> {
+    let context = Context::new().unwrap();
+    let mut g = GraphBuilder::new("expression")
+        .attribute(vizoxide::attr::graph::RANKDIR, "TB")
+        // .attribute(BGCOLOR, "black")
+        .attribute(vizoxide::attr::graph::EDGE_COLOR, "white")
+        .attribute(vizoxide::attr::graph::FONTCOLOR, "black")
+        .attribute(vizoxide::attr::graph::NODE_COLOR, "blue")
+        .attribute(STYLE, "filled")
+        // .attribute(vizoxide::attr::graph::, "white")
+        // .attribute(vizoxide::attr::graph::FONTNAME, "Helvetica")
+        // .attribute(vizoxide::attr::graph::NODE_SHAPE, "box")
+        .directed(true)
+        .strict(true)
+        .build()
+        .unwrap();
+    let mut labeler = Labeler::new();
+    chain_nodes(&mut g, &mut labeler, dot_node, chainer);
+    apply_layout(&context, &mut g, Engine::Dot);
+    render_to_file(&context, &g, Format::Png, path).unwrap();
+    Ok(())
+}
+
+pub trait Visualise {
+    fn render<'graph>(
+        &self,
+        graph: &'graph Graph,
+        labeler: &mut Labeler,
+    ) -> VisualizeResult<'graph>;
+}
+
+pub fn basic_chainer<'graph>(graph: &'graph Graph, frm: &Node<'graph>, to: &Node<'graph>) {
+    graph.create_edge(frm, to, None).build().unwrap();
+}
+
+pub fn block_chainer<'graph>(graph: &'graph Graph, frm: &Node<'graph>, to: &Node<'graph>) {
+    graph
+        .create_edge(frm, to, None)
+        .attribute(COLOR, "orange")
+        .attribute(LABEL, "block")
+        .build()
+        .unwrap();
+}
+pub fn assignment_chainer<'graph>(graph: &'graph Graph, frm: &Node<'graph>, to: &Node<'graph>) {
+    graph
+        .create_edge(frm, to, None)
+        .attribute(COLOR, "blue")
+        .attribute(LABEL, "then")
+        .build()
+        .unwrap();
+}

@@ -6,15 +6,15 @@ mod error {
     use std::fmt::{Debug, Display, Formatter};
     pub struct ZeaTypeError(String);
 
-    impl Into<ZeaTypeError> for String {
-        fn into(self) -> ZeaTypeError {
-            ZeaTypeError(self)
+    impl From<String> for ZeaTypeError {
+        fn from(val: String) -> Self {
+            ZeaTypeError(val)
         }
     }
 
-    impl Into<ZeaTypeError> for &str {
-        fn into(self) -> ZeaTypeError {
-            ZeaTypeError(self.into())
+    impl From<&str> for ZeaTypeError {
+        fn from(val: &str) -> Self {
+            ZeaTypeError(val.into())
         }
     }
     impl Display for ZeaTypeError {
