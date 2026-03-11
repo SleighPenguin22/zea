@@ -1,6 +1,6 @@
-use crate::ast::zea::expression::Expression;
-use crate::ast::zea::statement::Statement;
-use crate::ast::zea::{
+use crate::zea::expression::Expression;
+use crate::zea::statement::Statement;
+use crate::zea::{
     expression::Literal, patterns::AssignmentPattern, Function, Initialisation, Module, TopLevelStatement,
     Type, TypedIdentifier,
 };

@@ -1,12 +1,12 @@
 #![allow(unused)]
 
-use crate::ast::zea::expression::Expression;
-use crate::ast::zea::patterns::AssignmentPattern;
-use crate::ast::zea::statement::Statement;
-use crate::ast::zea::{Function, Initialisation, StatementBlock, Type, TypedIdentifier};
-use crate::lowering::{
+use crate::zea::expression::Expression;
+use crate::zea::lowering::{
     ExpandedBlockExpr, ExpandedExpression, ExpandedInitialisation, ExpandedStatement,
 };
+use crate::zea::patterns::AssignmentPattern;
+use crate::zea::statement::Statement;
+use crate::zea::{Function, Initialisation, StatementBlock, Type, TypedIdentifier};
 use std::collections::HashSet;
 
 pub type ModuleNamedTupleCache = HashSet<TupleWithNamedMembers>;
@@ -98,12 +98,12 @@ pub fn lower_function(
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::zea::expression::{Expression, Literal};
-    use crate::ast::zea::patterns::AssignmentPattern;
-    use crate::ast::zea::statement::Statement;
-    use crate::ast::zea::test_utils::types::int_type;
-    use crate::ast::zea::{Function, Initialisation};
-    use crate::codegen::symbollowering::{lower_function, ModuleNamedTupleCache};
+    use crate::zea::expression::{Expression, Literal};
+    use crate::zea::lowering::symbollowering::{lower_function, ModuleNamedTupleCache};
+    use crate::zea::patterns::AssignmentPattern;
+    use crate::zea::statement::Statement;
+    use crate::zea::test_utils::types::int_type;
+    use crate::zea::{Function, Initialisation};
 
     #[test]
     fn lower_basic_main() {

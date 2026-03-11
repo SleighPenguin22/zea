@@ -1,15 +1,4 @@
-[package]
-name = "zea"
-authors = ["Artsiom", "Iwan"]
-version = "0.1.0"
-edition = "2024"
-readme = "README.md"
+[workspace]
+resolver = "3"
 
-[dependencies]
-thiserror = { version = "2.0.18", features = ["default"] }
-clap = { version = "4.5.59", features = ["derive"] }
-vizoxide = { path = "vizoxide", optional = true }
-graphviz-sys = { version = "1.0.1", optional = true }
-
-[features]
-visualisation = ["dep:vizoxide", "dep:graphviz-sys"]
+members = ["zea-ast", 'zea-driver', "zea-parser", "zea-codegen"]

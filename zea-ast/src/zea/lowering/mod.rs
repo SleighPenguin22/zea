@@ -1,7 +1,9 @@
-use crate::ast::zea::expression::Literal;
-use crate::ast::zea::statement::Statement;
-use crate::ast::zea::Type;
+use crate::zea::expression::Literal;
+use crate::zea::statement::Statement;
+use crate::zea::Type;
 use thiserror::Error;
+
+pub mod symbollowering;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LoweringError {

@@ -1,8 +1,7 @@
 #![allow(dead_code)]
-use crate::ast::zea::expression::Expression;
-use crate::ast::zea::patterns::AssignmentPattern;
-use crate::ast::zea::Type;
-use crate::lowering::DesugaredCondMatch;
+use crate::zea::expression::{ConditionMatch, Expression};
+use crate::zea::patterns::AssignmentPattern;
+use crate::zea::Type;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -11,7 +10,7 @@ pub enum Statement {
     FunctionCall(FunctionCall),
     Return(Expression),
     Block(Vec<Statement>),
-    CondMatch(Box<DesugaredCondMatch>),
+    CondMatch(Box<ConditionMatch>),
 }
 
 #[derive(Debug, Clone, PartialEq)]

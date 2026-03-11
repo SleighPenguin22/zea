@@ -5,13 +5,13 @@ pub mod directives;
 pub mod expression;
 pub mod statement;
 
-use crate::ast::c::datatype::Type;
-use crate::ast::c::expression::Expression;
-use crate::ast::c::statement::{Initialisation, StatementBlock, VariableDeclaration};
+pub use crate::c::datatype::Type;
+pub use crate::c::expression::Expression;
+use crate::c::statement::{Initialisation, StatementBlock, VariableDeclaration};
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct TypedIdentifier(Type, String);
+pub struct TypedIdentifier(pub Type, pub String);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionCall {
@@ -27,23 +27,28 @@ pub enum PreProcessorDirective {
 }
 
 pub struct FunctionDeclaration {
-    returns: Type,
-    name: String,
-    args: Vec<TypedIdentifier>,
+    pub returns: Type,
+    pub name: String,
+    pub args: Vec<TypedIdentifier>,
 }
 
 pub struct FunctionDefinition {
-    declaration: FunctionDeclaration,
-    body: StatementBlock,
+    pub declaration: FunctionDeclaration,
+    pub body: StatementBlock,
 }
 
-pub enum TopLevelItem {
+pub enum TopLevelDecl {
     FuncDecl(FunctionDeclaration),
-    FuncDef(FunctionDefinition),
     VarDecl(VariableDeclaration),
+}
+
+pub enum TopLevelDef {
+    FuncDef(FunctionDefinition),
     VarInit(Initialisation),
 }
 
 pub struct TranslationUnit {
-    symbols: Vec<TopLevelItem>,
+    directives: Vec<PreProcessorDirective>,
+    declarations: Vec<TopLevelDecl>,
+    symbols: Vec<TopLevelDef>,
 }

@@ -1,9 +1,12 @@
-use crate::ast::c::FunctionCall;
+use crate::zea::patterns::AssignmentPattern;
+use crate::zea::statement::{FunctionCall, StatementBlock};
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
+    Unit,
     FuncCall(FunctionCall),
+    Ident(String),
     Literal(Literal),
     Add(Box<Expression>, Box<Expression>),
     Sub(Box<Expression>, Box<Expression>),
@@ -14,6 +17,7 @@ pub enum Expression {
 
     LogAnd(Box<Expression>, Box<Expression>),
     LogOr(Box<Expression>, Box<Expression>),
+    LogXor(Box<Expression>, Box<Expression>),
     LogNot(Box<Expression>),
 
     BitAnd(Box<Expression>, Box<Expression>),
@@ -21,15 +25,43 @@ pub enum Expression {
     BitXor(Box<Expression>, Box<Expression>),
     BitNot(Box<Expression>),
 
-    IfThenElse(Box<TernaryExpression>),
-}
-#[derive(Clone, Debug, PartialEq)]
-pub struct TernaryExpression {
-    pub condition: Expression,
-    pub true_branch: Expression,
-    pub false_branch: Expression,
+    Block(StatementBlock),
+
+    PatternMatch(PatternMatch),
+    ConditionMatch(ConditionMatch),
+    IfThenElse(IfThenElse),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ConditionMatch {
+    conditions: Vec<ConditionMatchArm>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PatternMatch {
+    subject: Box<Expression>,
+    patterns: Vec<PatternMatchArm>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct IfThenElse {
+    condition: Box<Expression>,
+    true_case: Box<Expression>,
+    false_case: Option<Box<Expression>>,
+}
+impl IfThenElse {
+    pub fn new(condition: Expression, true_case: Expression, false_case: Expression) -> IfThenElse {
+        IfThenElse {
+            condition: Box::new(condition),
+            true_case: Box::new(true_case),
+            false_case: Some(Box::new(false_case)),
+        }
+    }
+}
+
+pub type PatternMatchArm = (AssignmentPattern, Box<Expression>);
+
+pub type ConditionMatchArm = (Box<Expression>, Box<Expression>);
 #[derive(Debug, Clone)]
 pub enum Literal {
     Integer(u64),
@@ -66,5 +98,29 @@ impl Hash for Literal {
             Self::String(s) => s.hash(state),
             Self::Integer(i) => i.hash(state),
         }
+    }
+}
+
+impl From<u64> for Literal {
+    fn from(value: u64) -> Self {
+        Literal::Integer(value)
+    }
+}
+
+impl From<f64> for Literal {
+    fn from(value: f64) -> Self {
+        Literal::Float(value)
+    }
+}
+
+impl From<bool> for Literal {
+    fn from(value: bool) -> Self {
+        Literal::Boolean(value)
+    }
+}
+
+impl From<String> for Literal {
+    fn from(value: String) -> Self {
+        Literal::String(value)
     }
 }

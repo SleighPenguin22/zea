@@ -3,7 +3,7 @@ pub mod statements {}
 pub mod expressions {}
 
 pub mod literals {
-    use crate::ast::zea::expression::Literal;
+    use crate::zea::expression::Literal;
     pub fn int_lit(value: u64) -> Literal {
         Literal::Integer(value)
     }
@@ -20,7 +20,7 @@ pub mod literals {
     }
 }
 pub mod types {
-    use crate::ast::zea::Type;
+    use crate::zea::Type;
 
     pub fn ptr_to(typ: Type) -> Type {
         Type::Pointer(Box::new(typ))

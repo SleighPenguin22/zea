@@ -1,11 +1,11 @@
-use crate::ast::zea::expression::Expression;
-use crate::lowering::{
-    ExpandedBlockExpr, ExpandedExpression, ExpandedInitialisation, ExpandedStatement,
-    SimpleInitialisation,
-};
 use crate::visualisation::{
     assignment_chainer, block_chainer, chain_nodes, Labeler, RenderingNodeBuilder, Visualise,
     VisualizeResult,
+};
+use crate::zea::expression::Expression;
+use crate::zea::lowering::{
+    ExpandedBlockExpr, ExpandedExpression, ExpandedInitialisation, ExpandedStatement,
+    SimpleInitialisation,
 };
 use vizoxide::attr::edge::LABEL;
 use vizoxide::attr::node::{COLOR, SHAPE};

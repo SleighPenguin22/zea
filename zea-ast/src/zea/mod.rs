@@ -1,18 +1,19 @@
 #![allow(dead_code, unused_imports)]
 
-#[cfg(test)]
-pub mod test_utils;
 pub mod datatype;
 pub mod expression;
+pub mod lowering;
 pub mod patterns;
 pub mod statement;
+#[cfg(test)]
+pub mod test_utils;
 
+pub use datatype::{Type, TypedIdentifier};
+pub use statement::{Initialisation, StatementBlock};
 use std::{
     collections::HashSet,
     hash::{Hash, Hasher},
 };
-pub use datatype::{Type, TypedIdentifier};
-pub use statement::{Initialisation, StatementBlock};
 
 #[derive(Debug, Default, Clone)]
 pub struct Module {
