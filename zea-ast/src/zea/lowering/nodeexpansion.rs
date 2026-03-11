@@ -21,20 +21,42 @@ pub struct NodeExpander {
     named_tuple_cache: HashSet<TupleWithNamedMembers>,
 }
 
-macro_rules! label_expr {
-    ($variant:ident, $val:expr) => {{
-        Expression {
-            id: self.label(),
-            kind: ExpressionKind::$variant($val),
+/// Tranform some node into a given variant, and label it.
+macro_rules! label {
+    (stmt $s:ident, $variant:ident, $val:expr) => {
+        ExpandedStatement {
+            id: $s.label(),
+            kind: ExpandedStatementKind::$variant($val),
+        }
+    };
+    (stmt $s:ident, $variant:ident, $op:expr, ) => {{
+        ExpandedStatement {
+            id: $s.label(),
+            kind: ExpandedStatementKind::Return(label_exexpr!(self, Unit)),
         }
     }};
-}
-
-macro_rules! label_exexpr {
-    ($s:ident, $variant:ident, $val:expr) => {{
+    (expr $s:ident, $variant:ident) => {{
+        ExpandedExpression {
+            id: $s.label(),
+            kind: ExpandedExpressionKind::$variant,
+        }
+    }};
+    (expr $s:ident, $variant:ident, $val:expr) => {{
         ExpandedExpression {
             id: $s.label(),
             kind: ExpandedExpressionKind::$variant($val),
+        }
+    }};
+    (expr $s:ident, $variant:ident, $op:expr, $arg:expr) => {{
+        ExpandedExpression {
+            id: $s.label(),
+            kind: ExpandedExpressionKind::$variant($op, $val),
+        }
+    }};
+    (expr $s:ident, $variant:ident, $op:expr, $a:expr, $b:expr) => {{
+        ExpandedExpression {
+            id: $s.label(),
+            kind: ExpandedExpressionKind::$variant($op, $a, $b),
         }
     }};
 }
@@ -90,18 +112,11 @@ impl NodeExpander {
 
     pub fn expand_statement(&mut self, statement: Statement) -> ExpandedStatement {
         match statement.kind {
-            StatementKind::Block(b) => ExpandedStatement {
-                id: self.label(),
-                kind: ExpandedStatementKind::LoweredBlock(self.expand_block(b)),
-            },
-            StatementKind::Initialisation(assignment) => ExpandedStatement {
-                id: self.label(),
-                kind: ExpandedStatementKind::Initialisation(self.expand_assignment(assignment)),
-            },
-            StatementKind::Return(expr) => ExpandedStatement {
-                id: self.label(),
-                kind: ExpandedStatementKind::Return(self.expand_expression(expr)),
-            },
+            StatementKind::Block(b) => label!(stmt self, Block, self.expand_block(b)),
+            StatementKind::Initialisation(assignment) => {
+                label!(stmt self, Initialisation, self.expand_assignment(assignment))
+            }
+            StatementKind::Return(expr) => label!(stmt self, Return, self.expand_expression(expr)),
             _ => todo!("cannot yet expand statement\n{statement:?}\n"),
         }
     }
@@ -119,15 +134,11 @@ impl NodeExpander {
 
     pub fn expand_expression(&mut self, expression: Expression) -> ExpandedExpression {
         match expression.kind {
-            ExpressionKind::Block(block) => ExpandedExpression {
-                id: self.label(),
-                kind: ExpandedExpressionKind::Block(Box::new(self.expand_block(block))),
-            },
-            ExpressionKind::Ident(i) => label_exexpr!(self, Ident, i),
-            ExpressionKind::IntegerLiteral(l) => ExpandedExpression {
-                id: self.label(),
-                kind: ExpandedExpressionKind::IntegerLiteral(l),
-            },
+            ExpressionKind::Block(block) => {
+                label!(expr self, Block, Box::new(self.expand_block(block)))
+            }
+            ExpressionKind::Ident(i) => label!(expr self, Ident, i),
+            ExpressionKind::IntegerLiteral(l) => label!(expr self, IntegerLiteral, l),
             _ => todo!("cannot yet expand expression\n{expression:?}\n"),
         }
     }

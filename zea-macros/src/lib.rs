@@ -32,25 +32,3 @@ pub fn hash_by_id(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         Data::Union(_) => panic!("cannot derive HashById on a union."),
     }
 }
-
-/// HashSet literal initialization
-macro_rules! set {
-    ($($e:expr),*) => {{
-        use std::collections::HashSet;
-        HashSet::from_iter(vec![$($e),*])
-    }};
-}
-
-/// vec![], but each expression is `Box::new()`'ed
-macro_rules! vecboxed {
-    ($($e:expr),*) => {{
-        vec![$(Box::new($e)),*]
-    }};
-}
-
-/// vec![], but each expression is `Rc::clone()`'ed
-macro_rules! vecrcloned {
-    ($($e:expr),*) => {{
-        vec![$(std::rc::Rc::clone(&$e)),*]
-    }};
-}

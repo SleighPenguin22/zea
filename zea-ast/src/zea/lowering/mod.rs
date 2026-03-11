@@ -25,7 +25,7 @@ pub enum ExpandedStatementKind {
     Initialisation(ExpandedInitialisation),
     Reassignment(ExpandedReassignment),
     FunctionCall(LoweringFunctionCall),
-    LoweredBlock(ExpandedBlockExpr),
+    Block(ExpandedBlockExpr),
     UnitReturn,
     Return(ExpandedExpression),
 }
