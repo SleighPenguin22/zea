@@ -17,43 +17,43 @@ pub struct TupleWithNamedMembers {
 }
 #[derive(Default)]
 pub struct NodeExpander {
-    label: usize,
+    _labeler: usize,
     named_tuple_cache: HashSet<TupleWithNamedMembers>,
 }
 
 /// Tranform some node into a given variant, and label it.
 macro_rules! label {
-    (stmt $s:ident, $variant:ident, $val:expr) => {
+    (using $s:ident stmt $variant:ident with $val:expr) => {
         ExpandedStatement {
             id: $s.label(),
             kind: ExpandedStatementKind::$variant($val),
         }
     };
-    (stmt $s:ident, $variant:ident, $op:expr, ) => {{
+    (using $s:ident stmt $variant:ident) => {{
         ExpandedStatement {
             id: $s.label(),
             kind: ExpandedStatementKind::Return(label_exexpr!(self, Unit)),
         }
     }};
-    (expr $s:ident, $variant:ident) => {{
+    (using $s:ident expr $variant:ident) => {{
         ExpandedExpression {
             id: $s.label(),
             kind: ExpandedExpressionKind::$variant,
         }
     }};
-    (expr $s:ident, $variant:ident, $val:expr) => {{
+    (using $s:ident expr $variant:ident with $val:expr) => {{
         ExpandedExpression {
             id: $s.label(),
             kind: ExpandedExpressionKind::$variant($val),
         }
     }};
-    (expr $s:ident, $variant:ident, $op:expr, $arg:expr) => {{
+    (using $s:ident expr $variant:ident with $op:expr, $arg:expr) => {{
         ExpandedExpression {
             id: $s.label(),
             kind: ExpandedExpressionKind::$variant($op, $val),
         }
     }};
-    (expr $s:ident, $variant:ident, $op:expr, $a:expr, $b:expr) => {{
+    (using $s:ident expr $variant:ident with $op:expr, $a:expr, $b:expr) => {{
         ExpandedExpression {
             id: $s.label(),
             kind: ExpandedExpressionKind::$variant($op, $a, $b),
@@ -61,18 +61,13 @@ macro_rules! label {
     }};
 }
 impl NodeExpander {
-    const BLOCK_LABEL_PREFIX: &str = "__block";
-    const CONDMATCH_LABEL_PREFIX: &str = "__condmatch";
-    const PATMATCH_LABEL_PREFIX: &str = "__patmatch";
-    const TUPLE_LABEL_PREFIX: &str = "tuple";
-
     pub fn new() -> Self {
         Self::default()
     }
 
     fn label(&mut self) -> usize {
-        let label = self.label;
-        self.label += 1;
+        let label = self._labeler;
+        self._labeler += 1;
         label
     }
 
@@ -112,11 +107,13 @@ impl NodeExpander {
 
     pub fn expand_statement(&mut self, statement: Statement) -> ExpandedStatement {
         match statement.kind {
-            StatementKind::Block(b) => label!(stmt self, Block, self.expand_block(b)),
+            StatementKind::Block(b) => label!(using self stmt Block with self.expand_block(b)),
             StatementKind::Initialisation(assignment) => {
-                label!(stmt self, Initialisation, self.expand_assignment(assignment))
+                label!(using self stmt Initialisation with self.expand_assignment(assignment))
             }
-            StatementKind::Return(expr) => label!(stmt self, Return, self.expand_expression(expr)),
+            StatementKind::Return(expr) => {
+                label!(using self stmt Return with self.expand_expression(expr))
+            }
             _ => todo!("cannot yet expand statement\n{statement:?}\n"),
         }
     }
@@ -135,14 +132,19 @@ impl NodeExpander {
     pub fn expand_expression(&mut self, expression: Expression) -> ExpandedExpression {
         match expression.kind {
             ExpressionKind::Block(block) => {
-                label!(expr self, Block, Box::new(self.expand_block(block)))
+                label!(using self expr Block with Box::new(self.expand_block(block)))
             }
-            ExpressionKind::Ident(i) => label!(expr self, Ident, i),
-            ExpressionKind::IntegerLiteral(l) => label!(expr self, IntegerLiteral, l),
+            ExpressionKind::Ident(i) => label!(using self expr Ident with i),
+            ExpressionKind::IntegerLiteral(l) => label!(using self expr IntegerLiteral with l),
             _ => todo!("cannot yet expand expression\n{expression:?}\n"),
         }
     }
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+
+    fn test_expand_block() {
+
+    }
+}
