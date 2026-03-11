@@ -15,44 +15,24 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use zea_macros::HashById;
+use zea_macros::HashEqById;
 
-#[derive(Default, HashById)]
+#[derive(Default, HashEqById)]
 pub struct Module {
     pub id: usize,
     pub imports: Vec<String>,
     pub exports: Vec<String>,
-    pub symbols: HashSet<TopLevelStatement>,
+    pub globs: HashSet<Initialisation>,
+    pub functions: HashSet<Function>,
 }
 
 impl Module {
     pub fn find_entry_point(&self) -> Option<&Function> {
-        self.iter_symbols().find_map(|symbol| match symbol {
-            TopLevelStatement::FuncDefinition(f) if f.name == "main" => Some(f),
-            _ => None,
-        })
+        self.iter_symbols().find(|func| func.name == "main")
     }
 
-    pub fn iter_symbols(&self) -> impl Iterator<Item = &TopLevelStatement> {
-        self.symbols.iter()
-    }
-}
-#[derive(Debug, PartialEq, Clone)]
-pub enum TopLevelStatement {
-    FuncDefinition(Function),
-    GlobalConst(Initialisation),
-}
-
-impl Eq for TopLevelStatement {}
-impl Hash for TopLevelStatement {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            TopLevelStatement::GlobalConst(init) => init.assignee.hash(state),
-            TopLevelStatement::FuncDefinition(func) => {
-                func.name.hash(state);
-                func.returns.hash(state);
-            }
-        }
+    pub fn iter_symbols(&self) -> impl Iterator<Item = &Function> {
+        self.functions.iter()
     }
 }
 
@@ -60,7 +40,7 @@ impl Hash for TopLevelStatement {
 ///
 /// Function may be defined only once within a module, They are compared and [`Hash`]'ed against their signature.
 /// Functions may be imported as many times as needed.
-#[derive(Debug, Clone, HashById)]
+#[derive(Debug, Clone, HashEqById)]
 pub struct Function {
     pub id: usize,
     pub name: String,
@@ -68,10 +48,3 @@ pub struct Function {
     pub returns: Type,
     pub body: StatementBlock,
 }
-impl PartialEq for Function {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-impl Eq for Function {}
-

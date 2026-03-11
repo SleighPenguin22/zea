@@ -1,52 +1,68 @@
 use crate::zea::patterns::AssignmentPattern;
 use crate::zea::statement::{FunctionCall, StatementBlock};
 use std::hash::{Hash, Hasher};
-use zea_macros::HashById;
+use zea_macros::HashEqById;
+
+#[derive(Debug, Clone, HashEqById)]
+pub struct Expression {
+    id: usize,
+    pub(crate) kind: ExpressionKind,
+}
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Expression {
+pub enum ExpressionKind {
     Unit,
     FuncCall(FunctionCall),
     Ident(String),
-    Literal(Literal),
-    Add(Box<Expression>, Box<Expression>),
-    Sub(Box<Expression>, Box<Expression>),
-    Mul(Box<Expression>, Box<Expression>),
-    Div(Box<Expression>, Box<Expression>),
-    Mod(Box<Expression>, Box<Expression>),
-    Neg(Box<Expression>),
+    BinOpExpr(BinOp, Box<Expression>, Box<Expression>),
+    UnOpExpr(UnOp, Box<Expression>),
 
-    LogAnd(Box<Expression>, Box<Expression>),
-    LogOr(Box<Expression>, Box<Expression>),
-    LogXor(Box<Expression>, Box<Expression>),
-    LogNot(Box<Expression>),
-
-    BitAnd(Box<Expression>, Box<Expression>),
-    BitOr(Box<Expression>, Box<Expression>),
-    BitXor(Box<Expression>, Box<Expression>),
-    BitNot(Box<Expression>),
+    IntegerLiteral(u64),
+    FloatLiteral(f64),
+    BoolLiteral(bool),
+    StringLiteral(String),
 
     Block(StatementBlock),
-
     PatternMatch(PatternMatch),
     ConditionMatch(ConditionMatch),
     IfThenElse(IfThenElse),
 }
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    LogAnd,
+    LogOr,
+    LogXor,
+    BitAnd,
+    BitOr,
+    BitXor,
+}
 
-#[derive(Clone, Debug, PartialEq, HashById)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum UnOp {
+    Neg,
+    LogNot,
+    BitNot,
+}
+
+#[derive(Clone, Debug, HashEqById)]
 pub struct ConditionMatch {
     pub id: usize,
     conditions: Vec<ConditionMatchArm>,
 }
 
-#[derive(Clone, Debug, PartialEq, HashById)]
+#[derive(Clone, Debug, HashEqById)]
 pub struct PatternMatch {
     pub id: usize,
     subject: Box<Expression>,
     patterns: Vec<PatternMatchArm>,
 }
 
-#[derive(Clone, Debug, PartialEq, HashById)]
+#[derive(Clone, Debug, HashEqById)]
 pub struct IfThenElse {
     pub id: usize,
     condition: Box<Expression>,
@@ -72,65 +88,27 @@ impl IfThenElse {
 pub type PatternMatchArm = (AssignmentPattern, Box<Expression>);
 
 pub type ConditionMatchArm = (Box<Expression>, Box<Expression>);
-#[derive(Debug, Clone)]
-pub enum Literal {
-    Integer(u64),
-    Float(f64),
-    Boolean(bool),
-    String(String),
-}
 
-impl PartialEq for Literal {
-    fn eq(&self, other: &Self) -> bool {
-        if let (Self::Float(a), Self::Float(b)) = (self, other)
-            && a.is_nan()
-            && b.is_nan()
-        {
-            return true;
-        }
-        match (self, other) {
-            (Self::Integer(a), Self::Integer(b)) => a == b,
-            (Self::Boolean(a), Self::Boolean(b)) => a == b,
-            (Self::String(a), Self::String(b)) => a == b,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl Eq for Literal {}
-
-impl Hash for Literal {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            Self::Float(f) if f.is_nan() => state.write(f64::NAN.to_ne_bytes().as_ref()),
-            Self::Float(f) => state.write(f.to_ne_bytes().as_ref()),
-            Self::Boolean(b) => b.hash(state),
-            Self::String(s) => s.hash(state),
-            Self::Integer(i) => i.hash(state),
-        }
-    }
-}
-
-impl From<u64> for Literal {
+impl From<u64> for ExpressionKind {
     fn from(value: u64) -> Self {
-        Literal::Integer(value)
+        ExpressionKind::IntegerLiteral(value)
     }
 }
 
-impl From<f64> for Literal {
+impl From<f64> for ExpressionKind {
     fn from(value: f64) -> Self {
-        Literal::Float(value)
+        ExpressionKind::FloatLiteral(value)
     }
 }
 
-impl From<bool> for Literal {
+impl From<bool> for ExpressionKind {
     fn from(value: bool) -> Self {
-        Literal::Boolean(value)
+        ExpressionKind::BoolLiteral(value)
     }
 }
 
-impl From<String> for Literal {
+impl From<String> for ExpressionKind {
     fn from(value: String) -> Self {
-        Literal::String(value)
+        ExpressionKind::StringLiteral(value)
     }
 }

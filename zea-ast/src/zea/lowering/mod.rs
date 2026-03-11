@@ -1,7 +1,9 @@
-use crate::zea::expression::Literal;
+use crate::zea::expression::{BinOp, Expression, UnOp};
 use crate::zea::statement::Statement;
-use crate::zea::Type;
+use crate::zea::{Type, TypedIdentifier};
+use std::hash::{Hash, Hasher};
 use thiserror::Error;
+use zea_macros::HashEqById;
 
 pub mod nodeexpansion;
 
@@ -12,8 +14,14 @@ pub enum LoweringError {
 }
 pub type LoweringResult<T> = Result<T, LoweringError>;
 
+#[derive(Debug, Clone, HashEqById)]
+pub struct ExpandedStatement {
+    pub id: usize,
+    pub kind: ExpandedStatementKind,
+}
+
 #[derive(Debug, PartialEq, Clone)]
-pub enum ExpandedStatement {
+pub enum ExpandedStatementKind {
     Initialisation(ExpandedInitialisation),
     Reassignment(ExpandedReassignment),
     FunctionCall(LoweringFunctionCall),
@@ -32,27 +40,23 @@ pub struct LoweringFunctionCall {
     pub name: String,
     pub arguments: Vec<ExpandedExpression>,
 }
+
+#[derive(Debug, Clone, HashEqById)]
+pub struct ExpandedExpression {
+    pub id: usize,
+    kind: ExpandedExpressionKind,
+}
 #[derive(Debug, PartialEq, Clone)]
-pub enum ExpandedExpression {
+pub enum ExpandedExpressionKind {
     Unit,
     FuncCall(Box<LoweringFunctionCall>),
     Ident(String),
-    Literal(Literal),
-    Add(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    Sub(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    Mul(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    Div(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    Mod(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    Neg(Box<ExpandedExpression>),
-
-    LogAnd(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    LogOr(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    LogNot(Box<ExpandedExpression>),
-
-    BitAnd(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    BitOr(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    BitXor(Box<ExpandedExpression>, Box<ExpandedExpression>),
-    BitNot(Box<ExpandedExpression>),
+    BinOpExpr(BinOp, Box<ExpandedExpression>, Box<ExpandedExpression>),
+    UnOpExpr(UnOp, Box<ExpandedExpression>),
+    IntegerLiteral(u64),
+    FloatLiteral(f64),
+    BoolLiteral(bool),
+    StringLiteral(String),
 
     IfThenElse(
         Box<ExpandedExpression>,
@@ -67,7 +71,7 @@ pub enum ExpandedExpression {
 pub struct DesugaredCondMatch {
     /// The label that the condmatch value gets i.e. `__cmatch0`, `__cmatch1` etc.
     /// This label must be unique to the scope of the function in which it exists
-    label: usize,
+    id: usize,
     /// All of its cases, which may or may not contain a default arm.
     arms: Vec<ExpandedExpression>,
 }
@@ -77,36 +81,9 @@ pub struct ExpandedBlockExpr {
     /// The label that the block expression has its value assigned to
     /// i.e. `__block0`, `__block1` etc.
     /// This label must be unique to the scope of the function in which it exists
-    pub label: String,
+    pub id: usize,
     pub statements: Vec<ExpandedStatement>,
     pub last: ExpandedExpression,
-}
-impl ExpandedBlockExpr {
-    pub fn insert_return_unit(
-        statements: Vec<ExpandedStatement>,
-    ) -> (Vec<ExpandedStatement>, ExpandedExpression) {
-        match statements.last() {
-            Some(ExpandedStatement::Return(expr)) => {
-                (statements[..(statements.len() - 1)].to_vec(), expr.clone())
-            }
-            _ => (statements, ExpandedExpression::Unit),
-        }
-    }
-
-    pub fn new(label: impl Into<String>, statement_block: Vec<ExpandedStatement>) -> Self {
-        let (statements, last) = Self::insert_return_unit(statement_block);
-        Self {
-            label: label.into(),
-            statements,
-            last,
-        }
-    }
-}
-
-impl From<Literal> for ExpandedExpression {
-    fn from(value: Literal) -> Self {
-        Self::Literal(value)
-    }
 }
 
 /// An assignment to a simple, totally unpacked variable.
@@ -164,10 +141,11 @@ impl From<SimpleInitialisation> for ExpandedInitialisation {
     }
 }
 
-impl From<SimpleInitialisation> for ExpandedStatement {
-    fn from(value: SimpleInitialisation) -> Self {
-        Self::Initialisation(value.into())
-    }
+#[derive(Debug, Clone, HashEqById)]
+pub struct ExpandedFunction {
+    id: usize,
+    pub name: String,
+    pub args: Vec<TypedIdentifier>,
+    pub returns: Type,
+    pub body: Vec<ExpandedStatement>,
 }
-
-impl Statement {}

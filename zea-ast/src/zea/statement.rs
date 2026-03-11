@@ -1,14 +1,20 @@
 #![allow(dead_code)]
 
+use crate::zea::Type;
 use crate::zea::expression::{ConditionMatch, Expression};
 use crate::zea::patterns::AssignmentPattern;
-use crate::zea::Type;
-use crate::zea::{statement, Hasher};
+use crate::zea::{Hasher, statement};
 use std::hash::Hash;
-use zea_macros::HashById;
+use zea_macros::HashEqById;
+
+#[derive(Debug, Clone, HashEqById)]
+pub struct Statement {
+    pub id: usize,
+    pub(crate) kind: StatementKind,
+}
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Statement {
+pub enum StatementKind {
     Initialisation(Initialisation),
     Reassignment(Reassignment),
     FunctionCall(FunctionCall),
@@ -17,53 +23,27 @@ pub enum Statement {
     CondMatch(Box<ConditionMatch>),
 }
 
-#[derive(Debug, Clone, PartialEq, HashById)]
+#[derive(Debug, Clone, HashEqById)]
 pub struct Initialisation {
     pub id: usize,
     pub typ: Option<Type>,
     pub assignee: AssignmentPattern,
     pub value: Expression,
 }
-
-impl From<Reassignment> for Statement {
-    fn from(var: Reassignment) -> Self {
-        Statement::Reassignment(var)
-    }
-}
-
-impl From<Initialisation> for Statement {
-    fn from(var: Initialisation) -> Self {
-        Statement::Initialisation(var)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, HashById)]
+#[derive(Debug, Clone, HashEqById)]
 pub struct Reassignment {
     pub id: usize,
     pub assignee: AssignmentPattern,
     pub value: Expression,
 }
 
-#[derive(Debug, Clone, PartialEq, HashById)]
+#[derive(Debug, Clone, HashEqById)]
 pub struct FunctionCall {
     pub id: usize,
     pub name: String,
     pub args: Vec<Expression>,
 }
-
-impl From<FunctionCall> for Statement {
-    fn from(func: FunctionCall) -> Self {
-        Statement::FunctionCall(func)
-    }
-}
-
-impl From<FunctionCall> for Expression {
-    fn from(func: FunctionCall) -> Self {
-        Expression::FuncCall(func)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, HashById)]
+#[derive(Debug, Clone, HashEqById)]
 pub struct StatementBlock {
     pub id: usize,
     pub stmts: Vec<Statement>,

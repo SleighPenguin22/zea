@@ -2,10 +2,17 @@ mod structures;
 
 use proc_macro2::Ident;
 use quote::quote;
-use syn::{Data, DeriveInput, ItemStruct};
+use syn::{Data, DeriveInput};
 
 fn impl_struct(ident: Ident) -> proc_macro::TokenStream {
     proc_macro::TokenStream::from(quote! {
+        impl PartialEq for #ident {
+            fn eq(&self, other: &Self) -> bool {
+                self.id == other.id
+            }
+        }
+        impl Eq for #ident {}
+        
         impl Hash for #ident {
             fn hash<H: Hasher>(&self, state: &mut H) {
                 self.id.hash(state)
@@ -14,7 +21,7 @@ fn impl_struct(ident: Ident) -> proc_macro::TokenStream {
     })
 }
 
-#[proc_macro_derive(HashById)]
+#[proc_macro_derive(HashEqById)]
 pub fn hash_by_id(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let parsed = syn::parse_macro_input!(input as DeriveInput);
     let ident = parsed.ident;
@@ -26,31 +33,24 @@ pub fn hash_by_id(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     }
 }
 
-#[proc_macro_attribute]
-pub fn generator(
-    _attr: proc_macro::TokenStream,
-    input: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    let parsed = syn::parse_macro_input!(input as ItemStruct);
+/// HashSet literal initialization
+macro_rules! set {
+    ($($e:expr),*) => {{
+        use std::collections::HashSet;
+        HashSet::from_iter(vec![$($e),*])
+    }};
+}
 
-    let ident = parsed.ident;
-    let vis = parsed.vis;
-    let expanded = quote! {
-        // #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        #vis struct #ident {
-            cur: usize,
-        }
-        impl #ident {
-            pub fn new() -> Self {
-                Self { cur: 0}
-            }
-            pub fn get(&mut self) -> usize {
-                let cur = self.cur;
-                self.cur+=1;
-                cur
-            }
-        }
-    };
+/// vec![], but each expression is `Box::new()`'ed
+macro_rules! vecboxed {
+    ($($e:expr),*) => {{
+        vec![$(Box::new($e)),*]
+    }};
+}
 
-    proc_macro::TokenStream::from(expanded)
+/// vec![], but each expression is `Rc::clone()`'ed
+macro_rules! vecrcloned {
+    ($($e:expr),*) => {{
+        vec![$(std::rc::Rc::clone(&$e)),*]
+    }};
 }
