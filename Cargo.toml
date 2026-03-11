@@ -1,4 +1,4 @@
 [workspace]
 resolver = "3"
 
-members = ["zea-ast", 'zea-driver', "zea-parser", "zea-codegen"]
+members = ["zea-ast", 'zea-driver', "zea-parser", "zea-codegen", "zea-macros"]

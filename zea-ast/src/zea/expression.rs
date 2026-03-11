@@ -1,6 +1,7 @@
 use crate::zea::patterns::AssignmentPattern;
 use crate::zea::statement::{FunctionCall, StatementBlock};
 use std::hash::{Hash, Hasher};
+use zea_macros::HashById;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expression {
@@ -32,26 +33,35 @@ pub enum Expression {
     IfThenElse(IfThenElse),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, HashById)]
 pub struct ConditionMatch {
+    pub id: usize,
     conditions: Vec<ConditionMatchArm>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, HashById)]
 pub struct PatternMatch {
+    pub id: usize,
     subject: Box<Expression>,
     patterns: Vec<PatternMatchArm>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, HashById)]
 pub struct IfThenElse {
+    pub id: usize,
     condition: Box<Expression>,
     true_case: Box<Expression>,
     false_case: Option<Box<Expression>>,
 }
 impl IfThenElse {
-    pub fn new(condition: Expression, true_case: Expression, false_case: Expression) -> IfThenElse {
+    pub fn new(
+        id: usize,
+        condition: Expression,
+        true_case: Expression,
+        false_case: Expression,
+    ) -> IfThenElse {
         IfThenElse {
+            id,
             condition: Box::new(condition),
             true_case: Box::new(true_case),
             false_case: Some(Box::new(false_case)),

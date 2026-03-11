@@ -15,16 +15,20 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-#[derive(Debug, Default, Clone)]
+use zea_macros::HashById;
+
+#[derive(Default, HashById)]
 pub struct Module {
+    pub id: usize,
     pub imports: Vec<String>,
     pub exports: Vec<String>,
     pub symbols: HashSet<TopLevelStatement>,
 }
+
 impl Module {
-    pub fn find_entry_point(&self) -> Option<Function> {
+    pub fn find_entry_point(&self) -> Option<&Function> {
         self.iter_symbols().find_map(|symbol| match symbol {
-            TopLevelStatement::FuncDefinition(f) if f.name == "main" => Some(f.clone()),
+            TopLevelStatement::FuncDefinition(f) if f.name == "main" => Some(f),
             _ => None,
         })
     }
@@ -56,8 +60,9 @@ impl Hash for TopLevelStatement {
 ///
 /// Function may be defined only once within a module, They are compared and [`Hash`]'ed against their signature.
 /// Functions may be imported as many times as needed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, HashById)]
 pub struct Function {
+    pub id: usize,
     pub name: String,
     pub args: Vec<TypedIdentifier>,
     pub returns: Type,
@@ -70,10 +75,3 @@ impl PartialEq for Function {
 }
 impl Eq for Function {}
 
-impl Hash for Function {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        self.args.hash(state);
-        self.returns.hash(state);
-    }
-}

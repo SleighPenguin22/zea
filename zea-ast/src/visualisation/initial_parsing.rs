@@ -1,10 +1,10 @@
+use crate::visualisation::{Labeler, RenderingNodeBuilder, Visualise, VisualizeResult};
 use crate::zea::expression::Expression;
 use crate::zea::statement::Statement;
 use crate::zea::{
-    expression::Literal, patterns::AssignmentPattern, Function, Initialisation, Module, TopLevelStatement,
+    expression::Literal, patterns::AssignmentPattern, Function, Initialisation, Module, StatementBlock, TopLevelStatement,
     Type, TypedIdentifier,
 };
-use crate::visualisation::{Labeler, RenderingNodeBuilder, Visualise, VisualizeResult};
 use vizoxide::attr::edge::LABEL;
 use vizoxide::attr::node::{COLOR, FILLCOLOR, SHAPE};
 use vizoxide::{Graph, Node};
@@ -12,10 +12,10 @@ use vizoxide::{Graph, Node};
 pub(crate) fn render_block<'graph>(
     graph: &'graph Graph,
     labeler: &mut Labeler,
-    block: &Vec<Statement>,
+    block: &StatementBlock,
 ) -> VisualizeResult<'graph> {
     let id = labeler.get();
-    let label = if block.is_empty() {
+    let label = if block.stmts.is_empty() {
         "empty block"
     } else {
         "block"
@@ -27,7 +27,7 @@ pub(crate) fn render_block<'graph>(
         .color("grey")
         .build();
 
-    render_block_next(graph, labeler, &block[..], &node)?;
+    render_block_next(graph, labeler, &block.stmts[..], &node)?;
 
     Ok((id, node))
 }
@@ -450,7 +450,7 @@ impl Visualise for Function {
         let (_, params) = Self::render_paramlist(graph, labeler, &self.args)?;
         graph.create_edge(&node, &params, None).build().unwrap();
 
-        render_block_next(graph, labeler, &self.body, &node)?;
+        render_block_next(graph, labeler, &self.body.as_slice(), &node)?;
 
         Ok((id, node))
     }

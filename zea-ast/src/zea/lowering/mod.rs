@@ -3,7 +3,7 @@ use crate::zea::statement::Statement;
 use crate::zea::Type;
 use thiserror::Error;
 
-pub mod symbollowering;
+pub mod nodeexpansion;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LoweringError {
@@ -15,7 +15,7 @@ pub type LoweringResult<T> = Result<T, LoweringError>;
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpandedStatement {
     Initialisation(ExpandedInitialisation),
-    Reassignment(LoweringReassignment),
+    Reassignment(ExpandedReassignment),
     FunctionCall(LoweringFunctionCall),
     LoweredBlock(ExpandedBlockExpr),
     UnitReturn,
@@ -23,7 +23,7 @@ pub enum ExpandedStatement {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct LoweringReassignment {
+pub struct ExpandedReassignment {
     pub assignee: String,
     pub value: ExpandedExpression,
 }

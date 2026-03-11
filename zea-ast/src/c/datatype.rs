@@ -44,7 +44,7 @@ impl From<&TypeQualifier> for String {
 
 impl TypeSpecifier {
     /// Get the type behind any pointer variant:
-    /// ```
+    /// ```ignore
     /// "int" => "int",
     /// Pointer("int") => "int",
     /// Pointer(Pointer("bool")) => "bool"
@@ -57,6 +57,8 @@ impl TypeSpecifier {
     }
 }
 
-
 #[derive(Debug, PartialEq, Clone)]
-pub struct Type(pub HashSet<TypeQualifier>, pub TypeSpecifier);
+pub struct Type {
+    pub qualifiers: HashSet<TypeQualifier>,
+    pub specifier: TypeSpecifier,
+}

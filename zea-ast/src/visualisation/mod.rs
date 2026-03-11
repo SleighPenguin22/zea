@@ -9,17 +9,18 @@ use vizoxide::layout::{apply_layout, Engine};
 use vizoxide::render::{render_to_file, Format};
 use vizoxide::{Context, Graph, GraphBuilder, Node, NodeBuilder};
 
-#[derive(Debug)]
-pub struct Labeler(usize);
+pub struct Labeler {
+    cur: usize,
+}
+
 impl Labeler {
     pub fn new() -> Self {
-        Self(0)
+        Self { cur: 0 }
     }
-
     pub fn get(&mut self) -> usize {
-        let n = self.0;
-        self.0 += 1;
-        n
+        let cur = self.cur;
+        self.cur += 1;
+        cur
     }
 }
 struct RenderingNodeBuilder<'graph>(usize, NodeBuilder<'graph>);

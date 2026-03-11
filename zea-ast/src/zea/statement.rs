@@ -1,7 +1,11 @@
 #![allow(dead_code)]
+
 use crate::zea::expression::{ConditionMatch, Expression};
 use crate::zea::patterns::AssignmentPattern;
 use crate::zea::Type;
+use crate::zea::{statement, Hasher};
+use std::hash::Hash;
+use zea_macros::HashById;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Statement {
@@ -9,12 +13,13 @@ pub enum Statement {
     Reassignment(Reassignment),
     FunctionCall(FunctionCall),
     Return(Expression),
-    Block(Vec<Statement>),
+    Block(StatementBlock),
     CondMatch(Box<ConditionMatch>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, HashById)]
 pub struct Initialisation {
+    pub id: usize,
     pub typ: Option<Type>,
     pub assignee: AssignmentPattern,
     pub value: Expression,
@@ -32,14 +37,16 @@ impl From<Initialisation> for Statement {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, HashById)]
 pub struct Reassignment {
+    pub id: usize,
     pub assignee: AssignmentPattern,
     pub value: Expression,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, HashById)]
 pub struct FunctionCall {
+    pub id: usize,
     pub name: String,
     pub args: Vec<Expression>,
 }
@@ -56,4 +63,20 @@ impl From<FunctionCall> for Expression {
     }
 }
 
-pub type StatementBlock = Vec<Statement>;
+#[derive(Debug, Clone, PartialEq, HashById)]
+pub struct StatementBlock {
+    pub id: usize,
+    pub stmts: Vec<Statement>,
+}
+impl IntoIterator for StatementBlock {
+    type Item = Statement;
+    type IntoIter = <Vec<crate::zea::statement::Statement> as IntoIterator>::IntoIter;
+    fn into_iter(self) -> Self::IntoIter {
+        self.stmts.into_iter()
+    }
+}
+impl StatementBlock {
+    pub fn as_slice(&self) -> &[Statement] {
+        self.stmts.as_slice()
+    }
+}
