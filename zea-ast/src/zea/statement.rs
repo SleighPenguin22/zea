@@ -19,6 +19,7 @@ pub enum StatementKind {
     Reassignment(Reassignment),
     FunctionCall(FunctionCall),
     Return(Expression),
+    BlockTail(Expression),
     Block(StatementBlock),
     CondMatch(Box<ConditionMatch>),
 
@@ -38,7 +39,7 @@ pub struct Initialisation {
 #[derive(Debug, Clone, HashEqById)]
 pub struct Reassignment {
     pub id: usize,
-    pub assignee: AssignmentPattern,
+    pub assignee: String,
     pub value: Expression,
 }
 
@@ -51,18 +52,19 @@ pub struct FunctionCall {
 #[derive(Debug, Clone, HashEqById)]
 pub struct StatementBlock {
     pub id: usize,
-    pub stmts: Vec<Statement>,
+    pub statements: Vec<Statement>,
 }
+
 impl IntoIterator for StatementBlock {
     type Item = Statement;
     type IntoIter = <Vec<Statement> as IntoIterator>::IntoIter;
     fn into_iter(self) -> Self::IntoIter {
-        self.stmts.into_iter()
+        self.statements.into_iter()
     }
 }
 impl StatementBlock {
     pub fn as_slice(&self) -> &[Statement] {
-        self.stmts.as_slice()
+        self.statements.as_slice()
     }
 }
 

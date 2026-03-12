@@ -9,7 +9,7 @@ pub mod nodeexpansion;
 
 pub use datatype::{Type, TypedIdentifier};
 pub use expression::{Expression, ExpressionKind};
-pub use statement::{Initialisation, Statement, StatementBlock, StatementKind};
+pub use statement::{Initialisation, Statement, StatementBlock, StatementKind, FunctionCall};
 use std::{
     collections::HashSet,
     hash::{Hash, Hasher},

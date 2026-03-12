@@ -15,7 +15,7 @@ pub(crate) fn render_block<'graph>(
     block: &StatementBlock,
 ) -> VisualizeResult<'graph> {
     let id = labeler.get();
-    let label = if block.stmts.is_empty() {
+    let label = if block.statements.is_empty() {
         "empty block"
     } else {
         "block"
@@ -27,7 +27,7 @@ pub(crate) fn render_block<'graph>(
         .color("grey")
         .build();
 
-    render_block_next(graph, labeler, &block.stmts[..], &node)?;
+    render_block_next(graph, labeler, &block.statements[..], &node)?;
 
     Ok((id, node))
 }

@@ -1,11 +1,12 @@
 #![allow(unused)]
 
 use crate::zea::patterns::AssignmentPattern;
+use crate::zea::statement::{ExpandedBlockExpr, ExpandedInitialisation};
 use crate::zea::{Expression, ExpressionKind};
 use crate::zea::{Initialisation, StatementBlock, TypedIdentifier};
 use crate::zea::{Statement, StatementKind};
+use crate::VisitExpr;
 use std::collections::HashSet;
-use crate::zea::statement::ExpandedBlockExpr;
 
 pub type ModuleNamedTupleCache = HashSet<TupleWithNamedMembers>;
 
@@ -15,7 +16,6 @@ pub struct TupleWithNamedMembers {
 #[derive(Default)]
 pub struct NodeExpander {
     _labeler: usize,
-    named_tuple_cache: HashSet<TupleWithNamedMembers>,
 }
 
 /// Tranform some node into a given variant, and label it.
@@ -68,31 +68,19 @@ impl NodeExpander {
         label
     }
 
-    pub fn expand_block(&mut self, block: StatementBlock) -> ExpandedBlockExpr {
-        let block: Vec<_> = block
-            .into_iter()
-            .map(|stmt| self.expand_statement(stmt))
-            .collect();
-
-        let (statements, last) = if let Some((last, init)) = block.split_last() {
-            match last.kind {
-                StatementKind::Return(ref expr) => (init.to_vec(), expr.clone()),
-                _ => (
-                    block,
-                    Expression {
-                        id: self.label(),
-                        kind: ExpressionKind::Unit,
-                    },
-                ),
+    pub fn expand_block(&mut self, mut block: StatementBlock) -> ExpandedBlockExpr {
+        let (statements, last) = match block.statements.last() {
+            Some(Statement {
+                kind: StatementKind::BlockTail(_),
+                ..
+            }) => {
+                let tail = block.statements.pop().unwrap();
+                let StatementKind::BlockTail(e) = tail.kind else {
+                    unreachable!()
+                };
+                (block.statements, e)
             }
-        } else {
-            (
-                vec![],
-                Expression {
-                    id: self.label(),
-                    kind: ExpressionKind::Unit,
-                },
-            )
+            _ => (block.statements, Expression::unit(self.label())),
         };
 
         ExpandedBlockExpr {
@@ -103,39 +91,41 @@ impl NodeExpander {
     }
 
     pub fn expand_statement(&mut self, statement: Statement) -> Statement {
-        match statement.kind {
-            StatementKind::Block(b) => label!(using self stmt Block with self.expand_block(b)),
+        let kind = match statement.kind {
+            StatementKind::Block(b) => StatementKind::ExpandedBlock(self.expand_block(b)),
             StatementKind::Initialisation(assignment) => {
-                label!(using self stmt Initialisation with self.expand_assignment(assignment))
+                StatementKind::ExpandedInitialisation(self.expand_assignment(assignment))
             }
-            StatementKind::Return(expr) => {
-                label!(using self stmt Return with self.expand_expression(expr))
-            }
-            _ => todo!("cannot yet expand statement\n{statement:?}\n"),
+            _ => return statement,
+        };
+        Statement {
+            id: self.label(),
+            kind,
         }
     }
 
-    pub fn expand_assignment(&mut self, assignment: Initialisation) -> Expression {
-        match assignment.assignee {
+    pub fn expand_assignment(&mut self, assignment: Initialisation) -> ExpandedInitialisation {
+        match &assignment.assignee {
             AssignmentPattern::Identifier(assignee) => todo!(),
-            _ => todo!("cannot yet expand tuple assignment\n{assignment:?}\n"),
+            _ => todo!(),
         }
     }
 
     pub fn expand_expression(&mut self, expression: Expression) -> Expression {
-        match expression.kind {
+        let kind = match expression.kind {
             ExpressionKind::Block(block) => {
-                label!(using self expr Block with Box::new(self.expand_block(block)))
+                ExpressionKind::ExpandedBlock(Box::new(self.expand_block(block)))
             }
-            ExpressionKind::Ident(i) => label!(using self expr Ident with i),
-            ExpressionKind::IntegerLiteral(l) => label!(using self expr IntegerLiteral with l),
-            _ => todo!("cannot yet expand expression\n{expression:?}\n"),
+            ref _other => return expression,
+        };
+        Expression {
+            id: self.label(),
+            kind,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     fn test_expand_block() {}
 }

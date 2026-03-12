@@ -1,13 +1,29 @@
-use crate::zea::lowering::ExpandedBlockExpr;
 use crate::zea::patterns::AssignmentPattern;
-use crate::zea::statement::{FunctionCall, StatementBlock};
+use crate::zea::statement::{ExpandedBlockExpr, FunctionCall, StatementBlock};
 use std::hash::{Hash, Hasher};
 use zea_macros::HashEqById;
 
+macro_rules! extended {
+    ($($first:expr),+) => {{
+        vec![$($first),+]
+    }};
+    ($($first:expr),+ ; $($rest:expr),+) => {{
+        let mut v = vec![$($first),+];
+        $(v.extend($rest);)+
+        v
+    }};
+
+    (; $($rest:expr),+) => {{
+        let mut v = Vec::new();
+        $(v.extend($rest);)+
+        v
+    }};
+}
+
 #[derive(Debug, Clone, HashEqById)]
 pub struct Expression {
-    id: usize,
-    pub(crate) kind: ExpressionKind,
+    pub id: usize,
+    pub kind: ExpressionKind,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -31,6 +47,16 @@ pub enum ExpressionKind {
     // after expansion
     ExpandedBlock(Box<ExpandedBlockExpr>),
 }
+
+impl Expression {
+    pub fn unit(id: usize) -> Self {
+        Expression {
+            id,
+            kind: ExpressionKind::Unit,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BinOp {
     Add,
@@ -72,6 +98,14 @@ pub struct IfThenElse {
     condition: Box<Expression>,
     true_case: Box<Expression>,
     false_case: Option<Box<Expression>>,
+}
+
+#[derive(Clone, Debug, HashEqById)]
+pub struct ExpandedIfThenElse {
+    pub id: usize,
+    condition: Box<Expression>,
+    true_case: Box<Expression>,
+    false_case: Box<Expression>,
 }
 #[derive(Clone, Debug, HashEqById)]
 pub struct PatternMatchArm {
