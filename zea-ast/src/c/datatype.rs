@@ -57,6 +57,15 @@ impl TypeSpecifier {
     }
 }
 
+impl From<TypeSpecifier> for Type {
+    fn from(value: TypeSpecifier) -> Self {
+        Self {
+            qualifiers: HashSet::new(),
+            specifier: value,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Type {
     pub qualifiers: HashSet<TypeQualifier>,

@@ -5,8 +5,11 @@ pub mod expression;
 pub mod lowering;
 pub mod patterns;
 pub mod statement;
+pub mod nodeexpansion;
+
 pub use datatype::{Type, TypedIdentifier};
-pub use statement::{Initialisation, StatementBlock};
+pub use expression::{Expression, ExpressionKind};
+pub use statement::{Initialisation, Statement, StatementBlock, StatementKind};
 use std::{
     collections::HashSet,
     hash::{Hash, Hasher},

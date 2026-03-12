@@ -5,9 +5,11 @@ pub mod directives;
 pub mod expression;
 pub mod statement;
 
-pub use crate::c::datatype::Type;
+pub use crate::c::datatype::{Type, TypeQualifier, TypeSpecifier};
 pub use crate::c::expression::Expression;
-use crate::c::statement::{Initialisation, StatementBlock, VariableDeclaration};
+pub use crate::c::statement::{
+    DerefReassignment, Initialisation, Reassignment, Statement, StatementBlock, VariableDeclaration,
+};
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Debug, PartialEq)]

@@ -3,7 +3,11 @@
 use zea_ast::c::datatype::TypeSpecifier;
 use zea_ast::c::expression::Literal;
 use zea_ast::c::statement::{Initialisation, Statement, StatementBlock, VariableDeclaration};
-use zea_ast::c::{Expression, FunctionDeclaration, FunctionDefinition, TypedIdentifier};
+use zea_ast::c::{
+    Expression, FunctionDeclaration, FunctionDefinition, Reassignment, TypedIdentifier,
+};
+
+pub mod node_c_conversion;
 
 pub fn canoncalize_zea_identifier(identifier: &str) -> String {
     identifier
@@ -17,6 +21,10 @@ pub fn canoncalize_zea_identifier(identifier: &str) -> String {
 
 pub trait EmitC {
     fn emit_c(&self) -> String;
+}
+
+pub trait ConvertC {
+    fn convert_c(self) -> Vec<Box<dyn EmitC>>;
 }
 
 impl<T: EmitC> EmitC for Box<T> {
@@ -144,6 +152,12 @@ impl EmitC for FunctionDefinition {
     }
 }
 
+impl EmitC for Reassignment {
+    fn emit_c(&self) -> String {
+        format!("{} = {}", self.assignee, self.value.emit_c())
+    }
+}
+
 macro_rules! set {
         () => {{use std::collections::HashSet;HashSet::new()}};
         ($($e:expr),+) => {{
@@ -188,7 +202,7 @@ mod tests {
         let declb = c::statement::VariableDeclaration {
             typ: c::Type {
                 qualifiers: set![],
-                specifier: TypeSpecifier::Basic("int".to_string())
+                specifier: TypeSpecifier::Basic("int".to_string()),
             },
             name: "cat".to_string(),
         };
@@ -197,7 +211,7 @@ mod tests {
         let declb = c::statement::VariableDeclaration {
             typ: c::Type {
                 qualifiers: set![TypeQualifier::Static],
-                specifier: TypeSpecifier::Basic("int".to_string())
+                specifier: TypeSpecifier::Basic("int".to_string()),
             },
             name: "cat".to_string(),
         };
@@ -206,7 +220,9 @@ mod tests {
         let declb = c::statement::VariableDeclaration {
             typ: c::Type {
                 qualifiers: set![],
-                specifier: TypeSpecifier::Pointer(Box::new(TypeSpecifier::Basic("int".to_string())))
+                specifier: TypeSpecifier::Pointer(Box::new(TypeSpecifier::Basic(
+                    "int".to_string(),
+                ))),
             },
             name: "cat".to_string(),
         };
@@ -215,7 +231,9 @@ mod tests {
         let declb = c::statement::VariableDeclaration {
             typ: c::Type {
                 qualifiers: set![TypeQualifier::Static],
-                specifier: TypeSpecifier::Pointer(Box::new(TypeSpecifier::Basic("int".to_string())))
+                specifier: TypeSpecifier::Pointer(Box::new(TypeSpecifier::Basic(
+                    "int".to_string(),
+                ))),
             },
             name: "cat".to_string(),
         };
@@ -226,7 +244,7 @@ mod tests {
         let initc = c::statement::Initialisation {
             typ: c::Type {
                 qualifiers: set![TypeQualifier::Static],
-                specifier: TypeSpecifier::Basic("int".to_string())
+                specifier: TypeSpecifier::Basic("int".to_string()),
             },
             name: "bob".to_string(),
             value: c::Expression::Literal(c::expression::Literal::Integer(3)),

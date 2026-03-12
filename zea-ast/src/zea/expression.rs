@@ -1,3 +1,4 @@
+use crate::zea::lowering::ExpandedBlockExpr;
 use crate::zea::patterns::AssignmentPattern;
 use crate::zea::statement::{FunctionCall, StatementBlock};
 use std::hash::{Hash, Hasher};
@@ -11,21 +12,24 @@ pub struct Expression {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExpressionKind {
+    // initial pass
     Unit,
-    FuncCall(FunctionCall),
+    IntegerLiteral(u64),
+    BoolLiteral(bool),
+    FloatLiteral(f64),
+    StringLiteral(String),
     Ident(String),
+    FuncCall(FunctionCall),
     BinOpExpr(BinOp, Box<Expression>, Box<Expression>),
     UnOpExpr(UnOp, Box<Expression>),
 
-    IntegerLiteral(u64),
-    FloatLiteral(f64),
-    BoolLiteral(bool),
-    StringLiteral(String),
-
     Block(StatementBlock),
-    PatternMatch(PatternMatch),
-    ConditionMatch(ConditionMatch),
-    IfThenElse(IfThenElse),
+    // PatternMatch(PatternMatch),
+    // ConditionMatch(ConditionMatch),
+    // IfThenElse(IfThenElse),
+
+    // after expansion
+    ExpandedBlock(Box<ExpandedBlockExpr>),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BinOp {
@@ -69,46 +73,15 @@ pub struct IfThenElse {
     true_case: Box<Expression>,
     false_case: Option<Box<Expression>>,
 }
-impl IfThenElse {
-    pub fn new(
-        id: usize,
-        condition: Expression,
-        true_case: Expression,
-        false_case: Expression,
-    ) -> IfThenElse {
-        IfThenElse {
-            id,
-            condition: Box::new(condition),
-            true_case: Box::new(true_case),
-            false_case: Some(Box::new(false_case)),
-        }
-    }
+#[derive(Clone, Debug, HashEqById)]
+pub struct PatternMatchArm {
+    pub id: usize,
+    pat: AssignmentPattern,
+    value: Box<Expression>,
 }
-
-pub type PatternMatchArm = (AssignmentPattern, Box<Expression>);
-
-pub type ConditionMatchArm = (Box<Expression>, Box<Expression>);
-
-impl From<u64> for ExpressionKind {
-    fn from(value: u64) -> Self {
-        ExpressionKind::IntegerLiteral(value)
-    }
-}
-
-impl From<f64> for ExpressionKind {
-    fn from(value: f64) -> Self {
-        ExpressionKind::FloatLiteral(value)
-    }
-}
-
-impl From<bool> for ExpressionKind {
-    fn from(value: bool) -> Self {
-        ExpressionKind::BoolLiteral(value)
-    }
-}
-
-impl From<String> for ExpressionKind {
-    fn from(value: String) -> Self {
-        ExpressionKind::StringLiteral(value)
-    }
+#[derive(Clone, Debug, HashEqById)]
+pub struct ConditionMatchArm {
+    pub id: usize,
+    case: Box<Expression>,
+    value: Box<Expression>,
 }

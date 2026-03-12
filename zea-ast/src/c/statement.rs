@@ -48,8 +48,8 @@ pub enum Statement {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Reassignment {
-    assignee: String,
-    value: Expression,
+    pub assignee: String,
+    pub value: Expression,
 }
 
 #[derive(Clone, Debug, PartialEq)]
