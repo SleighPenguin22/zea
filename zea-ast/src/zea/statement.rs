@@ -15,11 +15,17 @@ pub struct Statement {
 #[derive(Debug, Clone, PartialEq)]
 pub enum StatementKind {
     // initial pass
+    /// Variable initialisation
     Initialisation(Initialisation),
+    /// Variable Reassignment
     Reassignment(Reassignment),
     FunctionCall(FunctionCall),
+    /// Control-flow return
     Return(Expression),
+    /// A tailing expression in a block
     BlockTail(Expression),
+    
+    /// A Block of statements
     Block(StatementBlock),
     CondMatch(Box<ConditionMatch>),
 

@@ -66,8 +66,8 @@ impl From<String> for Type {
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
 pub struct TypedIdentifier(String, Type);
 impl TypedIdentifier {
-    pub fn new(typ: Type, ident: String) -> Self {
-        Self(ident, typ)
+    pub fn new(typ: Type, ident: impl Into<String>) -> Self {
+        Self(ident.into(), typ)
     }
 }
 
