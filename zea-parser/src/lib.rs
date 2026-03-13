@@ -87,7 +87,7 @@ impl<'a> ParseState<'a> {
         Some((eaten, state))
     }
 
-    fn skip(self) -> ParseState<'a> {
+    fn whitespace(self) -> ParseState<'a> {
         let mut state = self;
 
         loop {
@@ -183,7 +183,7 @@ impl<'a> ParseState<'a> {
 
     pub fn parse_import_statement(self) -> ParseResult<'a, Vec<String>> {
         let (_, state) = self.toklit("import")?;
-        let state = state.skip();
+        let state = state.whitespace();
         let (identifier, state) = state.parse_expr_identifier()?;
 
         Ok((vec![identifier], state))
@@ -194,27 +194,27 @@ impl<'a> ParseState<'a> {
         Ok(state)
     }
 
-    pub fn close_paren(&self) -> Result<ParseState<'a>, ParseError<'a>> {
+    pub fn close_paren(self) -> Result<ParseState<'a>, ParseError<'a>> {
         let (_, state) = self.toklit(")")?;
         Ok(state)
     }
 
-    pub fn comma(&self) -> Result<ParseState<'a>, ParseError<'a>> {
+    pub fn comma(self) -> Result<ParseState<'a>, ParseError<'a>> {
         let (_, state) = self.toklit(",")?;
         Ok(state)
     }
 
-    pub fn colon(&self) -> Result<ParseState<'a>, ParseError<'a>> {
+    pub fn colon(self) -> Result<ParseState<'a>, ParseError<'a>> {
         let (_, state) = self.toklit(":")?;
         Ok(state)
     }
 
-    pub fn fn_arrow(&self) -> Result<ParseState<'a>, ParseError<'a>> {
+    pub fn fn_arrow(self) -> Result<ParseState<'a>, ParseError<'a>> {
         let (_, state) = self.toklit("->")?;
         Ok(state)
     }
 
-    pub fn kw_func(&self) -> Result<ParseState<'a>, ParseError<'a>> {
+    pub fn kw_func(self) -> Result<ParseState<'a>, ParseError<'a>> {
         let (_, state) = self.toklit(KW_FUNC)?;
         Ok(state)
     }
@@ -237,19 +237,19 @@ impl<'a> ParseState<'a> {
     }
 
     fn parse_array_type(self) -> ParseResult<'a, Type> {
-        let (_, state) = self.skip().toklit("[")?;
+        let (_, state) = self.whitespace().toklit("[")?;
 
         let (typ, state): (Type, ParseState<'a>) = state.parse_type()?;
-        let state: ParseState<'a> = state.skip();
+        let state: ParseState<'a> = state.whitespace();
 
         let (_, state) = state.toklit("]")?;
-        let state = state.skip();
+        let state = state.whitespace();
         let typ = Type::ArrayOf(Box::new(typ));
         Ok((typ, state))
     }
 
     fn parse_type(self) -> ParseResult<'a, zea::Type> {
-        if let Ok(_) = self.skip().toklit("[") {
+        if let Ok(_) = self.whitespace().toklit("[") {
             self.parse_array_type()
         } else {
             self.parse_pointer_type()
@@ -257,26 +257,26 @@ impl<'a> ParseState<'a> {
     }
 
     pub fn parse_func_param(self) -> ParseResult<'a, TypedIdentifier> {
-        let (ident, state) = self.skip().parse_expr_identifier()?;
-        let state = state.skip();
+        let (ident, state) = self.whitespace().parse_expr_identifier()?;
+        let state = state.whitespace();
         let state = state.colon()?;
-        let state = state.skip();
+        let state = state.whitespace();
         let (typ, state) = state.parse_type()?;
-        let state = state.skip();
+        let state = state.whitespace();
         Ok((TypedIdentifier::new(typ, ident), state))
     }
 
     pub fn parse_func_param_list(self) -> ParseResult<'a, Vec<TypedIdentifier>> {
-        let mut state = self.skip();
+        let mut state = self.whitespace();
         let mut res = vec![];
 
         loop {
             if let Ok((param, parsed_param)) = state.parse_func_param() {
                 res.push(param);
-                state = parsed_param.skip();
+                state = parsed_param.whitespace();
 
                 if let Ok(p_comma) = state.comma() {
-                    state = p_comma.skip();
+                    state = p_comma.whitespace();
                     continue;
                 }
             }
@@ -287,16 +287,16 @@ impl<'a> ParseState<'a> {
     }
 
     pub fn parse_func_head(self) -> ParseResult<'a, (String, Vec<TypedIdentifier>, Type)> {
-        let state = self.skip().kw_func()?;
-        let (name, state) = state.skip().parse_expr_identifier()?;
-        let state = state.skip().open_paren()?;
-        let (params, state) = state.skip().parse_func_param_list()?;
-        let mut state = state.skip().close_paren()?;
+        let state = self.whitespace().kw_func()?;
+        let (name, state) = state.whitespace().parse_expr_identifier()?;
+        let state = state.whitespace().open_paren()?;
+        let (params, state) = state.whitespace().parse_func_param_list()?;
+        let mut state = state.whitespace().close_paren()?;
 
-        let returns = match state.skip().fn_arrow() {
+        let returns = match state.whitespace().fn_arrow() {
             Ok(p_arrow) => {
-                let (returns, p_type) = p_arrow.skip().parse_type()?;
-                state = p_type.skip();
+                let (returns, p_type) = p_arrow.whitespace().parse_type()?;
+                state = p_type.whitespace();
                 returns
             }
             _ => Type::Basic("Void".to_string()),
@@ -306,7 +306,7 @@ impl<'a> ParseState<'a> {
     }
 
     pub fn parse_expr_lit_int(self) -> ParseResult<'a, u64> {
-        let state = self.skip();
+        let state = self.whitespace();
         let mut total: u64 = 0;
         let (radix, mut state) = match self.eat_bigly(2) {
             Some((c, p_prefix)) if c.eq_ignore_ascii_case("0x") => (16, p_prefix),
@@ -315,7 +315,6 @@ impl<'a> ParseState<'a> {
         };
 
         loop {
-            let mut keep_going = false;
             if let Ok((digit, p_digit)) = state.digit(radix) {
                 total *= radix as u64;
                 total += digit;
@@ -324,12 +323,10 @@ impl<'a> ParseState<'a> {
             }
 
             if let Ok((_, p_underscore)) = self.toklit("_") {
-                keep_going = true;
                 state = p_underscore;
+                continue;
             }
-            if !keep_going {
-                break;
-            }
+            break;
         }
         Ok((total, state))
     }
