@@ -2,8 +2,8 @@ use crate::visualisation::{Labeler, RenderingNodeBuilder, Visualise, VisualizeRe
 use crate::zea::expression::Expression;
 use crate::zea::statement::Statement;
 use crate::zea::{
-    expression::Literal, patterns::AssignmentPattern, Function, Initialisation, Module, StatementBlock, TopLevelStatement,
-    Type, TypedIdentifier,
+    patterns::AssignmentPattern, Function, Initialisation, Module, StatementBlock, Type,
+    TypedIdentifier,
 };
 use vizoxide::attr::edge::LABEL;
 use vizoxide::attr::node::{COLOR, FILLCOLOR, SHAPE};
@@ -53,36 +53,6 @@ fn render_block_next<'graph>(
         .unwrap();
     render_block_next(graph, labeler, rest, &node)?;
     Ok(())
-}
-
-impl Literal {
-    fn node_label(&self) -> String {
-        match self {
-            Literal::Integer(i) => i.to_string(),
-            Literal::Float(f) => f.to_string(),
-            Literal::Boolean(b) => b.to_string(),
-            Literal::String(s) => s.to_owned(),
-        }
-    }
-}
-
-impl Visualise for Literal {
-    fn render<'graph>(
-        &self,
-        graph: &'graph Graph,
-        labeler: &mut Labeler,
-    ) -> VisualizeResult<'graph> {
-        let s = labeler.get();
-        let node = graph
-            .create_node(&s.to_string())
-            .attribute(vizoxide::attr::node::FILLCOLOR, "blue")
-            .attribute(vizoxide::attr::node::COLOR, "blue")
-            .attribute(SHAPE, "box")
-            .attribute(LABEL, &self.node_label())
-            .build()
-            .unwrap();
-        Ok((s, node))
-    }
 }
 
 impl Expression {

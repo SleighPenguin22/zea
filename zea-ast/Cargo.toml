@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-vizoxide = { version = "1.0.5", optional = true }
+vizoxide = { path = "../vizoxide", optional = true }
 thiserror = "2.0.18"
 zea-macros = { path = "../zea-macros" }
 

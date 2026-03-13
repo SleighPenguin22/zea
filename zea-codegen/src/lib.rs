@@ -1,10 +1,10 @@
 #![allow(unused)]
 
-use zea_ast::c::datatype::TypeSpecifier;
-use zea_ast::c::expression::Literal;
-use zea_ast::c::statement::{Initialisation, Statement, StatementBlock, VariableDeclaration};
+use zea_ast::c::Literal;
+use zea_ast::c::TypeSpecifier;
 use zea_ast::c::{
-    Expression, FunctionDeclaration, FunctionDefinition, Reassignment, TypedIdentifier,
+    Expression, FunctionDeclaration, FunctionDefinition, Initialisation, Reassignment, Statement,
+    StatementBlock, TypedIdentifier, VariableDeclaration,
 };
 
 pub mod node_c_conversion;
@@ -170,7 +170,7 @@ macro_rules! set {
 mod tests {
     use crate::{fold_str, EmitC};
     use zea_ast::c;
-    use zea_ast::c::datatype::{TypeQualifier, TypeSpecifier};
+    use zea_ast::c::{TypeQualifier, TypeSpecifier};
 
     #[test]
     fn test_canonicalize_zea_identifier() {
@@ -199,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_decl_emit_c() {
-        let declb = c::statement::VariableDeclaration {
+        let declb = c::VariableDeclaration {
             typ: c::Type {
                 qualifiers: set![],
                 specifier: TypeSpecifier::Basic("int".to_string()),
@@ -208,7 +208,7 @@ mod tests {
         };
         assert_eq!("int cat;", declb.emit_c());
 
-        let declb = c::statement::VariableDeclaration {
+        let declb = c::VariableDeclaration {
             typ: c::Type {
                 qualifiers: set![TypeQualifier::Static],
                 specifier: TypeSpecifier::Basic("int".to_string()),
@@ -217,7 +217,7 @@ mod tests {
         };
         assert_eq!("static int cat;", declb.emit_c());
 
-        let declb = c::statement::VariableDeclaration {
+        let declb = c::VariableDeclaration {
             typ: c::Type {
                 qualifiers: set![],
                 specifier: TypeSpecifier::Pointer(Box::new(TypeSpecifier::Basic(
@@ -228,7 +228,7 @@ mod tests {
         };
         assert_eq!("int *cat;", declb.emit_c());
 
-        let declb = c::statement::VariableDeclaration {
+        let declb = c::VariableDeclaration {
             typ: c::Type {
                 qualifiers: set![TypeQualifier::Static],
                 specifier: TypeSpecifier::Pointer(Box::new(TypeSpecifier::Basic(
@@ -241,13 +241,13 @@ mod tests {
     }
 
     fn test_init_emit_c() {
-        let initc = c::statement::Initialisation {
+        let initc = c::Initialisation {
             typ: c::Type {
                 qualifiers: set![TypeQualifier::Static],
                 specifier: TypeSpecifier::Basic("int".to_string()),
             },
             name: "bob".to_string(),
-            value: c::Expression::Literal(c::expression::Literal::Integer(3)),
+            value: c::Expression::Literal(c::Literal::Integer(3)),
         };
     }
 }

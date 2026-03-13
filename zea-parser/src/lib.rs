@@ -2,7 +2,6 @@
 
 use crate::ParseError::{InvalidValueIdentifier, UnexpectedEOF};
 use zea_ast::zea;
-use zea_ast::zea::Type::Pointer;
 use zea_ast::zea::{Type, TypedIdentifier};
 
 const KW_FUNC: &str = "fn";
@@ -57,34 +56,60 @@ impl<'a> ParseState<'a> {
         self.input.chars().nth(self.index)
     }
 
-    fn eat(self) -> Option<ParseState<'a>> {
-        if self.index >= self.input.len() {
-            return None;
-        }
+    fn peek_n(self, n: usize) -> Result<&'a str, ParseError<'a>> {
+        self.input.get(self.index + n..).ok_or(UnexpectedEOF)
+    }
 
-        let (line, column) = if self.peek().unwrap() == '\n' {
+    fn eat_ignore(self) -> Result<ParseState<'a>, ParseError<'a>> {
+        let (line, column) = if self.peek().ok_or(UnexpectedEOF)? == '\n' {
             (self.line + 1, 1)
         } else {
             (self.line, self.column + 1)
         };
 
-        Some(ParseState {
+        Ok(ParseState {
             line,
             column,
             index: self.index + 1,
             ..self
         })
     }
-
-    fn eat_bigly(self, n: usize) -> Option<(&'a str, ParseState<'a>)> {
-        let mut state = self;
-        for _ in 0..n {
-            state = state.eat()?
+    fn eat(self) -> ParseResult<'a, char> {
+        if self.index >= self.input.len() {
+            return Err(UnexpectedEOF);
         }
 
-        let (eaten, _rest) = self.input.split_at(n);
+        let c = self.peek().unwrap();
 
-        Some((eaten, state))
+        let (line, column) = if c == '\n' {
+            (self.line + 1, 1)
+        } else {
+            (self.line, self.column + 1)
+        };
+
+        Ok((
+            c,
+            ParseState {
+                line,
+                column,
+                index: self.index + 1,
+                ..self
+            },
+        ))
+    }
+
+    fn eat_bigly(self, n: usize) -> ParseResult<'a, &'a str> {
+        let mut state = self;
+        let mut s = String::with_capacity(n);
+
+        for _ in 0..n {
+            // let try_eat = state.eat().unwrap();
+            let (ch, p_char) = state.eat()?;
+            s.push(ch);
+            state = p_char;
+        }
+
+        Ok((self.peek_n(n)?, state))
     }
 
     fn whitespace(self) -> ParseState<'a> {
@@ -92,7 +117,7 @@ impl<'a> ParseState<'a> {
 
         loop {
             match state.peek() {
-                Some(c) if c.is_whitespace() => state = state.eat().unwrap(),
+                Some(c) if c.is_whitespace() => state = state.eat_ignore().unwrap(),
                 _ => break,
             }
         }
@@ -100,19 +125,15 @@ impl<'a> ParseState<'a> {
         state
     }
 
-    fn digit(self, radix: u8) -> ParseResult<'a, u64> {
+    fn digit(self, radix: u32) -> ParseResult<'a, u64> {
         if radix < 2 || radix > 32 {
             panic!("invalid radix {radix}")
         }
-        let state = self.eat_bigly(1);
-        match state {
-            None => Err(UnexpectedEOF),
-            Some((d, state)) => {
-                let d = u64::from_str_radix(d, radix as u32)
-                    .map_err(|_| ParseError::UnexpectedInput(d.to_string(), self))?;
-                Ok((d, state))
-            }
-        }
+        let d = self.peek().ok_or(UnexpectedEOF)?;
+        let d = d
+            .to_digit(radix)
+            .ok_or(ParseError::UnexpectedInput(d.to_string(), self))?;
+        Ok((d as u64, self.eat_ignore().unwrap()))
     }
 
     pub fn starts_with(self, s: &str) -> bool {
@@ -134,19 +155,24 @@ impl<'a> ParseState<'a> {
             None => return Err(UnexpectedEOF),
             Some(c) => !c.is_lowercase(),
         };
-
-        let mut state = self;
-        let start_index = state.index;
-
-        while let Some(c) = state.peek() {
-            if c.is_alphanumeric() || c == '?' || c == '!' || c == '-' {
-                state = state.eat().unwrap()
-            } else {
-                break;
-            }
+        fn is_valid_char(ch: char) -> bool {
+            ch.is_lowercase() || ch.is_ascii_digit() || "-?!".contains(ch)
         }
 
-        let identifier = self.input[start_index..state.index].to_string();
+        let mut buffer = String::new();
+        let mut state = self;
+        let start_index = self.index;
+
+        let end_index = loop {
+            match state.eat() {
+                Ok((c, p_char)) if is_valid_char(c) => {
+                    state = p_char;
+                }
+                _ => break state.index,
+            }
+        };
+
+        let identifier = self.input[start_index..end_index].to_string();
         if invalid {
             Err(InvalidValueIdentifier(identifier, self))
         } else {
@@ -156,26 +182,29 @@ impl<'a> ParseState<'a> {
 
     pub fn parse_type_identifier(self) -> ParseResult<'a, String> {
         let invalid = match self.peek() {
-            None => {
-                return Err(UnexpectedEOF);
-            }
+            None => return Err(UnexpectedEOF),
             Some(c) => !c.is_uppercase(),
         };
+        fn is_valid_char(ch: char) -> bool {
+            ch.is_alphabetic() || ch.is_ascii_digit() || "_?!".contains(ch)
+        }
 
+        let mut buffer = String::new();
         let mut state = self;
         let start_index = state.index;
 
-        while let Some(c) = state.peek() {
-            if c.is_alphanumeric() {
-                state = state.eat().unwrap();
-            } else {
-                break;
+        let end_index = loop {
+            match state.eat() {
+                Ok((c, p_char)) if is_valid_char(c) => {
+                    state = p_char;
+                }
+                _ => break state.index,
             }
-        }
+        };
 
-        let identifier = self.input[start_index..state.index].to_string();
+        let identifier = self.input[start_index..end_index].to_string();
         if invalid {
-            Err(ParseError::InvalidTypeIdentifier(identifier, self))
+            Err(InvalidValueIdentifier(identifier, self))
         } else {
             Ok((identifier, state))
         }
@@ -249,11 +278,7 @@ impl<'a> ParseState<'a> {
     }
 
     fn parse_type(self) -> ParseResult<'a, zea::Type> {
-        if let Ok(_) = self.whitespace().toklit("[") {
-            self.parse_array_type()
-        } else {
-            self.parse_pointer_type()
-        }
+        self.parse_array_type().or(self.parse_pointer_type())
     }
 
     pub fn parse_func_param(self) -> ParseResult<'a, TypedIdentifier> {
@@ -305,19 +330,18 @@ impl<'a> ParseState<'a> {
         Ok((res, state))
     }
 
-    pub fn parse_expr_lit_int(self) -> ParseResult<'a, u64> {
+    pub fn parse_expr_lit_int_hex(self) -> ParseResult<'a, u64> {
         let state = self.whitespace();
+
+        let (_, mut state) = state.toklit("0x").or(state.toklit("0X"))?;
         let mut total: u64 = 0;
-        let (radix, mut state) = match self.eat_bigly(2) {
-            Some((c, p_prefix)) if c.eq_ignore_ascii_case("0x") => (16, p_prefix),
-            Some((c, p_prefix)) if c.eq_ignore_ascii_case("0b") => (2, p_prefix),
-            _ => (10, state),
-        };
 
         loop {
-            if let Ok((digit, p_digit)) = state.digit(radix) {
-                total *= radix as u64;
+            if let Ok((digit, p_digit)) = state.digit(16) {
+                // debug_assert!(p_digit.index > state_digits.index, "{digit}");
+                total *= 16;
                 total += digit;
+                eprintln!("total {total} after p_digit {digit}");
                 state = p_digit;
                 continue;
             }
@@ -326,9 +350,64 @@ impl<'a> ParseState<'a> {
                 state = p_underscore;
                 continue;
             }
-            break;
+            break Ok((total, state));
         }
-        Ok((total, state))
+    }
+
+    pub fn parse_expr_lit_int_bin(self) -> ParseResult<'a, u64> {
+        let state = self.whitespace();
+
+        let (_, mut state) = state.toklit("0b").or(state.toklit("0B"))?;
+        let mut total: u64 = 0;
+
+        loop {
+            if let Ok((digit, p_digit)) = state.digit(16) {
+                // debug_assert!(p_digit.index > state_digits.index, "{digit}");
+                total *= 16;
+                total += digit;
+                eprintln!("total {total} after p_digit {digit}");
+                state = p_digit;
+                continue;
+            }
+
+            if let Ok((_, p_underscore)) = self.toklit("_") {
+                state = p_underscore;
+                continue;
+            }
+            break Ok((total, state));
+        }
+    }
+
+    pub fn parse_expr_lit_int_dec(self) -> ParseResult<'a, u64> {
+        let mut state = self.whitespace();
+        let mut total: u64 = 0;
+
+        loop {
+            if let Ok((digit, p_digit)) = state.digit(10) {
+                // debug_assert!(p_digit.index > state_digits.index, "{digit}");
+                total *= 10;
+                total += digit;
+                eprintln!("total {total} after p_digit {digit}");
+                state = p_digit;
+                continue;
+            }
+
+            if let Ok((_, p_underscore)) = self.toklit("_") {
+                state = p_underscore;
+                continue;
+            }
+            break Ok((total, state));
+        }
+    }
+
+    pub fn parse_expr_lit_int(self) -> ParseResult<'a, u64> {
+        let state = self.whitespace();
+        let mut total: u64 = 0;
+
+        state
+            .parse_expr_lit_int_hex()
+            .or(state.parse_expr_lit_int_bin())
+            .or(state.parse_expr_lit_int_dec())
     }
 }
 
@@ -336,7 +415,7 @@ impl<'a> ParseState<'a> {
 mod tests {
     use super::*;
     mod types {
-        use zea_ast::zea::{Type, TypedIdentifier};
+        use zea_ast::zea::Type;
 
         macro_rules! typ {
             ($t:ident) => {
@@ -391,22 +470,26 @@ mod tests {
     fn test_parse_state_eat() {
         let state = ParseState::new("abc");
         assert_eq!(Some('a'), state.peek());
-        let state = state.eat().unwrap();
+        let state = state.eat_ignore().unwrap();
         assert_eq!(Some('b'), state.peek());
-        let state = state.eat().unwrap();
+        let state = state.eat_ignore().unwrap();
         assert_eq!(Some('c'), state.peek());
-        let state = state.eat().unwrap();
+        let state = state.eat_ignore().unwrap();
         assert_eq!(None, state.peek());
     }
 
     #[test]
-    fn test_parse_literal() {
-        let state = ParseState::new("import abc");
-        let (_, state) = state.toklit("import").unwrap();
+    fn test_parse_state_eat_bigly() {
+        let state = ParseState::new("abc");
+        let (_, bigly) = state.eat_bigly(0).unwrap();
+        assert!(bigly.index == state.index);
+        let (_, bigly) = state.eat_bigly(1).unwrap();
+        assert!(bigly.index == state.index + 1);
+        let (_, bigly) = state.eat_bigly(2).unwrap();
+        assert!(bigly.index == state.index + 2);
 
-        assert_eq!(6, state.index);
-        assert_eq!(7, state.column);
-        assert_eq!(1, state.line);
+        let err = state.eat_bigly(4).unwrap_err();
+        assert_eq!(UnexpectedEOF, err);
     }
 
     #[test]
@@ -569,6 +652,71 @@ mod tests {
         let (head, _) = ParseState::new("fn print(s: String,) -> Int")
             .parse_func_head()
             .unwrap();
+    }
+
+    #[test]
+    fn test_parse_digit() {
+        let state = ParseState::new("123");
+        let (d, advanced) = state.digit(10).unwrap();
+        assert_eq!(1, d);
+        assert_eq!('2', advanced.peek().unwrap());
+        let (d, advanced) = advanced.digit(10).unwrap();
+        assert_eq!(2, d);
+
+        let (d, advanced) = advanced.digit(10).unwrap();
+        assert_eq!(3, d);
+
+        let (d, _) = state.digit(2).unwrap();
+        assert_eq!(1, d);
+        let (d, _) = state.digit(16).unwrap();
+        assert_eq!(1, d);
+
+        let nine = ParseState::new("9");
+        let (d, _) = nine.digit(10).unwrap();
+        assert_eq!(9, d);
+        let (d, _) = nine.digit(16).unwrap();
+        assert_eq!(9, d);
+        let err = nine.digit(2).unwrap_err();
+        assert_eq!(ParseError::UnexpectedInput("9".to_string(), nine), err);
+
+        let f = ParseState::new("f");
+        let err = f.digit(2).unwrap_err();
+        assert_eq!(ParseError::UnexpectedInput("f".to_string(), f), err);
+        let f = ParseState::new("f");
+        let err = f.digit(10).unwrap_err();
+        assert_eq!(ParseError::UnexpectedInput("f".to_string(), f), err);
+        let (d, _) = f.digit(16).unwrap();
+        assert_eq!(15, d);
+    }
+
+    #[test]
+    fn test_parse_expr_lit_int() {
+        let (i, _) = ParseState::new("123").parse_expr_lit_int().unwrap();
+        assert_eq!(123, i);
+
+        let (i, _) = ParseState::new("0").parse_expr_lit_int().unwrap();
+        assert_eq!(0, i);
+
+        let (i, _) = ParseState::new("0x10").parse_expr_lit_int().unwrap();
+        assert_eq!(16, i);
+
+        let (i, _) = ParseState::new("0x11").parse_expr_lit_int().unwrap();
+        assert_eq!(17, i);
+
+        let (i, _) = ParseState::new("11").parse_expr_lit_int().unwrap();
+        assert_eq!(11, i);
+
+        let (i, _) = ParseState::new("0b1111").parse_expr_lit_int().unwrap();
+        assert_eq!(15, i);
+
+        let (i, _) = ParseState::new("1111").parse_expr_lit_int().unwrap();
+        assert_eq!(1111, i);
+
+        let (i, _) = ParseState::new("1_000_000").parse_expr_lit_int().unwrap();
+        assert_eq!(1000000, i);
+
+        let (i, _) = ParseState::new("1_000_").parse_expr_lit_int().unwrap();
+        assert_eq!(1000, i);
     }
 
     #[test]
