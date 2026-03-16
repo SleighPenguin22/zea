@@ -159,7 +159,7 @@ pub trait Visualise {
 /// * `nodes`: the list of renderable objects to link
 /// * `chainer`: a function that constructs and styles an edge between two adjacent nodes.
 ///
-/// returns: Option<Result<(Node, Node), String>>
+/// returns: `Option<Result<(Node, Node), String>>`
 /// - `None` if `nodes` is empty
 /// - `Some(Ok((first: Node, last: Node)))` if `nodes` is not empty
 ///     and every object was rendered succesfully.

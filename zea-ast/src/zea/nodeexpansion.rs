@@ -1,10 +1,21 @@
 // #![allow(unused)]
 
-use crate::zea::{AssignmentPattern, Function, FunctionCall, Module};
 use crate::zea::{ExpandedBlockExpr, ExpandedInitialisation};
 use crate::zea::{Expression, ExpressionKind};
+use crate::zea::{Function, FunctionCall, Module};
 use crate::zea::{Initialisation, StatementBlock};
 use crate::zea::{Statement, StatementKind};
+use std::collections::HashSet;
+
+/// This visitor will be called after each of the expansion-visitors
+/// to ensure a correct AST before moving on to static analysis.
+pub struct ASTValidator {
+    ids: HashSet<usize>,
+}
+pub trait AcceptsASTValidator {
+    /// Returns true if this node is considered valid
+    fn accept(&self, validator: &mut ASTValidator) -> bool;
+}
 
 pub trait AcceptsBlockExpander {
     /// Let the expander perform some transformation on `self`. Return false if no changes have been made.
@@ -45,7 +56,7 @@ impl AcceptsBlockExpander for Statement {
         }
         match &mut self.kind {
             StatementKind::Block(b) => {
-                self.kind = StatementKind::ExpandedBlock(block_expander.expand_block(b));
+                self.kind = StatementKind::ExpandedBlock(block_expander.expand_expr_block(b));
                 true
             }
             StatementKind::Initialisation(i) => i.value.accept(block_expander),
@@ -96,8 +107,9 @@ impl AcceptsBlockExpander for Expression {
 
         match &mut self.kind {
             ExpressionKind::Block(block) => {
-                self.kind =
-                    ExpressionKind::ExpandedBlock(Box::new(block_expander.expand_block(block)));
+                self.kind = ExpressionKind::ExpandedBlock(Box::new(
+                    block_expander.expand_expr_block(block),
+                ));
                 true
             }
             ExpressionKind::FuncCall(call) => call.accept(block_expander),
@@ -264,17 +276,21 @@ impl NodeExpander {
         label
     }
 
-    pub fn expand_block(&mut self, block: &StatementBlock) -> ExpandedBlockExpr {
+    /// Expand some expression block
+    ///
+    /// Inserts a unit-tail if the block does not end with a tail expression.
+    pub fn expand_expr_block(&mut self, block: &StatementBlock) -> ExpandedBlockExpr {
         let (statements, last) = match block.statements.last() {
             Some(Statement {
                 kind: StatementKind::BlockTail(_),
                 ..
             }) => {
-                let tail = block.statements.last().cloned().unwrap();
-                let StatementKind::BlockTail(e) = tail.kind else {
+                let (last, init) = block.statements.split_last().unwrap();
+                let init = init.to_vec();
+                let StatementKind::BlockTail(last) = last.clone().kind else {
                     unreachable!()
                 };
-                (block.statements.clone(), e)
+                (init, last)
             }
             _ => (block.statements.clone(), Expression::unit(self.label())),
         };
@@ -286,45 +302,61 @@ impl NodeExpander {
         }
     }
 
-    pub fn expand_statement(&mut self, statement: Statement) -> Statement {
-        let kind = match statement.kind {
-            StatementKind::Block(b) => StatementKind::ExpandedBlock(self.expand_block(&b)),
-            StatementKind::Initialisation(assignment) => {
-                StatementKind::ExpandedInitialisation(self.expand_assignment(assignment))
-            }
-            _ => return statement,
-        };
-        Statement {
-            id: self.label(),
-            kind,
-        }
-    }
+    // pub fn expand_func_body(&mut self, func: &mut Function) -> ExpandedBlockExpr {
+    //     let body = &mut func.body;
+    //     let (statements, last) = match body.statements.last() {
+    //         Some(Statement {
+    //             kind: StatementKind::Return(_),
+    //             ..
+    //         }) => {
+    //             let tail = body.statements.last().cloned().unwrap();
+    //             let StatementKind::Return(e) = tail.kind else {
+    //                 unreachable!()
+    //             };
+    //             (body.statements.clone(), e)
+    //         }
+    //         _ => (body.statements.clone(), Expression::unit(self.label())),
+    //     };
+    //
+    //     ExpandedBlockExpr {
+    //         id: self.label(),
+    //         statements,
+    //         last,
+    //     }
+    // }
 
-    pub fn expand_assignment(&mut self, assignment: Initialisation) -> ExpandedInitialisation {
-        match &assignment.assignee {
-            AssignmentPattern::Identifier(_assignee) => todo!(),
-            _ => todo!(),
-        }
-    }
-
-    pub fn expand_expression(&mut self, expression: Expression) -> Expression {
-        let kind = match expression.kind {
-            ExpressionKind::Block(block) => {
-                ExpressionKind::ExpandedBlock(Box::new(self.expand_block(&block)))
-            }
-            ref _other => return expression,
-        };
-        Expression {
-            id: self.label(),
-            kind,
-        }
-    }
+    // pub fn expand_statement(&mut self, statement: Statement) -> Statement {
+    //     let kind = match statement.kind {
+    //         StatementKind::Block(b) => StatementKind::ExpandedBlock(self.expand_expr_block(&b)),
+    //         StatementKind::Initialisation(assignment) => {
+    //             StatementKind::ExpandedInitialisation(self.expand_assignment(assignment))
+    //         }
+    //         _ => return statement,
+    //     };
+    //     Statement {
+    //         id: self.label(),
+    //         kind,
+    //     }
+    // }
+    //
+    // pub fn expand_expression(&mut self, expression: Expression) -> Expression {
+    //     let kind = match expression.kind {
+    //         ExpressionKind::Block(block) => {
+    //             ExpressionKind::ExpandedBlock(Box::new(self.expand_expr_block(&block)))
+    //         }
+    //         ref _other => return expression,
+    //     };
+    //     Expression {
+    //         id: self.label(),
+    //         kind,
+    //     }
+    // }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::zea::nodeexpansion::{AcceptsBlockExpander, NodeExpander};
-    use crate::zea::{Function, Module, StatementBlock, Type};
+    use crate::zea::{Expression, ExpressionKind, Function, Module, StatementBlock, Type};
 
     macro_rules! block {
         {} => {
@@ -335,7 +367,7 @@ mod tests {
                }
            }
         };
-        {$($e:expr);+} => {
+        {$($e:expr);+ $(;)?} => {
            {
                StatementBlock {
                     id: 0,
@@ -397,6 +429,13 @@ mod tests {
     }
 
     macro_rules! expr {
+        (ident $($l:tt)+) => {{
+            use crate::zea::{Expression, ExpressionKind};
+            Expression {
+                id: 0,
+                kind: ExpressionKind::Ident(String::from(stringify!($($l)+))),
+            }
+        }};
         (litint $l:literal) => {{
             use crate::zea::{Expression, ExpressionKind};
             Expression {
@@ -431,10 +470,22 @@ mod tests {
                 kind: ExpressionKind::Unit,
             }
         }};
+        (block $block:expr) => {{
+            use crate::zea::{Expression,ExpressionKind,StatementBlock};
+            Expression {
+                id: 0,
+                kind: ExpressionKind::Block($block)
+            }
+            }
+        }
     }
 
     macro_rules! zea_module {
-        (imports {$($imp:ident),*} exports {$($exp:ident),*} globs {$($glob:expr);*} funcs {$($func:expr);* $(;)?}) => {
+        (imports {$($imp:ident),* $(,)?}
+         exports {$($exp:ident),* $(,)?}
+         globs   {$($glob:expr);* $(;)?}
+         funcs   {$($func:expr);* $(;)?}
+        ) => {
             {
                 use crate::zea::Module;
                 Module {
@@ -500,6 +551,18 @@ mod tests {
 
         let ast = ast.expand_blocks(&mut block_expander);
         // eprintln!("{:?}", ast.functions[0]);
-        assert!(ast.is_expanded(&mut block_expander))
+        assert!(ast.is_expanded(&mut block_expander));
+        let mut ast = expr!(block block! {
+            stmt!(init a := expr!(litint 3));
+            stmt!(tail expr!(ident a))
+        });
+        let before = ast.clone();
+        ast.accept(&mut block_expander);
+        let after = ast;
+        let ExpressionKind::ExpandedBlock(expanded) = after.kind else {
+            unreachable!()
+        };
+        assert_eq!(expanded.statements, vec![stmt!(init a := expr!(litint 3))]);
+        assert_eq!(expanded.last, expr!(ident a));
     }
 }
