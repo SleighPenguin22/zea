@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+pub mod expression;
+
 use crate::ParseError::{InvalidValueIdentifier, UnexpectedEOF};
 use zea_ast::zea;
 use zea_ast::zea::{Type, TypedIdentifier};
@@ -38,6 +40,7 @@ enum ParseError<'a> {
     InvalidValueIdentifier(String, ParseState<'a>),
     InvalidTypeIdentifier(String, ParseState<'a>),
     UnexpectedInput(String, ParseState<'a>),
+    InvalidFloatLiteral(String, ParseState<'a>),
 }
 
 type ParseResult<'a, T> = Result<(T, ParseState<'a>), ParseError<'a>>;
@@ -128,6 +131,46 @@ impl<'a> ParseState<'a> {
         state
     }
 
+    pub fn peek_diff(self, other: ParseState<'a>) -> &'a str {
+        let start = self.index.min(other.index);
+        let end = self.index.max(other.index);
+        &self.input[start..end]
+    }
+
+    pub fn succeed_with<T>(self, value: T) -> ParseResult<'a, T> {
+        Ok((value, self))
+    }
+
+    pub fn no_eof(self) -> Result<ParseState<'a>, ParseError<'a>> {
+        match self.peek() {
+            Some(_) => Ok(self),
+            None => Err(UnexpectedEOF),
+        }
+    }
+
+    fn eat_while(
+        self,
+        predicate: impl Fn(char) -> bool,
+        can_be_eof: bool,
+    ) -> ParseResult<'a, &'a str> {
+        let mut state = self;
+        loop {
+            match state.eat() {
+                Ok((ch, p_char)) if predicate(ch) => {
+                    state = p_char;
+                }
+                Ok((_ch, p_char)) => return Ok((self.peek_diff(state), state)),
+                Err(e) => {
+                    return if can_be_eof {
+                        Ok((self.peek_diff(state), state))
+                    } else {
+                        Err(e)
+                    };
+                }
+            }
+        }
+    }
+
     fn digit(self, radix: u32) -> ParseResult<'a, u64> {
         if radix < 2 || radix > 32 {
             panic!("invalid radix {radix}")
@@ -162,20 +205,18 @@ impl<'a> ParseState<'a> {
             ch.is_lowercase() || ch.is_ascii_digit() || "-?!".contains(ch)
         }
 
-        let mut buffer = String::new();
         let mut state = self;
-        let start_index = self.index;
 
-        let end_index = loop {
+        loop {
             match state.eat() {
                 Ok((c, p_char)) if is_valid_char(c) => {
                     state = p_char;
                 }
-                _ => break state.index,
+                _ => break,
             }
-        };
+        }
 
-        let identifier = self.input[start_index..end_index].to_string();
+        let identifier = self.peek_diff(state).to_string();
         if invalid {
             Err(InvalidValueIdentifier(identifier, self))
         } else {
@@ -192,33 +233,23 @@ impl<'a> ParseState<'a> {
             ch.is_alphabetic() || ch.is_ascii_digit() || "_?!".contains(ch)
         }
 
-        let mut buffer = String::new();
         let mut state = self;
-        let start_index = state.index;
 
-        let end_index = loop {
+        loop {
             match state.eat() {
                 Ok((c, p_char)) if is_valid_char(c) => {
                     state = p_char;
                 }
-                _ => break state.index,
+                _ => break,
             }
-        };
+        }
 
-        let identifier = self.input[start_index..end_index].to_string();
+        let identifier = self.peek_diff(state).to_string();
         if invalid {
             Err(InvalidValueIdentifier(identifier, self))
         } else {
             Ok((identifier, state))
         }
-    }
-
-    pub fn parse_import_statement(self) -> ParseResult<'a, Vec<String>> {
-        let (_, state) = self.toklit("import")?;
-        let state = state.whitespace();
-        let (identifier, state) = state.parse_expr_identifier()?;
-
-        Ok((vec![identifier], state))
     }
 
     pub fn open_paren(self) -> Result<ParseState<'a>, ParseError<'a>> {
@@ -251,6 +282,13 @@ impl<'a> ParseState<'a> {
         Ok(state)
     }
 
+    pub fn parse_import_statement(self) -> ParseResult<'a, Vec<String>> {
+        let (_, state) = self.toklit("import")?;
+        let state = state.whitespace();
+        let (identifier, state) = state.parse_expr_identifier()?;
+
+        Ok((vec![identifier], state))
+    }
     fn parse_pointer_type(self) -> ParseResult<'a, Type> {
         let state = self;
         let (ident, mut state) = self.parse_type_identifier()?;
@@ -331,89 +369,6 @@ impl<'a> ParseState<'a> {
         };
         let res = (name, params, returns);
         Ok((res, state))
-    }
-
-    pub fn parse_expr_lit_int_hex(self) -> ParseResult<'a, u64> {
-        let state = self.whitespace();
-
-        let (_, mut state) = state.toklit("0x").or(state.toklit("0X"))?;
-        let mut total: u64 = 0;
-
-        loop {
-            if let Ok((digit, p_digit)) = state.digit(16) {
-                // debug_assert!(p_digit.index > state_digits.index, "{digit}");
-                total *= 16;
-                total += digit;
-                eprintln!("total {total} after 16_digit {digit}");
-                state = p_digit;
-                continue;
-            }
-
-            if let Ok((_, p_underscore)) = state.toklit("_") {
-                state = p_underscore;
-                continue;
-            }
-            break Ok((total, state));
-        }
-    }
-
-    pub fn parse_expr_lit_int_bin(self) -> ParseResult<'a, u64> {
-        let state = self.whitespace();
-
-        let (_, mut state) = state.toklit("0b").or(state.toklit("0B"))?;
-        let mut total: u64 = 0;
-
-        loop {
-            if let Ok((digit, p_digit)) = state.digit(2) {
-                // debug_assert!(p_digit.index > state_digits.index, "{digit}");
-                total *= 2;
-                total += digit;
-                eprintln!("total {total} after 2_digit {digit}");
-                state = p_digit;
-                continue;
-            }
-
-            if let Ok((_, p_underscore)) = state.toklit("_") {
-                state = p_underscore;
-                continue;
-            }
-            break Ok((total, state));
-        }
-    }
-
-    pub fn parse_expr_lit_int_dec(self) -> ParseResult<'a, u64> {
-        eprintln!("decimal literal");
-        let mut state = self.whitespace();
-        let mut total: u64 = 0;
-
-        loop {
-            if let Ok((digit, p_digit)) = state.digit(10) {
-                // debug_assert!(p_digit.index > state_digits.index, "{digit}");
-                eprint!("acc {total} ++ {digit}base10 = ");
-                total *= 10;
-                total += digit;
-                eprintln!("{total}");
-                state = p_digit;
-                continue;
-            }
-
-            if let Ok((_, p_underscore)) = state.toklit("_") {
-                eprintln!("underscore!");
-                state = p_underscore;
-                continue;
-            }
-            break Ok((total, state));
-        }
-    }
-
-    pub fn parse_expr_lit_int(self) -> ParseResult<'a, u64> {
-        let state = self.whitespace();
-        let mut total: u64 = 0;
-
-        state
-            .parse_expr_lit_int_hex()
-            .or(state.parse_expr_lit_int_bin())
-            .or(state.parse_expr_lit_int_dec())
     }
 }
 
@@ -665,12 +620,13 @@ mod tests {
         let state = ParseState::new("123");
         let (d, advanced) = state.digit(10).unwrap();
         assert_eq!(1, d);
-        assert_eq!('2', advanced.peek().unwrap());
+        assert_eq!("23", advanced.peek_remaining());
         let (d, advanced) = advanced.digit(10).unwrap();
         assert_eq!(2, d);
-
+        assert_eq!("3", advanced.peek_remaining());
         let (d, advanced) = advanced.digit(10).unwrap();
         assert_eq!(3, d);
+        assert_eq!("", advanced.peek_remaining());
 
         let (d, _) = state.digit(2).unwrap();
         assert_eq!(1, d);
@@ -694,103 +650,6 @@ mod tests {
         let (d, _) = f.digit(16).unwrap();
         assert_eq!(15, d);
     }
-
-    #[test]
-    fn test_parse_expr_lit_int_dec() {
-        let (i, _) = ParseState::new("123").parse_expr_lit_int_dec().unwrap();
-        assert_eq!(123, i);
-
-        let (i, _) = ParseState::new("0").parse_expr_lit_int_dec().unwrap();
-        assert_eq!(0, i);
-
-        // let (i, _) = ParseState::new("0x10").parse_expr_lit_int_dec().unwrap();
-        // assert_eq!(16, i);
-        //
-        // let (i, _) = ParseState::new("0x11").parse_expr_lit_int_dec().unwrap();
-        // assert_eq!(17, i);
-
-        let (i, _) = ParseState::new("11").parse_expr_lit_int_dec().unwrap();
-        assert_eq!(11, i);
-
-        // let (i, _) = ParseState::new("0b1111").parse_expr_lit_int_dec().unwrap();
-        // assert_eq!(15, i);
-
-        let (i, _) = ParseState::new("9999").parse_expr_lit_int_dec().unwrap();
-        assert_eq!(9999, i);
-
-        let (i, _) = ParseState::new("1_000_000")
-            .parse_expr_lit_int_dec()
-            .unwrap();
-        assert_eq!(1000000, i);
-
-        let (i, _) = ParseState::new("1_000_").parse_expr_lit_int_dec().unwrap();
-        assert_eq!(1000, i);
-
-        let (i, _) = ParseState::new("________________________1_000_")
-            .parse_expr_lit_int_dec()
-            .unwrap();
-        assert_eq!(1000, i);
-
-        let (i, _) = ParseState::new("0001").parse_expr_lit_int_dec().unwrap();
-        assert_eq!(1, i);
-    }
-
-    #[test]
-    fn test_parse_expr_lit_int_hex() {
-        let (i, _) = ParseState::new("0x10").parse_expr_lit_int_hex().unwrap();
-        assert_eq!(16, i);
-
-        let (i, _) = ParseState::new("0x11").parse_expr_lit_int_hex().unwrap();
-        assert_eq!(17, i);
-
-        let (i, _) = ParseState::new("0x________________________________________________11")
-            .parse_expr_lit_int_hex()
-            .unwrap();
-        assert_eq!(17, i);
-
-        let (i, _) = ParseState::new("0x011").parse_expr_lit_int_hex().unwrap();
-        assert_eq!(17, i);
-
-        let (i, _) = ParseState::new("0x_0_000_00_____00_00000____00_011")
-            .parse_expr_lit_int_hex()
-            .unwrap();
-        assert_eq!(17, i);
-
-        let (i, _) = ParseState::new("0xFF").parse_expr_lit_int_hex().unwrap();
-        assert_eq!(255, i);
-
-        let (i, _) = ParseState::new("0xff").parse_expr_lit_int_hex().unwrap();
-        assert_eq!(255, i);
-        let (i, _) = ParseState::new("0xfF").parse_expr_lit_int_hex().unwrap();
-        assert_eq!(255, i);
-    }
-
-    #[test]
-    fn test_parse_expr_lit_int_bin() {
-        let (i, _) = ParseState::new("0b_1111_1111")
-            .parse_expr_lit_int_bin()
-            .unwrap();
-        assert_eq!(255, i);
-
-        let (i, _) = ParseState::new("0b0000_1111_0000_1111").parse_expr_lit_int_bin().unwrap();
-        assert_eq!(3855, i);
-
-        let (i, _) = ParseState::new("0b________________________________________________11")
-            .parse_expr_lit_int_bin()
-            .unwrap();
-        assert_eq!(3, i);
-
-        let (i, _) = ParseState::new("0b011").parse_expr_lit_int_bin().unwrap();
-        assert_eq!(3, i);
-
-        let (i, _) = ParseState::new("0b_0_000_00_____00_00000____00_011")
-            .parse_expr_lit_int_bin()
-            .unwrap();
-        assert_eq!(3, i);
-    }
-    #[test]
-    fn test_parse_expr_lit_int() {}
-
     #[test]
     fn test_parse_import_statement() {
         let state = ParseState::new("import io");
