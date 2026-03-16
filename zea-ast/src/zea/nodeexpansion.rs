@@ -1,167 +1,254 @@
-#![allow(unused)]
+// #![allow(unused)]
 
 use crate::zea::{AssignmentPattern, Function, FunctionCall, Module};
 use crate::zea::{ExpandedBlockExpr, ExpandedInitialisation};
 use crate::zea::{Expression, ExpressionKind};
-use crate::zea::{Initialisation, StatementBlock, TypedIdentifier};
+use crate::zea::{Initialisation, StatementBlock};
 use crate::zea::{Statement, StatementKind};
-use std::collections::HashSet;
 
-pub type ModuleNamedTupleCache = HashSet<TupleWithNamedMembers>;
-
-pub struct TupleWithNamedMembers {
-    members: Vec<TypedIdentifier>,
+pub trait AcceptsBlockExpander {
+    /// Let the expander perform some transformation on `self`. Return false if no changes have been made.
+    /// Repeatedly calling this method is guaranteed to eventually return false:
+    ///
+    /// ```ignore
+    /// let ast = StatementBlock {
+    ///     id: 0,
+    ///     statements: vec![...]
+    /// };
+    /// let mut expander = NodeExpander
+    /// while !ast.accept(&mut expander) {} // will always terminate
+    /// ```
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool;
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool;
 }
 
-pub trait AcceptsNodeExpander {
-    fn accept(&mut self, node_expander: &mut NodeExpander);
-    fn is_expanded(&self) -> bool;
+pub trait AcceptsTupleNamer {
+    /// Let the expander perform some transformation on `self`. Return false if no changes have been made.
+    /// Repeatedly calling this method is guaranteed to eventually return false:
+    ///
+    /// ```ignore
+    /// let ast = StatementBlock {
+    ///     id: 0,
+    ///     statements: vec![...]
+    /// };
+    /// let mut expander = NodeExpander
+    /// while !ast.accept(&mut expander) {} // will always terminate
+    /// ```
+    fn accept(&mut self, tuple_namer: &mut NodeExpander) -> bool;
+    fn is_expanded(&self, tuple_namer: &mut NodeExpander) -> bool;
 }
 
-impl AcceptsNodeExpander for Statement {
-    fn accept(&mut self, node_expander: &mut NodeExpander) {
+impl AcceptsBlockExpander for Statement {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
         match &mut self.kind {
             StatementKind::Block(b) => {
-                self.kind = StatementKind::ExpandedBlock(node_expander.expand_block(b));
+                self.kind = StatementKind::ExpandedBlock(block_expander.expand_block(b));
+                true
             }
-            StatementKind::Initialisation(i) => i.value.accept(node_expander),
-            StatementKind::Reassignment(r) => r.value.accept(node_expander),
-            StatementKind::FunctionCall(call) => call.accept(node_expander),
-            StatementKind::Return(expr) => expr.accept(node_expander),
-            StatementKind::BlockTail(expr) => expr.accept(node_expander),
-            StatementKind::ExpandedInitialisation(init) => init.accept(node_expander),
-            StatementKind::SimpleInitialisation(sinit) => sinit.value.accept(node_expander),
-            StatementKind::ExpandedBlock(_) => {}
-        }
-        // self.accept(node_expander)
+            StatementKind::Initialisation(i) => i.value.accept(block_expander),
+            StatementKind::Reassignment(r) => r.value.accept(block_expander),
+            StatementKind::FunctionCall(call) => call.accept(block_expander),
+            StatementKind::Return(expr) => expr.accept(block_expander),
+            StatementKind::BlockTail(expr) => expr.accept(block_expander),
+            StatementKind::ExpandedInitialisation(init) => init.accept(block_expander),
+            StatementKind::SimpleInitialisation(sinit) => sinit.value.accept(block_expander),
+            StatementKind::ExpandedBlock(b) => b.accept(block_expander),
+        };
+        !self.is_expanded(block_expander)
     }
-    fn is_expanded(&self) -> bool {
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
         match &self.kind {
             StatementKind::Block(_) => false,
 
-            StatementKind::Initialisation(i) => i.value.is_expanded(),
-            StatementKind::Reassignment(r) => r.value.is_expanded(),
-            StatementKind::FunctionCall(call) => call.is_expanded(),
-            StatementKind::Return(expr) => expr.is_expanded(),
-            StatementKind::BlockTail(expr) => expr.is_expanded(),
-            StatementKind::ExpandedInitialisation(init) => init.is_expanded(),
-            StatementKind::SimpleInitialisation(sinit) => sinit.value.is_expanded(),
-            StatementKind::ExpandedBlock(b) => b.is_expanded(),
+            StatementKind::Initialisation(i) => i.value.is_expanded(block_expander),
+            StatementKind::Reassignment(r) => r.value.is_expanded(block_expander),
+            StatementKind::FunctionCall(call) => call.is_expanded(block_expander),
+            StatementKind::Return(expr) => expr.is_expanded(block_expander),
+            StatementKind::BlockTail(expr) => expr.is_expanded(block_expander),
+            StatementKind::ExpandedInitialisation(init) => init.is_expanded(block_expander),
+            StatementKind::SimpleInitialisation(sinit) => sinit.value.is_expanded(block_expander),
+            StatementKind::ExpandedBlock(b) => b.is_expanded(block_expander),
         }
     }
 }
+impl AcceptsBlockExpander for Initialisation {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
 
-impl AcceptsNodeExpander for Expression {
-    fn accept(&mut self, node_expander: &mut NodeExpander) {
+        self.value.accept(block_expander);
+        !self.is_expanded(block_expander)
+    }
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.value.is_expanded(block_expander)
+    }
+}
+
+impl AcceptsBlockExpander for Expression {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
+
         match &mut self.kind {
             ExpressionKind::Block(block) => {
                 self.kind =
-                    ExpressionKind::ExpandedBlock(Box::new(node_expander.expand_block(block)));
+                    ExpressionKind::ExpandedBlock(Box::new(block_expander.expand_block(block)));
+                true
             }
-            ExpressionKind::FuncCall(call) => call.accept(node_expander),
+            ExpressionKind::FuncCall(call) => call.accept(block_expander),
             ExpressionKind::BinOpExpr(_, lhs, rhs) => {
-                lhs.accept(node_expander);
-                rhs.accept(node_expander)
+                lhs.accept(block_expander) || rhs.accept(block_expander)
             }
-            ExpressionKind::UnOpExpr(_, arg) => arg.accept(node_expander),
-            ExpressionKind::ExpandedBlock(block) => {}
-            ExpressionKind::Unit => {}
-            ExpressionKind::IntegerLiteral(_) => {}
-            ExpressionKind::BoolLiteral(_) => {}
-            ExpressionKind::FloatLiteral(_) => {}
-            ExpressionKind::StringLiteral(_) => {}
-            ExpressionKind::Ident(_) => {}
-        }
+            ExpressionKind::UnOpExpr(_, arg) => arg.accept(block_expander),
+            ExpressionKind::ExpandedBlock(block) => block.accept(block_expander),
+            ExpressionKind::Unit => false,
+            ExpressionKind::IntegerLiteral(_) => false,
+            ExpressionKind::BoolLiteral(_) => false,
+            ExpressionKind::FloatLiteral(_) => false,
+            ExpressionKind::StringLiteral(_) => false,
+            ExpressionKind::Ident(_) => false,
+        };
+
+        !self.is_expanded(block_expander)
     }
-    fn is_expanded(&self) -> bool {
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
         match &self.kind {
-            ExpressionKind::Block(block) => false,
-            ExpressionKind::FuncCall(call) => call.is_expanded(),
-            ExpressionKind::BinOpExpr(_, lhs, rhs) => lhs.is_expanded() && rhs.is_expanded(),
-            ExpressionKind::UnOpExpr(_, arg) => arg.is_expanded(),
-            ExpressionKind::ExpandedBlock(block) => block.is_expanded(),
+            ExpressionKind::Block(_block) => false,
+            ExpressionKind::FuncCall(call) => call.is_expanded(block_expander),
+            ExpressionKind::BinOpExpr(_, lhs, rhs) => {
+                lhs.is_expanded(block_expander) && rhs.is_expanded(block_expander)
+            }
+            ExpressionKind::UnOpExpr(_, arg) => arg.is_expanded(block_expander),
+            ExpressionKind::ExpandedBlock(block) => block.is_expanded(block_expander),
             _ => true,
         }
     }
 }
 
-impl AcceptsNodeExpander for ExpandedInitialisation {
-    fn accept(&mut self, node_expander: &mut NodeExpander) {
-        self.temporary.value.accept(node_expander);
+impl AcceptsBlockExpander for ExpandedInitialisation {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
+
+        self.temporary.value.accept(block_expander);
         for assign in &mut self.unpacked_assignments {
-            assign.accept(node_expander);
+            assign.accept(block_expander);
         }
+        !self.is_expanded(block_expander)
     }
-    fn is_expanded(&self) -> bool {
-        self.unpacked_assignments.iter().all(|a| a.is_expanded())
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.unpacked_assignments
+            .iter()
+            .all(|a| a.is_expanded(block_expander))
     }
 }
 
-impl AcceptsNodeExpander for FunctionCall {
-    fn accept(&mut self, node_expander: &mut NodeExpander) {
+impl AcceptsBlockExpander for FunctionCall {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
+
         for arg in self.args.iter_mut() {
-            arg.accept(node_expander)
+            arg.accept(block_expander);
         }
+
+        !self.is_expanded(block_expander)
     }
-    fn is_expanded(&self) -> bool {
-        self.args.iter().all(|e| e.is_expanded())
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.args.iter().all(|e| e.is_expanded(block_expander))
     }
 }
 
-impl AcceptsNodeExpander for Function {
-    fn accept(&mut self, node_expander: &mut NodeExpander) {
-        self.body.accept(node_expander)
+impl AcceptsBlockExpander for Function {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
+        self.body.accept(block_expander);
+        !self.is_expanded(block_expander)
     }
 
-    fn is_expanded(&self) -> bool {
-        self.body.is_expanded()
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.body.is_expanded(block_expander)
     }
 }
 
-impl AcceptsNodeExpander for StatementBlock {
-    fn accept(&mut self, node_expander: &mut NodeExpander) {
+impl AcceptsBlockExpander for StatementBlock {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
+
         for stmt in self.statements.iter_mut() {
-            stmt.accept(node_expander)
+            stmt.accept(block_expander);
         }
+        !self.is_expanded(block_expander)
     }
-    fn is_expanded(&self) -> bool {
-        self.statements.iter().all(|s| s.is_expanded())
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.statements
+            .iter()
+            .all(|s| s.is_expanded(block_expander))
     }
 }
 
-impl AcceptsNodeExpander for ExpandedBlockExpr {
-    fn accept(&mut self, node_expander: &mut NodeExpander) {
-        self.last.accept(node_expander);
+impl AcceptsBlockExpander for ExpandedBlockExpr {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
+        self.last.accept(block_expander);
         for stmt in self.statements.iter_mut() {
-            stmt.accept(node_expander);
+            eprintln!("expanding stmt with id {}", stmt.id);
+            stmt.accept(block_expander);
         }
+        !self.is_expanded(block_expander)
     }
-    fn is_expanded(&self) -> bool {
-        self.last.is_expanded() && self.statements.iter().all(|s| s.is_expanded())
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.last.is_expanded(block_expander)
+            && self
+                .statements
+                .iter()
+                .all(|s| s.is_expanded(block_expander))
     }
 }
 
-impl AcceptsNodeExpander for Module {
-    fn accept(&mut self, node_expander: &mut NodeExpander) {
+impl AcceptsBlockExpander for Module {
+    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.is_expanded(block_expander) {
+            return false;
+        }
+
         for func in self.functions.iter_mut() {
-            func.accept(node_expander)
+            eprintln!("expanding function with name {}", func.name);
+            func.accept(block_expander);
         }
+        !self.is_expanded(block_expander)
     }
 
-    fn is_expanded(&self) -> bool {
-        self.functions.iter().all(|f| f.is_expanded())
+    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.functions.iter().all(|f| f.is_expanded(block_expander))
     }
 }
 
 impl Module {
-    pub fn expand_blocks(mut self, node_expander: &mut NodeExpander) -> Module {
-        self.accept(node_expander);
+    pub fn expand_blocks(mut self, block_expander: &mut NodeExpander) -> Module {
+        while self.accept(block_expander) {
+            eprintln!("expanding still...")
+        }
         self
     }
 }
 #[derive(Default)]
 pub struct NodeExpander {
     labeler: usize,
+    // expanded_nodes: HashMap<usize, bool>,
 }
 
 /// Tranform some node into a given variant, and label it.
@@ -215,7 +302,7 @@ impl NodeExpander {
 
     pub fn expand_assignment(&mut self, assignment: Initialisation) -> ExpandedInitialisation {
         match &assignment.assignee {
-            AssignmentPattern::Identifier(assignee) => todo!(),
+            AssignmentPattern::Identifier(_assignee) => todo!(),
             _ => todo!(),
         }
     }
@@ -236,138 +323,183 @@ impl NodeExpander {
 
 #[cfg(test)]
 mod tests {
-    use crate::zea::nodeexpansion::{AcceptsNodeExpander, NodeExpander};
-    use crate::zea::{
-        Function, FunctionCall, Module, Statement, StatementBlock, StatementKind, Type,
-    };
+    use crate::zea::nodeexpansion::{AcceptsBlockExpander, NodeExpander};
+    use crate::zea::{Function, Module, StatementBlock, Type};
 
+    macro_rules! block {
+        {} => {
+           {
+               StatementBlock {
+                    id: 0,
+                    statements: vec![]
+               }
+           }
+        };
+        {$($e:expr);+} => {
+           {
+               StatementBlock {
+                    id: 0,
+                    statements: vec![$($e),+]
+               }
+           }
+        };
+    }
+
+    macro_rules! stmt {
+        (ret $e:expr) => {
+            {use crate::zea::{Statement,StatementKind};
+            Statement {
+                id: 0,
+                kind: StatementKind::Return($e)
+            }
+        }};
+        (block $e:expr) => {
+            {
+                use crate::zea::{Statement, StatementKind};
+            Statement {
+                id: 0,
+                kind: StatementKind::Block($e)
+            }
+        }};
+        (tail $e:expr) => {
+            {use crate::zea::{Statement,StatementKind};
+            Statement {
+                id: 0,
+                kind: StatementKind::BlockTail($e)
+            }
+        }};
+        (call $name:ident ($($e:expr),*)) => {
+            {
+                use crate::zea::{Statement, StatementKind, FunctionCall}
+            Statement {
+                id: 0,
+                kind: StatementKind::FunctionCall(FunctionCall {
+                    id: 0,
+                    name: $name,
+                    args: vec![$($e),*]
+                })
+            }
+        }};
+
+        (init $name:ident := $val:expr) => {
+            {
+                use crate::zea::{AssignmentPattern,Initialisation,Statement,StatementKind};
+            Statement {
+                id: 0,
+                kind: StatementKind::Initialisation(Initialisation {
+                    id: 0,
+                    assignee: AssignmentPattern::Identifier(String::from(stringify!($name))),
+                    typ: None,
+                    value: $val,
+                })
+            }
+        }};
+    }
+
+    macro_rules! expr {
+        (litint $l:literal) => {{
+            use crate::zea::{Expression, ExpressionKind};
+            Expression {
+                id: 0,
+                kind: ExpressionKind::IntegerLiteral($l),
+            }
+        }};
+        (litfloat $l:literal) => {{
+            use crate::zea::{Expression, ExpressionKind};
+            Expression {
+                id: 0,
+                kind: ExpressionKind::FloatLiteral($l),
+            }
+        }};
+        (litbool $l:literal) => {{
+            use crate::zea::{Expression, ExpressionKind};
+            Expression {
+                id: 0,
+                kind: ExpressionKind::BoolLiteral($l),
+            }
+        }};
+        (litstr $l:literal) => {
+            Expression {
+                id: 0,
+                kind: ExpressionKind::StringLiteral(stringify!($l)),
+            }
+        };
+        (unit) => {{
+            use crate::zea::{Expression, ExpressionKind};
+            Expression {
+                id: 0,
+                kind: ExpressionKind::Unit,
+            }
+        }};
+    }
+
+    macro_rules! zea_module {
+        (imports {$($imp:ident),*} exports {$($exp:ident),*} globs {$($glob:expr);*} funcs {$($func:expr);* $(;)?}) => {
+            {
+                use crate::zea::Module;
+                Module {
+                    id: 0,
+                    imports: vec![$(String::from(stringify!($imp))),*],
+                    exports: vec![$(String::from(stringify!($exp))),*],
+                    globs: vec![$($glob),*],
+                    functions: vec![$($func),*],
+                }
+            }
+        };
+    }
+    macro_rules! func {
+        {$name:ident ( $($arg:ident: $typ:expr),* ) -> $ret:expr; { $body:expr }} => {
+            {
+                use crate::zea::{Function, TypedIdentifier};
+                let args = vec![$(
+                TypedIdentifier(String::from(stringify!($arg)), $typ)
+                ),*];
+                Function {
+                    id: 0,
+                    name: String::from(stringify!($name)),
+                    args,
+                    returns: $ret,
+                    body: $body,
+                }
+            }
+        };
+    }
+    macro_rules! ztyp {
+        ($t:ident) => {
+            {
+            use crate::zea::Type;
+                Type::Basic(String::from(stringify!($t)))
+            }
+        };
+        (*$($t:tt)+) => {
+            {
+            use crate::zea::Type;
+                Type::Pointer(Box::new(ztyp!($($t)+)))
+            }
+        };
+        ([ ]$($t:tt)+) => {
+            {
+            use crate::zea::Type;
+                Type::ArrayOf(Box::new(ztyp!($($t)+)))
+            }
+        };
+    }
     #[test]
     fn test_expand_block() {
-        let mut node_expander = NodeExpander::new();
-        let mut ast = Module::default();
-        ast.functions.push(Function {
-            id: 0,
-            name: "main".to_string(),
-            args: vec![],
-            returns: Type::Basic("Int".to_string()),
-            body: StatementBlock {
-                id: 0,
-                statements: vec![
-                    Statement {
-                        id: 0,
-                        kind: StatementKind::Block(StatementBlock {
-                            id: 0,
-                            statements: vec![Statement {
-                                id: 0,
-                                kind: StatementKind::FunctionCall(FunctionCall {
-                                    id: 0,
-                                    name: "main".to_string(),
-                                    args: vec![],
-                                }),
-                            }],
-                        }),
-                    },
-                    Statement {
-                        id: 0,
-                        kind: StatementKind::Block(StatementBlock {
-                            id: 0,
-                            statements: vec![
-                                Statement {
-                                    id: 0,
-                                    kind: StatementKind::FunctionCall(FunctionCall {
-                                        id: 0,
-                                        name: "main".to_string(),
-                                        args: vec![],
-                                    }),
-                                },
-                                Statement {
-                                    id: 0,
-                                    kind: StatementKind::Block(StatementBlock {
-                                        id: 0,
-                                        statements: vec![Statement {
-                                            id: 0,
-                                            kind: StatementKind::FunctionCall(FunctionCall {
-                                                id: 0,
-                                                name: "main".to_string(),
-                                                args: vec![],
-                                            }),
-                                        },Statement {
-                                            id: 0,
-                                            kind: StatementKind::Block(StatementBlock {
-                                                id: 0,
-                                                statements: vec![Statement {
-                                                    id: 0,
-                                                    kind: StatementKind::FunctionCall(FunctionCall {
-                                                        id: 0,
-                                                        name: "main".to_string(),
-                                                        args: vec![],
-                                                    }),
-                                                },Statement {
-                                                    id: 0,
-                                                    kind: StatementKind::Block(StatementBlock {
-                                                        id: 0,
-                                                        statements: vec![Statement {
-                                                            id: 0,
-                                                            kind: StatementKind::FunctionCall(FunctionCall {
-                                                                id: 0,
-                                                                name: "main".to_string(),
-                                                                args: vec![],
-                                                            }),
-                                                        }],
-                                                    }),
-                                                },Statement {
-                                                    id: 0,
-                                                    kind: StatementKind::Block(StatementBlock {
-                                                        id: 0,
-                                                        statements: vec![Statement {
-                                                            id: 0,
-                                                            kind: StatementKind::FunctionCall(FunctionCall {
-                                                                id: 0,
-                                                                name: "main".to_string(),
-                                                                args: vec![],
-                                                            }),
-                                                        }],
-                                                    }),
-                                                },Statement {
-                                                    id: 0,
-                                                    kind: StatementKind::Block(StatementBlock {
-                                                        id: 0,
-                                                        statements: vec![Statement {
-                                                            id: 0,
-                                                            kind: StatementKind::FunctionCall(FunctionCall {
-                                                                id: 0,
-                                                                name: "main".to_string(),
-                                                                args: vec![],
-                                                            }),
-                                                        },Statement {
-                                                            id: 0,
-                                                            kind: StatementKind::Block(StatementBlock {
-                                                                id: 0,
-                                                                statements: vec![Statement {
-                                                                    id: 0,
-                                                                    kind: StatementKind::FunctionCall(FunctionCall {
-                                                                        id: 0,
-                                                                        name: "main".to_string(),
-                                                                        args: vec![],
-                                                                    }),
-                                                                }],
-                                                            }),
-                                                        }],
-                                                    }),
-                                                }],
-                                            }),
-                                        }],
-                                    }),
-                                },
-                            ],
-                        }),
-                    },
-                ],
-            },
-        });
+        let mut block_expander = NodeExpander::new();
+        let mut ast = zea_module! {
+            imports {}
+            exports {}
+            globs {}
+            funcs {
+                func!(main() -> ztyp!(Int); {block!{
+                    stmt!(tail expr!(litint 3))
+                }})
+            }
+        };
 
-        let ast = ast.expand_blocks(&mut node_expander);
-        eprintln!("{:?}", ast.functions[0]);
-        assert!(ast.is_expanded())
+        let ast = ast.expand_blocks(&mut block_expander);
+        // eprintln!("{:?}", ast.functions[0]);
+        assert!(ast.is_expanded(&mut block_expander))
     }
 }
