@@ -1,10 +1,11 @@
 #![allow(unused)]
 
 pub mod expression;
+pub mod statement;
 
 use crate::ParseError::{InvalidValueIdentifier, UnexpectedEOF};
 use zea_ast::zea;
-use zea_ast::zea::{Type, TypedIdentifier};
+use zea_ast::zea::{Function, StatementBlock, Type, TypedIdentifier};
 
 const KW_FUNC: &str = "fn";
 const KW_STRUCT: &str = "struct";
@@ -18,8 +19,7 @@ const KW_IMPORTS: &str = "imports";
 const KW_EXPORTS: &str = "exports";
 const KW_MODULE: &str = "module";
 const KW_RETURN: &str = "return";
-const OP_INIT: &str = ":=";
-const OP_REASSIGN: &str = "=";
+const OP_ASSIGN: &str = "=";
 const OP_DEREF: &str = "@";
 
 const OP_REF: &str = "&";
@@ -37,6 +37,8 @@ const OP_BIT_NOT: &str = "~";
 
 const OP_PIPE: &str = "|>";
 const PIPE_HOLE: &str = "$";
+
+const KW_UNIT: &str = "void";
 
 #[derive(Default, Clone, Copy)]
 struct NodeIdGenerator {
@@ -73,8 +75,8 @@ enum ParseError<'a> {
 
 type ParseResult<'a, T> = Result<(T, ParseState<'a>), ParseError<'a>>;
 
-impl<'a> ParseState<'a> {
-    pub fn new(input: &'a str) -> ParseState<'a> {
+impl<'state> ParseState<'state> {
+    pub fn new(input: &'state str) -> ParseState<'state> {
         ParseState {
             input,
             line: 1,
@@ -88,16 +90,16 @@ impl<'a> ParseState<'a> {
 
     /// Peek n characters forward,
     /// or return UnexpectedEOF if there is less than n characters of input left
-    fn peek_n(self, n: usize) -> Result<&'a str, ParseError<'a>> {
+    fn peek_n(self, n: usize) -> Result<&'state str, ParseError<'state>> {
         self.input.get(self.index + n..).ok_or(UnexpectedEOF)
     }
     /// Peek the remaining input (i.e. The after starting from the state's index)
-    fn peek_remaining(self) -> &'a str {
+    fn peek_remaining(self) -> &'state str {
         &self.input[self.index..]
     }
 
-    /// Advance the state by one character, but discards the character.
-    fn eat_ignore(self) -> Result<ParseState<'a>, ParseError<'a>> {
+    /// Advance the state by one character, but discards that character.
+    fn eat_ignore(self) -> Result<ParseState<'state>, ParseError<'state>> {
         let (line, column) = if self.peek().ok_or(UnexpectedEOF)? == '\n' {
             (self.line + 1, 1)
         } else {
@@ -113,7 +115,7 @@ impl<'a> ParseState<'a> {
     }
 
     /// Advance the state by one character and return it
-    fn eat(self) -> ParseResult<'a, char> {
+    fn eat(self) -> ParseResult<'state, char> {
         if self.index >= self.input.len() {
             return Err(UnexpectedEOF);
         }
@@ -139,7 +141,7 @@ impl<'a> ParseState<'a> {
 
     /// Advance the state by n characters,
     /// returning the consumed characters.
-    fn eat_bigly(self, n: usize) -> ParseResult<'a, &'a str> {
+    fn eat_bigly(self, n: usize) -> ParseResult<'state, &'state str> {
         let mut state = self;
         let mut s = String::with_capacity(n);
 
@@ -155,7 +157,7 @@ impl<'a> ParseState<'a> {
 
     /// Skip any whitespace at the current input onwards.
     /// Guarantees the state to end up at a non-whitespace character.
-    fn whitespace(self) -> ParseState<'a> {
+    fn whitespace(self) -> ParseState<'state> {
         let mut state = self;
 
         loop {
@@ -168,19 +170,40 @@ impl<'a> ParseState<'a> {
         state
     }
 
+    /// Skip any whitespace at the current input onwards.
+    /// Guarantees the state to end up at a non-whitespace character.
+    /// Returns an error if there is not at least one whitespace character consumed.
+    fn require_whitespace(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let mut state = self;
+        if state.peek().is_some_and(|ch| !ch.is_whitespace()) {
+            return Err(ParseError::UnexpectedInput(
+                state.peek().unwrap().to_string(),
+                state,
+            ));
+        }
+        loop {
+            match state.peek() {
+                Some(c) if c.is_whitespace() => state = state.eat_ignore().unwrap(),
+                _ => break,
+            }
+        }
+
+        Ok(state)
+    }
+
     /// Get the input span between two states
-    pub fn peek_diff(self, other: ParseState<'a>) -> &'a str {
+    pub fn peek_diff(self, other: ParseState<'state>) -> &'state str {
         let start = self.index.min(other.index);
         let end = self.index.max(other.index);
         &self.input[start..end]
     }
 
     /// Wrap some value with a state into an Ok-ParseResult
-    pub fn succeed_with<T>(self, value: T) -> ParseResult<'a, T> {
+    pub fn succeed_with<T>(self, value: T) -> ParseResult<'state, T> {
         Ok((value, self))
     }
 
-    pub fn no_eof(self) -> Result<ParseState<'a>, ParseError<'a>> {
+    pub fn no_eof(self) -> Result<ParseState<'state>, ParseError<'state>> {
         match self.peek() {
             Some(_) => Ok(self),
             None => Err(UnexpectedEOF),
@@ -194,7 +217,7 @@ impl<'a> ParseState<'a> {
         self,
         predicate: impl Fn(char) -> bool,
         can_be_eof: bool,
-    ) -> ParseResult<'a, &'a str> {
+    ) -> ParseResult<'state, &'state str> {
         let mut state = self;
         loop {
             match state.eat() {
@@ -215,7 +238,7 @@ impl<'a> ParseState<'a> {
 
     /// Parse some digit in base `radix`
     /// A valid radix is one between 2 and 32: `2 <= radix <= 32`.
-    fn digit(self, radix: u32) -> ParseResult<'a, u64> {
+    fn digit(self, radix: u32) -> ParseResult<'state, u64> {
         if radix < 2 || radix > 32 {
             panic!("invalid radix {radix}")
         }
@@ -234,7 +257,7 @@ impl<'a> ParseState<'a> {
     }
     /// Parse some literal string.
     /// Does not check that the literal ends with a whitespace.
-    pub fn toklit(self, keyword: &'a str) -> ParseResult<'a, &'a str> {
+    pub fn token<'token: 'state>(self, keyword: &'token str) -> ParseResult<'state, &'state str> {
         if !self.starts_with(keyword) {
             return Err(ParseError::LiteralNotMatched(keyword.to_string(), self));
         }
@@ -242,7 +265,7 @@ impl<'a> ParseState<'a> {
         Ok(self.eat_bigly(keyword.len()).unwrap())
     }
 
-    pub fn parse_expr_identifier(self) -> ParseResult<'a, String> {
+    pub fn parse_non_type_identifier(self) -> ParseResult<'state, String> {
         let invalid = match self.peek() {
             None => return Err(UnexpectedEOF),
             Some(c) => !c.is_lowercase(),
@@ -270,7 +293,7 @@ impl<'a> ParseState<'a> {
         }
     }
 
-    pub fn parse_type_identifier(self) -> ParseResult<'a, String> {
+    pub fn parse_type_identifier(self) -> ParseResult<'state, String> {
         let invalid = match self.peek() {
             None => return Err(UnexpectedEOF),
             Some(c) => !c.is_uppercase(),
@@ -298,50 +321,86 @@ impl<'a> ParseState<'a> {
         }
     }
 
-    pub fn open_paren(self) -> Result<ParseState<'a>, ParseError<'a>> {
-        let (_, state) = self.toklit("(")?;
+    pub fn open_paren(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token("(")?;
         Ok(state)
     }
 
-    pub fn close_paren(self) -> Result<ParseState<'a>, ParseError<'a>> {
-        let (_, state) = self.toklit(")")?;
+    pub fn close_paren(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token(")")?;
         Ok(state)
     }
 
-    pub fn comma(self) -> Result<ParseState<'a>, ParseError<'a>> {
-        let (_, state) = self.toklit(",")?;
+    pub fn open_brace(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token("{")?;
         Ok(state)
     }
 
-    pub fn colon(self) -> Result<ParseState<'a>, ParseError<'a>> {
-        let (_, state) = self.toklit(":")?;
+    pub fn close_brace(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token("}")?;
         Ok(state)
     }
 
-    pub fn fn_arrow(self) -> Result<ParseState<'a>, ParseError<'a>> {
-        let (_, state) = self.toklit("->")?;
+    pub fn comma(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token(",")?;
         Ok(state)
     }
 
-    pub fn kw_func(self) -> Result<ParseState<'a>, ParseError<'a>> {
-        let (_, state) = self.toklit(KW_FUNC)?;
+    pub fn colon(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token(":")?;
         Ok(state)
     }
 
-    pub fn parse_import_statement(self) -> ParseResult<'a, Vec<String>> {
-        let (_, state) = self.toklit("import")?;
+    pub fn semicolon(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token(";")?;
+        Ok(state)
+    }
+
+    pub fn fn_arrow(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token("->")?;
+        Ok(state)
+    }
+
+    pub fn kw_func(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        self.keyword(KW_FUNC)
+    }
+    pub fn kw_return(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        self.keyword(KW_RETURN)
+    }
+
+    pub fn kw_unit(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        self.keyword(KW_UNIT)
+    }
+
+    pub fn op_assign(self) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token(OP_ASSIGN)?;
+        Ok(state)
+    }
+
+    /// Consume some literal token, asserting that the token is followed by whitespace
+    pub fn keyword<'token: 'state>(
+        self,
+        keyword: &'token str,
+    ) -> Result<ParseState<'state>, ParseError<'state>> {
+        let (_, state) = self.token(keyword)?;
+        let state = state.require_whitespace()?;
+        Ok(state)
+    }
+
+    pub fn parse_import_statement(self) -> ParseResult<'state, Vec<String>> {
+        let (_, state) = self.token("import")?;
         let state = state.whitespace();
-        let (identifier, state) = state.parse_expr_identifier()?;
+        let (identifier, state) = state.parse_non_type_identifier()?;
 
         Ok((vec![identifier], state))
     }
-    fn parse_pointer_type(self) -> ParseResult<'a, Type> {
+    fn parse_pointer_type(self) -> ParseResult<'state, Type> {
         let state = self;
         let (ident, mut state) = self.parse_type_identifier()?;
         let mut res = Type::Basic(ident);
 
         loop {
-            if let Ok((_, parsed_pointer)) = state.toklit("*") {
+            if let Ok((_, parsed_pointer)) = state.token("*") {
                 res = Type::Pointer(Box::new(res));
                 state = parsed_pointer;
                 continue;
@@ -352,24 +411,24 @@ impl<'a> ParseState<'a> {
         Ok((res, state))
     }
 
-    fn parse_array_type(self) -> ParseResult<'a, Type> {
-        let (_, state) = self.whitespace().toklit("[")?;
+    fn parse_array_type(self) -> ParseResult<'state, Type> {
+        let (_, state) = self.whitespace().token("[")?;
 
-        let (typ, state): (Type, ParseState<'a>) = state.parse_type()?;
-        let state: ParseState<'a> = state.whitespace();
+        let (typ, state): (Type, ParseState<'state>) = state.parse_type()?;
+        let state: ParseState<'state> = state.whitespace();
 
-        let (_, state) = state.toklit("]")?;
+        let (_, state) = state.token("]")?;
         let state = state.whitespace();
         let typ = Type::ArrayOf(Box::new(typ));
         Ok((typ, state))
     }
 
-    fn parse_type(self) -> ParseResult<'a, zea::Type> {
+    fn parse_type(self) -> ParseResult<'state, zea::Type> {
         self.parse_array_type().or(self.parse_pointer_type())
     }
 
-    pub fn parse_func_param(self) -> ParseResult<'a, TypedIdentifier> {
-        let (ident, state) = self.whitespace().parse_expr_identifier()?;
+    pub fn parse_func_param(self) -> ParseResult<'state, TypedIdentifier> {
+        let (ident, state) = self.whitespace().parse_non_type_identifier()?;
         let state = state.whitespace();
         let state = state.colon()?;
         let state = state.whitespace();
@@ -378,16 +437,16 @@ impl<'a> ParseState<'a> {
         Ok((TypedIdentifier::new(typ, ident), state))
     }
 
-    pub fn parse_func_param_list(self) -> ParseResult<'a, Vec<TypedIdentifier>> {
+    pub fn parse_func_param_list(self) -> ParseResult<'state, Vec<TypedIdentifier>> {
         let mut state = self.whitespace();
         let mut res = vec![];
 
         loop {
-            if let Ok((param, parsed_param)) = state.parse_func_param() {
+            if let Ok((param, parsed_param)) = state.whitespace().parse_func_param() {
                 res.push(param);
                 state = parsed_param.whitespace();
 
-                if let Ok(p_comma) = state.comma() {
+                if let Ok(p_comma) = state.whitespace().comma() {
                     state = p_comma.whitespace();
                     continue;
                 }
@@ -398,9 +457,9 @@ impl<'a> ParseState<'a> {
         Ok((res, state))
     }
 
-    pub fn parse_func_head(self) -> ParseResult<'a, (String, Vec<TypedIdentifier>, Type)> {
+    pub fn parse_func_head(self) -> ParseResult<'state, (String, Vec<TypedIdentifier>, Type)> {
         let state = self.whitespace().kw_func()?;
-        let (name, state) = state.whitespace().parse_expr_identifier()?;
+        let (name, state) = state.require_whitespace()?.parse_non_type_identifier()?;
         let state = state.whitespace().open_paren()?;
         let (params, state) = state.whitespace().parse_func_param_list()?;
         let mut state = state.whitespace().close_paren()?;
@@ -416,11 +475,51 @@ impl<'a> ParseState<'a> {
         let res = (name, params, returns);
         Ok((res, state))
     }
+
+    pub fn parse_func_body(
+        self,
+        node_id_generator: &mut NodeIdGenerator,
+    ) -> ParseResult<'state, StatementBlock> {
+        let mut state = self.open_brace()?;
+        let mut block = StatementBlock {
+            id: node_id_generator.get(),
+            statements: Vec::new(),
+        };
+        loop {
+            match state.whitespace().parse_stmt(node_id_generator) {
+                Ok((stmt, p_stmt)) => {
+                    block.statements.push(stmt);
+                    state = p_stmt;
+                }
+                Err(_) => break,
+            }
+        }
+
+        let state = state.close_brace()?;
+        Ok((block, state))
+    }
+
+    pub fn parse_func(
+        self,
+        node_id_generator: &mut NodeIdGenerator,
+    ) -> ParseResult<'state, Function> {
+        let ((name, args, returns), state) = self.parse_func_head()?;
+        let (body, state) = state.parse_func_body(node_id_generator)?;
+        let function = Function {
+            id: node_id_generator.get(),
+            name,
+            args,
+            returns,
+            body,
+        };
+        Ok((function, state))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::types::typ;
     mod types {
         use zea_ast::zea::Type;
 
@@ -502,31 +601,31 @@ mod tests {
     #[test]
     fn test_parse_identifier() {
         let state = ParseState::new("xyz abracadabra");
-        let (identifier, state) = state.parse_expr_identifier().unwrap();
+        let (identifier, state) = state.parse_non_type_identifier().unwrap();
 
         assert_eq!("xyz", identifier);
 
         let state = ParseState::new("xyz? bob");
-        let (identifier, state) = state.parse_expr_identifier().unwrap();
+        let (identifier, state) = state.parse_non_type_identifier().unwrap();
 
         assert_eq!("xyz?", identifier);
 
         let state = ParseState::new("xyz! bob");
-        let (identifier, state) = state.parse_expr_identifier().unwrap();
+        let (identifier, state) = state.parse_non_type_identifier().unwrap();
 
         assert_eq!("xyz!", identifier);
 
         let state = ParseState::new("xyz!?? bob");
-        let (identifier, state) = state.parse_expr_identifier().unwrap();
+        let (identifier, state) = state.parse_non_type_identifier().unwrap();
 
         assert_eq!("xyz!??", identifier);
 
         let state = ParseState::new("bob-is-cool");
-        let (identifier, state) = state.parse_expr_identifier().unwrap();
+        let (identifier, state) = state.parse_non_type_identifier().unwrap();
 
         assert_eq!("bob-is-cool", identifier);
         let state = ParseState::new("is-even? no its not bro");
-        let (identifier, state) = state.parse_expr_identifier().unwrap();
+        let (identifier, state) = state.parse_non_type_identifier().unwrap();
 
         assert_eq!("is-even?", identifier);
     }
@@ -703,5 +802,28 @@ mod tests {
             Ok((identifiers, _state)) => assert_eq!(vec![String::from("io")], identifiers),
             Err(error) => panic!("{:?}", error),
         }
+    }
+
+    #[test]
+    fn test_parse_function() {
+        let state = ParseState::new("fn main() -> Int {}");
+        let mut ids = NodeIdGenerator::new();
+        let (func, _) = state.parse_func(&mut ids).unwrap();
+        assert_eq!(func.returns, typ("Int"));
+        assert_eq!(func.name, "main");
+        assert_eq!(func.args, vec![]);
+        assert_eq!(func.body.statements, vec![]);
+
+        let state = ParseState::new("fn main()->Int{}");
+        let mut ids = NodeIdGenerator::new();
+        let (func, _) = state.parse_func(&mut ids).unwrap();
+        assert_eq!(func.returns, typ("Int"));
+        assert_eq!(func.name, "main");
+        assert_eq!(func.args, vec![]);
+        assert_eq!(func.body.statements, vec![]);
+
+        let state = ParseState::new("fnmain () ->Int{}");
+        let mut ids = NodeIdGenerator::new();
+        assert!(state.parse_func(&mut ids).is_err());
     }
 }
