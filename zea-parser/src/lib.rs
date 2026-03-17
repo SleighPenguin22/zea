@@ -9,6 +9,34 @@ use zea_ast::zea::{Type, TypedIdentifier};
 const KW_FUNC: &str = "fn";
 const KW_STRUCT: &str = "struct";
 const KW_TAGGED_UNION: &str = "enum";
+const KW_LOOP: &str = "for";
+const KW_IF: &str = "if";
+const KW_UNLESS: &str = "unless";
+const KW_WHILE: &str = "while";
+const KW_UNTIL: &str = "until";
+const KW_IMPORTS: &str = "imports";
+const KW_EXPORTS: &str = "exports";
+const KW_MODULE: &str = "module";
+const KW_RETURN: &str = "return";
+const OP_INIT: &str = ":=";
+const OP_REASSIGN: &str = "=";
+const OP_DEREF: &str = "@";
+
+const OP_REF: &str = "&";
+
+const OP_CAST: &str = "as";
+const OP_LOG_OR: &str = "||";
+const OP_LOG_AND: &str = "&&";
+const OP_LOG_XOR: &str = "^^";
+const OP_LOG_NOT: &str = "~";
+
+const OP_BIT_OR: &str = "|";
+const OP_BIT_AND: &str = "&";
+const OP_BIT_XOR: &str = "^";
+const OP_BIT_NOT: &str = "~";
+
+const OP_PIPE: &str = "|>";
+const PIPE_HOLE: &str = "$";
 
 #[derive(Default, Clone, Copy)]
 struct NodeIdGenerator {
@@ -54,18 +82,21 @@ impl<'a> ParseState<'a> {
             index: 0,
         }
     }
-
     fn peek(self) -> Option<char> {
         self.input.chars().nth(self.index)
     }
 
+    /// Peek n characters forward,
+    /// or return UnexpectedEOF if there is less than n characters of input left
     fn peek_n(self, n: usize) -> Result<&'a str, ParseError<'a>> {
         self.input.get(self.index + n..).ok_or(UnexpectedEOF)
     }
+    /// Peek the remaining input (i.e. The after starting from the state's index)
     fn peek_remaining(self) -> &'a str {
         &self.input[self.index..]
     }
 
+    /// Advance the state by one character, but discards the character.
     fn eat_ignore(self) -> Result<ParseState<'a>, ParseError<'a>> {
         let (line, column) = if self.peek().ok_or(UnexpectedEOF)? == '\n' {
             (self.line + 1, 1)
@@ -80,6 +111,8 @@ impl<'a> ParseState<'a> {
             ..self
         })
     }
+
+    /// Advance the state by one character and return it
     fn eat(self) -> ParseResult<'a, char> {
         if self.index >= self.input.len() {
             return Err(UnexpectedEOF);
@@ -104,6 +137,8 @@ impl<'a> ParseState<'a> {
         ))
     }
 
+    /// Advance the state by n characters,
+    /// returning the consumed characters.
     fn eat_bigly(self, n: usize) -> ParseResult<'a, &'a str> {
         let mut state = self;
         let mut s = String::with_capacity(n);
@@ -118,6 +153,8 @@ impl<'a> ParseState<'a> {
         Ok((self.peek_n(n)?, state))
     }
 
+    /// Skip any whitespace at the current input onwards.
+    /// Guarantees the state to end up at a non-whitespace character.
     fn whitespace(self) -> ParseState<'a> {
         let mut state = self;
 
@@ -131,12 +168,14 @@ impl<'a> ParseState<'a> {
         state
     }
 
+    /// Get the input span between two states
     pub fn peek_diff(self, other: ParseState<'a>) -> &'a str {
         let start = self.index.min(other.index);
         let end = self.index.max(other.index);
         &self.input[start..end]
     }
 
+    /// Wrap some value with a state into an Ok-ParseResult
     pub fn succeed_with<T>(self, value: T) -> ParseResult<'a, T> {
         Ok((value, self))
     }
@@ -148,6 +187,9 @@ impl<'a> ParseState<'a> {
         }
     }
 
+    /// Keep consuming characters while some predicate holds.
+    /// Will return an error if `can_be_eof` is `false` and the state encounters EOF.
+    /// returns a result containing the consumed characters otherwise.
     fn eat_while(
         self,
         predicate: impl Fn(char) -> bool,
@@ -171,6 +213,8 @@ impl<'a> ParseState<'a> {
         }
     }
 
+    /// Parse some digit in base `radix`
+    /// A valid radix is one between 2 and 32: `2 <= radix <= 32`.
     fn digit(self, radix: u32) -> ParseResult<'a, u64> {
         if radix < 2 || radix > 32 {
             panic!("invalid radix {radix}")
@@ -188,6 +232,8 @@ impl<'a> ParseState<'a> {
             Some(slice) => slice.starts_with(s),
         }
     }
+    /// Parse some literal string.
+    /// Does not check that the literal ends with a whitespace.
     pub fn toklit(self, keyword: &'a str) -> ParseResult<'a, &'a str> {
         if !self.starts_with(keyword) {
             return Err(ParseError::LiteralNotMatched(keyword.to_string(), self));
