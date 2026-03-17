@@ -458,8 +458,8 @@ impl<'state> ParseState<'state> {
     }
 
     pub fn parse_func_head(self) -> ParseResult<'state, (String, Vec<TypedIdentifier>, Type)> {
-        let state = self.whitespace().kw_func()?;
-        let (name, state) = state.require_whitespace()?.parse_non_type_identifier()?;
+        let state = self.whitespace().keyword(KW_FUNC)?;
+        let (name, state) = state.parse_non_type_identifier()?;
         let state = state.whitespace().open_paren()?;
         let (params, state) = state.whitespace().parse_func_param_list()?;
         let mut state = state.whitespace().close_paren()?;
