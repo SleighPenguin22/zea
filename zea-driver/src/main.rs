@@ -1,7 +1,5 @@
 use clap::Parser;
-use std::fs::read_to_string;
-use std::process::exit;
-// use zea_parser::parse;
+// use zea_parser::grammar;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -11,7 +9,8 @@ pub struct Args {
 }
 
 fn main() {
-    let src = read_to_string("zea-driver/test.zea").unwrap();
+    // let src = read_to_string("zea-driver/test.zea").unwrap();
+    // let c = grammar::ExprParser::new();
     // let module = parse(&src);
     // let module = match module {
     //     Ok((module, errs)) => {

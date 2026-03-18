@@ -1,0 +1,41 @@
+use std::str::FromStr;
+use zea_ast::zea::*;
+use crate::NodeIdGenerator;
+
+grammar<'ast>(generator: &'ast mut NodeIdGenerator);
+
+pub Expr: Expression = { // (1)
+    <l:Expr> <op:OpExpr> <r:Factor> => Expression {
+ id: generator.get(),
+ kind: ExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),}, // (2)
+    Factor,
+};
+
+Factor: Expression = {
+     <l:Factor> <op:OpFactor> <r:Term> => {
+    Expression {
+
+    id: generator.get(), kind: ExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),}
+ },
+};
+
+Term: Expression = {
+    Num => {
+    Expression {
+        id: generator.get(),
+        kind: ExpressionKind::IntegerLiteral(<>)}
+    }
+
+};
+
+OpExpr: BinOp = { // (3)
+    "+" => BinOp::Add,
+    "-" => BinOp::Sub,
+};
+
+OpFactor: BinOp = { // (3)
+    "*" => BinOp::Mul,
+    "/" => BinOp::Div,
+    "%" => BinOp::Div,
+};
+Num: u64 = {r"[0-9_]+|0x[0-9a-fA-F_]+|0b[01_]+" => u64::from_str(<>).unwrap()}
