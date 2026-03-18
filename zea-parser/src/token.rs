@@ -231,7 +231,7 @@ impl<'source> Tokeniser<'source> {
         }
     }
     fn is_valid_expr_identifier_char(ch: char) -> bool {
-        ch.is_alphanumeric() || ch == '-' || ch == '?' || ch == '!'
+        ch.is_lowercase() || ch.is_numeric() || ch == '-' || ch == '?' || ch == '!'
     }
     fn try_expr_identifier(self) -> TokenResult<'source, Token<'source>> {
         let mut state = self.whitespace();
@@ -249,7 +249,6 @@ impl<'source> Tokeniser<'source> {
             TokenSpan::from_str(ident_str, start),
             TokenKind::ExprIdent(ident_str),
         );
-        eprintln!("multi char token");
         Ok((ident, state))
     }
 
@@ -281,10 +280,9 @@ impl<'source> Tokeniser<'source> {
         let ident_str = start.peek_diff(state);
         let ident = Token::new(
             TokenSpan::from_str(ident_str, start),
-            TokenKind::ExprIdent(ident_str),
+            TokenKind::TypeIdent(ident_str),
         );
 
-        eprintln!("type ident token");
         Ok((ident, state))
     }
 
@@ -308,10 +306,8 @@ impl<'source> Tokeniser<'source> {
         let token_str = start.peek_diff(state);
         let kind = Token::validate_multi_char_token(token_str)
             .ok_or(UnexpectedInput(token_str.to_string(), start))?;
-        eprintln!("produced token str {token_str:?}");
 
         let keyword = Token::new(TokenSpan::from_str(token_str, start), kind);
-        eprintln!("multi char token");
         Ok((keyword, state))
     }
 
@@ -319,9 +315,9 @@ impl<'source> Tokeniser<'source> {
         let state = self.require_input()?.whitespace();
         state
             .try_multi_char_token()
+            .or_else(|_| state.try_single_char_token())
             .or_else(|_| state.try_expr_identifier())
             .or_else(|_| state.try_type_identifier())
-            .or_else(|_| state.try_single_char_token())
     }
 }
 
@@ -333,7 +329,6 @@ impl<'source> Iterator for Tokeniser<'source> {
                 self.index = state.index;
                 self.line = state.line;
                 self.column = state.column;
-                // eprintln!("{token:?}");
                 Some(token)
             }
             Err(_) => None,
@@ -411,10 +406,7 @@ impl<'source> Token<'source> {
             reserved_symbols::OP_LOG_XOR => Some(T::LogXor),
             reserved_symbols::OP_LOG_AND => Some(T::LogAnd),
             reserved_symbols::OP_LOG_OR => Some(T::LogOr),
-            _ => {
-                eprintln!("not a valid multi char: {keyword}");
-                None
-            }
+            _ => None,
         }
     }
 }
