@@ -1,3 +1,4 @@
+use crate::token::reserved::NON_IDENTIFIER_CHARS;
 use crate::token::TokenError::{UnexpectedEOF, UnexpectedInput};
 use std::marker::PhantomData;
 use zea_macros::VariantToStr;
@@ -59,6 +60,7 @@ pub enum TokenKind<'source> {
     // For,
     // Match
     Plus,
+    Carot,
     OpenAngle,
     CloseAngle,
     Dash,
@@ -79,7 +81,9 @@ pub fn tokenise<'source>(src: &'source str) -> Vec<Token<'source>> {
     Tokeniser::start(src).collect()
 }
 
-mod reserved_symbols {
+mod reserved {
+    use std::collections::HashSet;
+
     pub const KW_FUNC: &str = "fn";
     pub const KW_STRUCT: &str = "struct";
     pub const KW_TAGGED_UNION: &str = "enum";
@@ -92,12 +96,13 @@ mod reserved_symbols {
     pub const KW_EXPORTS: &str = "exports";
     pub const KW_MODULE: &str = "module";
     pub const KW_RETURN: &str = "return";
+    pub const KW_UNIT: &str = "void";
     pub const OP_ASSIGN: &str = "=";
     pub const OP_DEREF: &str = "@";
 
     pub const OP_REF: &str = "&";
 
-    pub const OP_CAST: &str = "as";
+    // pub const OP_CAST: &str = "as";
     pub const OP_LOG_OR: &str = "||";
     pub const OP_LOG_AND: &str = "&&";
     pub const OP_LOG_XOR: &str = "^^";
@@ -112,17 +117,33 @@ mod reserved_symbols {
     pub const PIPE_HOLE: &str = "$";
     pub const FN_ARROW: &str = "->";
 
-    pub const KW_UNIT: &str = "void";
-
-    pub const OPERATORS: [&str; 12] = [
+    const OPERATORS: [&str; 12] = [
         OP_LOG_AND, OP_LOG_XOR, OP_LOG_OR, OP_LOG_NOT, OP_BIT_AND, OP_BIT_NOT, OP_BIT_XOR,
         OP_BIT_OR, OP_DEREF, OP_PIPE, OP_REF, OP_ASSIGN,
     ];
-    pub fn operator_firsts<'a>() -> String {
+
+    const MISC_SYMBOLS: &str = "(){}[]!";
+
+    pub const NON_IDENTIFIER_CHARS: &str = "(){}[]<>!@#$^&-+,;:|~";
+    pub fn operator_firsts() -> HashSet<char> {
         OPERATORS
             .iter()
             .map(|op| op.chars().nth(0).unwrap())
             .collect()
+    }
+
+    pub fn operator_lasts() -> HashSet<char> {
+        OPERATORS
+            .iter()
+            .map(|op| op.chars().last().unwrap())
+            .collect()
+    }
+    pub fn operator_chars() -> HashSet<char> {
+        OPERATORS.iter().flat_map(|op| op.chars()).collect()
+    }
+
+    pub fn symbol_chars() -> HashSet<char> {
+        NON_IDENTIFIER_CHARS.chars().collect()
     }
 }
 
@@ -220,7 +241,9 @@ impl<'source> Tokeniser<'source> {
         state
     }
     fn try_single_char_token(self) -> TokenResult<'source, Token<'source>> {
-        let state = self.whitespace().require_input()?;
+        let state = self
+            .whitespace()
+            .require(|c| NON_IDENTIFIER_CHARS.contains(c))?;
         match state.eat() {
             Ok((c, t_char)) => {
                 let (c, kind) = Token::validate_char(c)
@@ -288,16 +311,16 @@ impl<'source> Tokeniser<'source> {
 
     fn try_multi_char_token(self) -> TokenResult<'source, Token<'source>> {
         let start = self.whitespace();
-        let mut state = start.require(|ch| reserved_symbols::operator_firsts().contains(ch))?;
+        let mut state = start.require(|ch| NON_IDENTIFIER_CHARS.contains(ch))?;
         loop {
             match state.eat() {
-                Ok((ch, p_non_ws)) if !ch.is_whitespace() => {
+                Ok((ch, p_non_ws)) if NON_IDENTIFIER_CHARS.contains(ch) => {
                     state = p_non_ws;
                 }
-                Ok((ch, p_ws)) if ch.is_whitespace() => {
-                    state = p_ws;
-                    break;
-                }
+                // Ok((ch, p_ws)) if ch.is_whitespace() => {
+                //     state = p_ws;
+                //     break;
+                // }
                 _ => break,
             }
         }
@@ -390,6 +413,7 @@ impl<'source> Token<'source> {
             '~' => Some((ch, T::Tilde)),
             '.' => Some((ch, T::Dot)),
             ',' => Some((ch, T::Comma)),
+            '^' => Some((ch, T::Carot)),
             _ => None,
         }
     }
@@ -397,15 +421,15 @@ impl<'source> Token<'source> {
     pub fn validate_multi_char_token(keyword: &'source str) -> Option<TokenKind<'source>> {
         use TokenKind as T;
         match keyword {
-            reserved_symbols::KW_IMPORTS => Some(T::Imports),
-            reserved_symbols::KW_MODULE => Some(T::Module),
-            reserved_symbols::KW_RETURN => Some(T::Return),
-            reserved_symbols::KW_IF => Some(T::If),
-            reserved_symbols::FN_ARROW => Some(T::FnArrow),
-            reserved_symbols::KW_WHILE => Some(T::While),
-            reserved_symbols::OP_LOG_XOR => Some(T::LogXor),
-            reserved_symbols::OP_LOG_AND => Some(T::LogAnd),
-            reserved_symbols::OP_LOG_OR => Some(T::LogOr),
+            reserved::KW_IMPORTS => Some(T::Imports),
+            reserved::KW_MODULE => Some(T::Module),
+            reserved::KW_RETURN => Some(T::Return),
+            reserved::KW_IF => Some(T::If),
+            reserved::FN_ARROW => Some(T::FnArrow),
+            reserved::KW_WHILE => Some(T::While),
+            reserved::OP_LOG_XOR => Some(T::LogXor),
+            reserved::OP_LOG_AND => Some(T::LogAnd),
+            reserved::OP_LOG_OR => Some(T::LogOr),
             _ => None,
         }
     }
@@ -413,7 +437,16 @@ impl<'source> Token<'source> {
 
 #[cfg(test)]
 mod tests {
-    use crate::token::Tokeniser;
+    use crate::token::TokenKind::{Dash, FnArrow};
+    use crate::token::{Token, TokenKind, Tokeniser};
+
+    fn first_token<'a>(s: &'a str) -> Token<'a> {
+        Tokeniser::start(s).next().unwrap()
+    }
+
+    fn kinds<'a>(s: &'a str) -> Vec<TokenKind> {
+        Tokeniser::start(s).map(|tok| tok.kind).collect()
+    }
 
     #[test]
     fn eat_advances() {
@@ -441,7 +474,7 @@ mod tests {
 
         let s = "bob @";
         let mut ts = Tokeniser::start(s);
-        let _ = ts.next();
+        let _bob = ts.next();
         match ts.next() {
             Some(at) => assert_eq!(at.span.length, 1),
             None => panic!("expected token"),
@@ -449,11 +482,17 @@ mod tests {
     }
 
     #[test]
-    fn token_full() {
-        let s = "bob @ Shimmy is ->";
-        let mut ts = Tokeniser::start(s);
-        while let Some(t) = ts.next() {
-            eprintln!("{t:?}");
-        }
+    fn ambiguous_tokens() {
+        use TokenKind::*;
+        assert_eq!(kinds("->"), vec![FnArrow]);
+        assert_eq!(kinds("- >"), vec![Dash, CloseAngle]);
+        assert_eq!(kinds("-->"), vec![Dash, FnArrow]);
+        assert_eq!(kinds("^^"), vec![LogXor]);
+        assert_eq!(kinds("^ ^"), vec![Carot, Carot]);
+        assert_eq!(kinds("^^^"), vec![Carot, LogXor]);
+        assert_eq!(kinds("a-b"), vec![ExprIdent("a-b")]);
+        assert_eq!(kinds("a - b"), vec![ExprIdent("a"), Dash, ExprIdent("b")]);
     }
+    #[test]
+    fn token_full() {}
 }

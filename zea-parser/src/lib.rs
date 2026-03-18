@@ -5,10 +5,8 @@ pub mod expression;
 pub mod statement;
 pub mod token;
 
-use crate::ParseError::{InvalidValueIdentifier, UnexpectedEOF};
-use zea_ast::zea::{Function, Module, StatementBlock, Type, TypedIdentifier};
+use crate::token::Token;
 use zea_macros::VariantToStr;
-
 
 #[derive(Default, Clone, Copy)]
 pub struct NodeIdGenerator {
@@ -36,9 +34,7 @@ impl NodeIdGenerator {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct ParseState<'a> {
-    input: &'a str,
-    line: usize,
-    column: usize,
+    tokens: &'a [Token<'a>],
     index: usize,
 }
 
