@@ -1,0 +1,4 @@
+module main
+exports {main}
+
+fn main() { return 0;}

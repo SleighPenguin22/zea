@@ -49,7 +49,7 @@ impl<'state> ParseState<'state> {
         self,
         node_id_generator: &mut NodeIdGenerator,
     ) -> ParseResult<'state, Expression> {
-        let (ident, state) = self.parse_non_type_identifier()?;
+        let (ident, state) = self.p_identifier()?;
         wrap_expr!(Ident(ident) with node_id_generator, state)
     }
 
@@ -80,7 +80,7 @@ impl<'state> ParseState<'state> {
     pub fn parse_lit_int_hex(self) -> ParseResult<'state, u64> {
         let state = self.whitespace();
 
-        let (_, mut state) = state.token("0x").or(state.token("0X"))?;
+        let mut state = state.literal("0x").or(state.literal("0X"))?;
         let mut total: u64 = 0;
 
         loop {
@@ -92,7 +92,7 @@ impl<'state> ParseState<'state> {
                 continue;
             }
 
-            if let Ok((_, p_underscore)) = state.token("_") {
+            if let Ok(p_underscore) = state.literal("_") {
                 state = p_underscore;
                 continue;
             }
@@ -103,7 +103,7 @@ impl<'state> ParseState<'state> {
     pub fn parse_lit_int_bin(self) -> ParseResult<'state, u64> {
         let state = self.whitespace();
 
-        let (_, mut state) = state.token("0b").or(state.token("0B"))?;
+        let mut state = state.literal("0b").or(state.literal("0B"))?;
         let mut total: u64 = 0;
 
         loop {
@@ -115,7 +115,7 @@ impl<'state> ParseState<'state> {
                 continue;
             }
 
-            if let Ok((_, p_underscore)) = state.token("_") {
+            if let Ok(p_underscore) = state.literal("_") {
                 state = p_underscore;
                 continue;
             }
@@ -136,7 +136,7 @@ impl<'state> ParseState<'state> {
                 continue;
             }
 
-            if let Ok((_, p_underscore)) = state.token("_") {
+            if let Ok(p_underscore) = state.literal("_") {
                 state = p_underscore;
                 continue;
             }
@@ -155,11 +155,11 @@ impl<'state> ParseState<'state> {
     }
 
     fn parse_lit_float_nan(self) -> ParseResult<'state, f64> {
-        self.token(".nan").map(|(_, p_nan)| (f64::NAN, p_nan))
+        self.literal(".nan").map(|p_nan| (f64::NAN, p_nan))
     }
 
     fn parse_lit_float_inf(self, negative: bool) -> ParseResult<'state, f64> {
-        self.token(".inf").map(|(_, p_nan)| {
+        self.literal(".inf").map(|p_nan| {
             (
                 if negative {
                     f64::NEG_INFINITY
@@ -183,11 +183,11 @@ impl<'state> ParseState<'state> {
     pub fn parse_lit_float_numeric(self, negative: bool) -> ParseResult<'state, f64> {
         let (_int, state) = self.no_eof()?.parse_lit_int_dec()?;
 
-        let state = match state.token(".") {
-            Ok((_dot, p_dot)) => {
+        let state = match state.literal(".") {
+            Ok(p_dot) => {
                 let (_frac, p_frac) = p_dot.parse_lit_int_dec()?;
-                let try_exp = match p_frac.token("e").or(p_frac.token("E")) {
-                    Ok((_e, p_e)) => {
+                let try_exp = match p_frac.literal("e").or(p_frac.literal("E")) {
+                    Ok(p_e) => {
                         let (_sign, p_sign) = p_e.parse_lit_float_sign()?;
                         let (_exp, p_expr) = p_sign.parse_lit_int_dec()?;
                         p_expr
@@ -210,8 +210,8 @@ impl<'state> ParseState<'state> {
     }
 
     pub fn parse_lit_float_sign(self) -> ParseResult<'state, bool> {
-        self.token("-")
-            .map(|(_, state)| (true, state))
+        self.literal("-")
+            .map(|state| (true, state))
             .or(self.succeed_with(false))
     }
 }
@@ -370,9 +370,10 @@ mod tests {
         assert_eq!(99.0, val);
         assert_eq!(after.peek_remaining(), "abc");
 
+        let state = ParseState::new("");
         assert!(matches!(
-            ParseState::new("").parse_lit_float_numeric(false),
-            Err(ParseError::UnexpectedEOF)
+            state.parse_lit_float_numeric(false),
+            Err(ParseError::UnexpectedEOF(state))
         ));
 
         assert!(
@@ -431,9 +432,10 @@ mod tests {
         assert!(val.is_infinite());
         assert_eq!(after.peek(), Some(' '));
 
+        let state = ParseState::new("");
         assert_eq!(
-            ParseState::new("").parse_lit_float(),
-            Err(ParseError::UnexpectedEOF)
+            state.parse_lit_float(),
+            Err(ParseError::UnexpectedEOF(state))
         );
     }
 }

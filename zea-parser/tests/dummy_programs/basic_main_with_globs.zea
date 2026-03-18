@@ -1,0 +1,9 @@
+module main
+imports {}
+exports {main}
+
+return-value: Int = 3;
+
+fn main() -> Int {
+    return return-value;
+}

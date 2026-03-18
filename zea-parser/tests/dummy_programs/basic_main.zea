@@ -1,0 +1,7 @@
+module main
+imports {}
+exports {main}
+
+fn main() -> Int {
+    return 0;
+}

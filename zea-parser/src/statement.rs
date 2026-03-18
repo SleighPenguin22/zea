@@ -12,7 +12,7 @@ macro_rules! wrap_stmt {
 }
 
 impl<'state> ParseState<'state> {
-    pub fn parse_stmt(
+    pub fn p_statement(
         self,
         node_id_generator: &mut NodeIdGenerator,
     ) -> ParseResult<'state, Statement> {
@@ -28,14 +28,14 @@ impl<'state> ParseState<'state> {
         wrap_stmt!(Return(expr) with node_id_generator, state)
     }
 
-    pub fn parse_initialisation(
+    pub fn p_initialisation(
         self,
         node_id_generator: &mut NodeIdGenerator,
     ) -> ParseResult<'state, Initialisation> {
         let state = self.whitespace();
         let (assignee, state) = state.parse_assignment_pattern()?;
         let state = state.colon()?;
-        let (typ, state) = match state.parse_type() {
+        let (typ, state) = match state.p_type() {
             Ok((typ, p_type)) => (Some(typ), p_type),
             Err(_) => (None, state),
         };
@@ -56,12 +56,12 @@ impl<'state> ParseState<'state> {
         self,
         node_id_generator: &mut NodeIdGenerator,
     ) -> ParseResult<'state, Statement> {
-        let (init, state) = self.parse_initialisation(node_id_generator)?;
+        let (init, state) = self.p_initialisation(node_id_generator)?;
         wrap_stmt!(Initialisation(init) with node_id_generator, state)
     }
 
     fn parse_assignment_pattern_simple(self) -> ParseResult<'state, AssignmentPattern> {
-        let (ident, state) = self.parse_non_type_identifier()?;
+        let (ident, state) = self.p_identifier()?;
         Ok((AssignmentPattern::Identifier(ident), state))
     }
 

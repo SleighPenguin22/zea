@@ -3,7 +3,7 @@ mod nodeexpansion;
 use std::hash::{Hash, Hasher};
 use zea_macros::HashEqById;
 
-#[derive(Default, HashEqById)]
+#[derive(Default, HashEqById, Debug)]
 pub struct Module {
     pub id: usize,
     pub imports: Vec<String>,
