@@ -1,4 +1,4 @@
-use crate::token::TokenError::UnexpectedEOF;
+use crate::token::TokenError::{UnexpectedEOF, UnexpectedInput};
 use std::marker::PhantomData;
 use zea_macros::VariantToStr;
 
@@ -22,18 +22,20 @@ pub struct Tokeniser<'source> {
     index: usize,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct Token<'source> {
     span: TokenSpan<'source>,
     kind: TokenKind<'source>,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub struct TokenSpan<'source> {
     phantom_data: PhantomData<&'source str>,
     pub start: usize,
-    pub len: usize,
+    pub line: usize,
+    pub column: usize,
+    pub length: usize,
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TokenKind<'source> {
     ExprIdent(&'source str),
     TypeIdent(&'source str),
@@ -56,6 +58,72 @@ pub enum TokenKind<'source> {
     SemiColon,
     // For,
     // Match
+    Plus,
+    OpenAngle,
+    CloseAngle,
+    Dash,
+    Comma,
+    Dot,
+    Tilde,
+    Star,
+    At,
+    Fence,
+    Dollar,
+    Pipe,
+    LogXor,
+    LogAnd,
+    LogOr,
+}
+
+pub fn tokenise<'source>(src: &'source str) -> Vec<Token<'source>> {
+    Tokeniser::start(src).collect()
+}
+
+mod reserved_symbols {
+    pub const KW_FUNC: &str = "fn";
+    pub const KW_STRUCT: &str = "struct";
+    pub const KW_TAGGED_UNION: &str = "enum";
+    pub const KW_LOOP: &str = "for";
+    pub const KW_IF: &str = "if";
+    pub const KW_UNLESS: &str = "unless";
+    pub const KW_WHILE: &str = "while";
+    pub const KW_UNTIL: &str = "until";
+    pub const KW_IMPORTS: &str = "imports";
+    pub const KW_EXPORTS: &str = "exports";
+    pub const KW_MODULE: &str = "module";
+    pub const KW_RETURN: &str = "return";
+    pub const OP_ASSIGN: &str = "=";
+    pub const OP_DEREF: &str = "@";
+
+    pub const OP_REF: &str = "&";
+
+    pub const OP_CAST: &str = "as";
+    pub const OP_LOG_OR: &str = "||";
+    pub const OP_LOG_AND: &str = "&&";
+    pub const OP_LOG_XOR: &str = "^^";
+    pub const OP_LOG_NOT: &str = "~";
+
+    pub const OP_BIT_OR: &str = "|";
+    pub const OP_BIT_AND: &str = "&";
+    pub const OP_BIT_XOR: &str = "^";
+    pub const OP_BIT_NOT: &str = "~";
+
+    pub const OP_PIPE: &str = "|>";
+    pub const PIPE_HOLE: &str = "$";
+    pub const FN_ARROW: &str = "->";
+
+    pub const KW_UNIT: &str = "void";
+
+    pub const OPERATORS: [&str; 12] = [
+        OP_LOG_AND, OP_LOG_XOR, OP_LOG_OR, OP_LOG_NOT, OP_BIT_AND, OP_BIT_NOT, OP_BIT_XOR,
+        OP_BIT_OR, OP_DEREF, OP_PIPE, OP_REF, OP_ASSIGN,
+    ];
+    pub fn operator_firsts<'a>() -> String {
+        OPERATORS
+            .iter()
+            .map(|op| op.chars().nth(0).unwrap())
+            .collect()
+    }
 }
 
 impl<'source> Tokeniser<'source> {
@@ -144,15 +212,16 @@ impl<'source> Tokeniser<'source> {
         let mut state = self;
 
         loop {
-            match state.peek() {
-                Some(c) if c.is_whitespace() => state = state.eat_ignore().unwrap(),
+            match state.eat() {
+                Ok((c, t_ws)) if c.is_whitespace() => state = t_ws,
                 _ => break,
             }
         }
         state
     }
     fn try_single_char_token(self) -> TokenResult<'source, Token<'source>> {
-        match self.whitespace().eat() {
+        let state = self.whitespace().require_input()?;
+        match state.eat() {
             Ok((c, t_char)) => {
                 let (c, kind) = Token::validate_char(c)
                     .ok_or(TokenError::UnexpectedInput(c.to_string(), t_char))?;
@@ -165,7 +234,8 @@ impl<'source> Tokeniser<'source> {
         ch.is_alphanumeric() || ch == '-' || ch == '?' || ch == '!'
     }
     fn try_expr_identifier(self) -> TokenResult<'source, Token<'source>> {
-        let mut state = self.require_input()?;
+        let mut state = self.whitespace();
+        let mut start = state.require(Self::is_valid_expr_identifier_char)?;
         loop {
             match state.eat() {
                 Ok((ch, t_char)) if Self::is_valid_expr_identifier_char(ch) => {
@@ -174,21 +244,32 @@ impl<'source> Tokeniser<'source> {
                 _ => break,
             }
         }
-        let ident_str = self.peek_diff(state);
+        let ident_str = start.peek_diff(state);
         let ident = Token::new(
-            TokenSpan::from_str(ident_str, self),
+            TokenSpan::from_str(ident_str, start),
             TokenKind::ExprIdent(ident_str),
         );
-
+        eprintln!("multi char token");
         Ok((ident, state))
     }
 
     fn is_valid_type_identifier_char(ch: char) -> bool {
         ch.is_alphanumeric() || ch == '_'
     }
+
+    fn require(
+        self,
+        p: impl FnOnce(char) -> bool,
+    ) -> Result<Tokeniser<'source>, TokenError<'source>> {
+        match self.eat() {
+            Ok((c, _)) if p(c) => Ok(self),
+            Ok((c, invalid)) => Err(UnexpectedInput(c.to_string(), invalid)),
+            Err(_) => Err(UnexpectedEOF(self)),
+        }
+    }
     fn try_type_identifier(self) -> TokenResult<'source, Token<'source>> {
-        let mut state = self.require_input()?;
-        let invalid = self.peek().is_some_and(|ch| !ch.is_uppercase());
+        let mut start = self.whitespace();
+        let mut state = start.require(|c| c.is_uppercase())?;
         loop {
             match state.eat() {
                 Ok((ch, t_char)) if Self::is_valid_type_identifier_char(ch) => {
@@ -197,18 +278,65 @@ impl<'source> Tokeniser<'source> {
                 _ => break,
             }
         }
-        let ident_str = self.peek_diff(state);
+        let ident_str = start.peek_diff(state);
         let ident = Token::new(
-            TokenSpan::from_str(ident_str, self),
+            TokenSpan::from_str(ident_str, start),
             TokenKind::ExprIdent(ident_str),
         );
-        if invalid {
-            Err(TokenError::InvalidValueIdentifier(
-                ident_str.to_string(),
-                state,
-            ))
-        } else {
-            Ok((ident, state))
+
+        eprintln!("type ident token");
+        Ok((ident, state))
+    }
+
+    fn try_multi_char_token(self) -> TokenResult<'source, Token<'source>> {
+        let start = self.whitespace();
+        let mut state = start.require(|ch| reserved_symbols::operator_firsts().contains(ch))?;
+        loop {
+            match state.eat() {
+                Ok((ch, p_non_ws)) if !ch.is_whitespace() => {
+                    state = p_non_ws;
+                }
+                Ok((ch, p_ws)) if ch.is_whitespace() => {
+                    state = p_ws;
+                    break;
+                }
+                _ => break,
+            }
+        }
+        assert!(state.index > start.index);
+
+        let token_str = start.peek_diff(state);
+        let kind = Token::validate_multi_char_token(token_str)
+            .ok_or(UnexpectedInput(token_str.to_string(), start))?;
+        eprintln!("produced token str {token_str:?}");
+
+        let keyword = Token::new(TokenSpan::from_str(token_str, start), kind);
+        eprintln!("multi char token");
+        Ok((keyword, state))
+    }
+
+    fn _next(self) -> TokenResult<'source, Token<'source>> {
+        let state = self.require_input()?.whitespace();
+        state
+            .try_multi_char_token()
+            .or_else(|_| state.try_expr_identifier())
+            .or_else(|_| state.try_type_identifier())
+            .or_else(|_| state.try_single_char_token())
+    }
+}
+
+impl<'source> Iterator for Tokeniser<'source> {
+    type Item = Token<'source>;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self._next() {
+            Ok((token, state)) => {
+                self.index = state.index;
+                self.line = state.line;
+                self.column = state.column;
+                // eprintln!("{token:?}");
+                Some(token)
+            }
+            Err(_) => None,
         }
     }
 }
@@ -221,7 +349,9 @@ impl<'source> TokenSpan<'source> {
         TokenSpan {
             phantom_data: PhantomData::default(),
             start: state.index,
-            len: token_value.len(),
+            line: state.line,
+            column: state.column,
+            length: token_value.len(),
         }
     }
     pub fn from_char<'value: 'source>(
@@ -231,7 +361,9 @@ impl<'source> TokenSpan<'source> {
         TokenSpan {
             phantom_data: PhantomData::default(),
             start: state.index,
-            len: 1,
+            line: state.line,
+            column: state.column,
+            length: 1,
         }
     }
 }
@@ -251,7 +383,85 @@ impl<'source> Token<'source> {
             ':' => Some((ch, T::Colon)),
             '=' => Some((ch, T::Assign)),
             ';' => Some((ch, T::Assign)),
+            '+' => Some((ch, T::Plus)),
+            '-' => Some((ch, T::Dash)),
+            '<' => Some((ch, T::OpenAngle)),
+            '>' => Some((ch, T::CloseAngle)),
+            '|' => Some((ch, T::Pipe)),
+            '$' => Some((ch, T::Dollar)),
+            '#' => Some((ch, T::Fence)),
+            '@' => Some((ch, T::At)),
+            '*' => Some((ch, T::Star)),
+            '~' => Some((ch, T::Tilde)),
+            '.' => Some((ch, T::Dot)),
+            ',' => Some((ch, T::Comma)),
             _ => None,
+        }
+    }
+
+    pub fn validate_multi_char_token(keyword: &'source str) -> Option<TokenKind<'source>> {
+        use TokenKind as T;
+        match keyword {
+            reserved_symbols::KW_IMPORTS => Some(T::Imports),
+            reserved_symbols::KW_MODULE => Some(T::Module),
+            reserved_symbols::KW_RETURN => Some(T::Return),
+            reserved_symbols::KW_IF => Some(T::If),
+            reserved_symbols::FN_ARROW => Some(T::FnArrow),
+            reserved_symbols::KW_WHILE => Some(T::While),
+            reserved_symbols::OP_LOG_XOR => Some(T::LogXor),
+            reserved_symbols::OP_LOG_AND => Some(T::LogAnd),
+            reserved_symbols::OP_LOG_OR => Some(T::LogOr),
+            _ => {
+                eprintln!("not a valid multi char: {keyword}");
+                None
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::token::Tokeniser;
+
+    #[test]
+    fn eat_advances() {
+        let s = "bob";
+        let start = Tokeniser::start(s);
+        let mut ts = start;
+        let bob = ts.next().unwrap();
+        assert_eq!(start.index + 3, ts.index);
+    }
+    #[test]
+    fn idents_cannot_be_empty() {
+        let s = "";
+        let mut ts = Tokeniser::start(s);
+        match ts.next() {
+            Some(t) => panic!(),
+            None => {}
+        }
+
+        let s = "bob";
+        let mut ts = Tokeniser::start(s);
+        match ts.next() {
+            Some(t) => assert_eq!(t.span.length, 3),
+            None => panic!("expected token"),
+        }
+
+        let s = "bob @";
+        let mut ts = Tokeniser::start(s);
+        let _ = ts.next();
+        match ts.next() {
+            Some(at) => assert_eq!(at.span.length, 1),
+            None => panic!("expected token"),
+        }
+    }
+
+    #[test]
+    fn token_full() {
+        let s = "bob @ Shimmy is ->";
+        let mut ts = Tokeniser::start(s);
+        while let Some(t) = ts.next() {
+            eprintln!("{t:?}");
         }
     }
 }
