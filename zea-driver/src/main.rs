@@ -1,12 +1,9 @@
-use clap::Parser;
-// use zea_parser::grammar;
-
-#[derive(Parser, Debug)]
-#[command(version, about)]
-pub struct Args {
-    #[arg(short, long)]
-    pub filename: String,
-}
+// #[derive(Parser, Debug)]
+// #[command(version, about)]
+// pub struct Args {
+//     #[arg(short, long)]
+//     pub filename: String,
+// }
 
 fn main() {
     // let src = read_to_string("zea-driver/test.zea").unwrap();

@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_imports)]
 mod nodeexpansion;
 use std::hash::{Hash, Hasher};
-use zea_macros::HashEqById;
+use zea_macros::{HashEqById, VariantToStr};
 
 #[derive(Default, HashEqById, Debug)]
 pub struct Module {
@@ -10,6 +10,49 @@ pub struct Module {
     pub exports: Vec<String>,
     pub globs: Vec<Initialisation>,
     pub functions: Vec<Function>,
+}
+macro_rules! indent {
+    ($d:expr) => {{
+        let d: usize = $d;
+        " ".repeat((d + 1) * 4)
+    }};
+}
+impl PrettyAST for Module {
+    fn pretty_print(&self, depth: usize) -> String {
+        format!(
+            "MODULE(\n\
+        {0}IMPORTS(\n\
+        {1}\
+        \n{0})\n\
+        {0}EXPORTS(\n\
+        {2}\
+        \n{0})\n\
+        {0}GLOBS(\n\
+        {3}\
+        \n{0})\n\
+        {0}FUNCS(\n\
+        {4}\
+        \n{0})\n\
+        )",
+            indent!(depth),
+            indent!(depth + 1) + &self.imports.join(&(indent!(depth + 1) + "\n")),
+            indent!(depth + 1) + &self.exports.join(&(indent!(depth + 1) + "\n")),
+            indent!(depth + 1)
+                + &self
+                    .globs
+                    .iter()
+                    .map(|glob| glob.pretty_print(depth))
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            indent!(depth + 1)
+                + &self
+                    .functions
+                    .iter()
+                    .map(|f| f.pretty_print(depth))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+        )
+    }
 }
 
 impl Module {
@@ -35,13 +78,82 @@ pub struct Function {
     pub body: StatementBlock,
 }
 
+impl PrettyAST for Function {
+    fn pretty_print(&self, depth: usize) -> String {
+        format!(
+            "{1}{2:?} -> {3:?}\n\
+            {0}BODY {{\n\
+            {4}
+            \n{0}}}",
+            indent!(depth+1),
+            self.name,
+            self.args,
+            self.returns,
+            self.body.pretty_print(depth + 1)
+        )
+    }
+}
+
+impl PrettyAST for StatementBlock {
+    fn pretty_print(&self, depth: usize) -> String {
+        self.statements
+            .iter()
+            .map(|s| s.pretty_print(depth + 1))
+            .collect::<Vec<_>>()
+            .join(";\n")
+    }
+}
+impl PrettyAST for Statement {
+    fn pretty_print(&self, depth: usize) -> String {
+        match &self.kind {
+            StatementKind::Return(e) => {
+                format!("{}RETURN({})", indent!(depth), e.pretty_print(depth))
+            }
+            StatementKind::Initialisation(i) => i.pretty_print(depth),
+            _ => todo!("pretty print statement with kind {:?}", self.kind),
+        }
+    }
+}
+impl PrettyAST for Initialisation {
+    fn pretty_print(&self, depth: usize) -> String {
+        format!(
+            "INIT(\n\
+        {0}PATTERN:\n\
+        {1}\n\
+        {0}TYPE {2:?}\n\
+        {0}VALUE:\n\
+        {3}\n\
+        {0})",
+            indent!(depth),
+            self.assignee.pretty_print(depth),
+            self.typ,
+            self.value.pretty_print(depth + 1)
+        )
+    }
+}
+
+impl PrettyAST for AssignmentPattern {
+    fn pretty_print(&self, depth: usize) -> String {
+        match self {
+            AssignmentPattern::Identifier(i) => indent!(depth) + i,
+            AssignmentPattern::Tuple(tup) => {
+                indent!(depth)
+                    + &tup
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+            }
+        }
+    }
+}
 #[derive(Debug, Clone, HashEqById)]
 pub struct Statement {
     pub id: usize,
     pub kind: StatementKind,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, VariantToStr)]
 pub enum StatementKind {
     // initial pass
     /// Variable initialisation
@@ -62,6 +174,36 @@ pub enum StatementKind {
     ExpandedBlock(ExpandedBlockExpr),
     ExpandedInitialisation(ExpandedInitialisation),
     SimpleInitialisation(SimpleInitialisation),
+}
+
+impl PrettyAST for Expression {
+    fn pretty_print(&self, depth: usize) -> String {
+        let kind_str = self.kind.variant_as_str();
+        match &self.kind {
+            ExpressionKind::Ident(i) => format!("{kind_str}({i})"),
+            ExpressionKind::IntegerLiteral(i) => format!("Int({i})"),
+            ExpressionKind::FloatLiteral(i) => format!("Float({i})"),
+            ExpressionKind::BinOpExpr(op, l, r) => {
+                format!(
+                    "{op:?}(\n{}{}\n{}{}\n{})",
+                    Self::depth_str(depth + 1),
+                    l.pretty_print(depth + 1),
+                    Self::depth_str(depth + 1),
+                    r.pretty_print(depth + 1),
+                    Self::depth_str(depth + 1),
+                )
+            }
+            ExpressionKind::UnOpExpr(op, arg) => {
+                format!(
+                    "{op:?}(\n{}{}\n{})",
+                    Self::depth_str(depth + 1),
+                    arg.pretty_print(depth + 1),
+                    Self::depth_str(depth + 1),
+                )
+            }
+            _ => todo!("pretty print expression of kind {:?}", self.kind),
+        }
+    }
 }
 
 #[derive(Debug, Clone, HashEqById)]
@@ -152,7 +294,7 @@ pub struct Expression {
     pub kind: ExpressionKind,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, VariantToStr)]
 pub enum ExpressionKind {
     // initial pass
     Unit,
@@ -225,14 +367,6 @@ pub struct IfThenElse {
     true_case: Box<Expression>,
     false_case: Option<Box<Expression>>,
 }
-
-#[derive(Clone, Debug, HashEqById)]
-pub struct ExpandedIfThenElse {
-    pub id: usize,
-    condition: Box<Expression>,
-    true_case: Box<Expression>,
-    false_case: Box<Expression>,
-}
 #[derive(Clone, Debug, HashEqById)]
 pub struct PatternMatchArm {
     pub id: usize,
@@ -291,6 +425,7 @@ impl std::fmt::Display for AssignmentPattern {
     }
 }
 
+use crate::PrettyAST;
 use std::fmt::{Debug, Formatter};
 
 /// The Zea named Struct type / product type

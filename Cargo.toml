@@ -6,4 +6,4 @@ members = ["zea-ast", 'zea-driver', "zea-parser", "zea-codegen", "zea-macros"]
 [workspace.lints.rust]
 dead_code = "allow"
 unsafe_code = "forbid"
-
+unused_imorts = "allow"

@@ -9,4 +9,7 @@ zea-macros = { path = "../zea-macros" }
 lalrpop-util = { version = "0.23.1", features = ["lexer", "unicode"] }
 
 [build-dependencies]
-lalrpop = "0.23.1"
+lalrpop = { version = "0.23.1" }
+
+[lib]
+doctest = false

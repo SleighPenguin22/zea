@@ -5,8 +5,10 @@ edition = "2024"
 
 [dependencies]
 #vizoxide = { path = "../vizoxide", optional = true }
-thiserror = "2.0.18"
 zea-macros = { path = "../zea-macros" }
 
 #[features]
 #visualisation = ["dep:vizoxide"]
+
+[lib]
+doctest = false
