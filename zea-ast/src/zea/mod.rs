@@ -340,6 +340,14 @@ pub enum BinOp {
     BitOr,
     BitXor,
     Subscript,
+    Lsh,
+    Rsh,
+    Eq,
+    Neq,
+    Geq,
+    Leq,
+    LT,
+    GT
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

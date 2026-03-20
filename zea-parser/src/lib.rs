@@ -3,6 +3,7 @@
 mod grammar;
 pub use grammar::ExprParser as ExpressionParser;
 pub use grammar::ModParser as ModuleParser;
+pub use grammar::StmtParser as StatementParser;
 use zea_ast::zea::{Function, Initialisation};
 
 #[derive(Default, Clone, Copy)]
@@ -47,7 +48,7 @@ mod tests {
     fn test_expr() {
         let mut generator = NodeIdGenerator::new();
         let p = ExpressionParser::new();
-        let s = p.parse(&mut generator, "13 + a * 4 + 2 + 2").unwrap();
+        let s = p.parse(&mut generator, "1+a+4+2+2").unwrap();
         eprintln!("{}", s.pretty_print(0));
     }
 
