@@ -306,6 +306,7 @@ pub enum ExpressionKind {
     FuncCall(FunctionCall),
     BinOpExpr(BinOp, Box<Expression>, Box<Expression>),
     UnOpExpr(UnOp, Box<Expression>),
+    MemberAccess(Box<Expression>, String),
 
     Block(StatementBlock),
     // PatternMatch(PatternMatch),
@@ -338,6 +339,7 @@ pub enum BinOp {
     BitAnd,
     BitOr,
     BitXor,
+    Subscript,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
