@@ -85,7 +85,7 @@ impl PrettyAST for Function {
             {0}BODY {{\n\
             {4}
             \n{0}}}",
-            indent!(depth+1),
+            indent!(depth + 1),
             self.name,
             self.args,
             self.returns,
@@ -110,6 +110,7 @@ impl PrettyAST for Statement {
                 format!("{}RETURN({})", indent!(depth), e.pretty_print(depth))
             }
             StatementKind::Initialisation(i) => i.pretty_print(depth),
+            StatementKind::BlockTail(e) => indent!(depth) + &e.pretty_print(depth),
             _ => todo!("pretty print statement with kind {:?}", self.kind),
         }
     }
@@ -347,7 +348,7 @@ pub enum BinOp {
     Geq,
     Leq,
     LT,
-    GT
+    GT,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -502,18 +503,13 @@ impl From<String> for Type {
     }
 }
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
-pub struct TypedIdentifier(String, Type);
-impl TypedIdentifier {
-    pub fn new(typ: Type, ident: impl Into<String>) -> Self {
-        Self(ident.into(), typ)
-    }
+pub struct TypedIdentifier {
+    pub name: String,
+    pub typ: Type,
 }
 
 impl TypedIdentifier {
-    pub fn ident(&self) -> &str {
-        &self.0
-    }
-    pub fn typ(&self) -> &Type {
-        &self.1
+    pub fn new(typ: Type, name: impl Into<String>) -> Self {
+        Self { typ, name: name.into() }
     }
 }
