@@ -173,8 +173,6 @@ pub enum StatementKind {
 
     // after expansion
     ExpandedBlock(ExpandedBlockExpr),
-    ExpandedInitialisation(ExpandedInitialisation),
-    SimpleInitialisation(SimpleInitialisation),
 }
 
 impl PrettyAST for Expression {
@@ -210,10 +208,36 @@ impl PrettyAST for Expression {
 #[derive(Debug, Clone, HashEqById)]
 pub struct Initialisation {
     pub id: usize,
+    pub kind: InitialisationKind,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct PackedInitialisation {
     pub typ: Option<Type>,
     pub assignee: AssignmentPattern,
     pub value: Expression,
 }
+
+/// An assignment to a simple, totally unpacked variable.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct UnpackedInitialisation {
+    pub typ: Option<Type>,
+    pub assignee: String,
+    pub value: Expression,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct PartiallyUnpackedInitialisation {
+    pub temporary: UnpackedInitialisation,
+    pub unpacked_assignments: Vec<PartiallyUnpackedInitialisation>,
+}
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum InitialisationKind {
+    Packed(PackedInitialisation),
+    PartiallyUnpacked(PartiallyUnpackedInitialisation),
+    Unpacked(Vec<UnpackedInitialisation>),
+}
+
 #[derive(Debug, Clone, HashEqById)]
 pub struct Reassignment {
     pub id: usize,
@@ -256,22 +280,6 @@ pub struct ExpandedBlockExpr {
     pub last: Expression,
 }
 
-/// An assignment to a simple, totally unpacked variable.
-#[derive(Debug, Clone, HashEqById)]
-pub struct SimpleInitialisation {
-    pub id: usize,
-    pub typ: Option<Type>,
-    pub assignee: String,
-    pub value: Expression,
-}
-
-#[derive(Debug, Clone, HashEqById)]
-pub struct ExpandedInitialisation {
-    pub id: usize,
-    pub temporary: SimpleInitialisation,
-    pub unpacked_assignments: Vec<ExpandedInitialisation>,
-}
-
 // macro_rules! extended {
 //     ($($first:expr),+) => {{
 //         vec![$($first),+]
@@ -293,6 +301,26 @@ pub struct ExpandedInitialisation {
 pub struct Expression {
     pub id: usize,
     pub kind: ExpressionKind,
+}
+
+impl Expression {
+    pub fn label_member_access(
+        generator: &mut NodeExpander,
+        e: Expression,
+        field: usize,
+    ) -> Expression {
+        Expression {
+            id: generator.label(),
+            kind: ExpressionKind::MemberAccess(Box::new(e), format!("_{field}")),
+        }
+    }
+
+    pub fn ident(generator: &mut NodeExpander, ident: String) -> Expression {
+        Expression {
+            id: generator.label(),
+            kind: ExpressionKind::Ident(ident),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, VariantToStr)]
@@ -436,6 +464,7 @@ impl std::fmt::Display for AssignmentPattern {
     }
 }
 
+use crate::zea::nodeexpansion::NodeExpander;
 use crate::PrettyAST;
 use std::fmt::{Debug, Formatter};
 
@@ -510,6 +539,9 @@ pub struct TypedIdentifier {
 
 impl TypedIdentifier {
     pub fn new(typ: Type, name: impl Into<String>) -> Self {
-        Self { typ, name: name.into() }
+        Self {
+            typ,
+            name: name.into(),
+        }
     }
 }

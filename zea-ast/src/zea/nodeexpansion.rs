@@ -1,10 +1,10 @@
 // #![allow(unused)]
 
-use crate::zea::{ExpandedBlockExpr, ExpandedInitialisation};
-use crate::zea::{Expression, ExpressionKind};
-use crate::zea::{Function, FunctionCall, Module};
-use crate::zea::{Initialisation, StatementBlock};
-use crate::zea::{Statement, StatementKind};
+use crate::zea::{
+    AssignmentPattern, ExpandedBlockExpr, ExpandedInitialisation, Expression, ExpressionKind,
+    Function, FunctionCall, Initialisation, InitialisationKind, Module, PackedInitialisation,
+    Statement, StatementBlock, StatementKind, UnpackedInitialisation,
+};
 use std::collections::HashSet;
 
 /// This visitor will be called after each of the expansion-visitors
@@ -42,7 +42,7 @@ pub trait AcceptsTupleNamer {
     ///     id: 0,
     ///     statements: vec![...]
     /// };
-    /// let mut expander = NodeExpander
+    /// let mut expander = NodeExpander::new()
     /// while !ast.accept(&mut expander) {} // will always terminate
     /// ```
     fn accept(&mut self, tuple_namer: &mut NodeExpander) -> bool;
@@ -271,10 +271,15 @@ impl NodeExpander {
         Self::default()
     }
 
-    fn label(&mut self) -> usize {
+    pub fn label(&mut self) -> usize {
         let label = self.labeler;
         self.labeler += 1;
         label
+    }
+
+    fn label_unpack(&mut self) -> (usize, String) {
+        let label = self.label();
+        (label, format!("__unpack{label}"))
     }
 
     /// Expand some expression block
@@ -352,6 +357,127 @@ impl NodeExpander {
     //         kind,
     //     }
     // }
+
+    /*
+    (a,b) = c
+
+    __u = c;
+    a = __u.0;
+    b = __u.1;
+
+    ((a,b),c) = d;
+    __0 = d;
+    (a,b) = d.0;
+       __1 = __0;
+       a = __1.0;
+       b = __1.1;
+    c = d.1;
+
+
+
+    */
+
+    /// Given a tuple-value to unpack,
+    /// generate a sequence of initializations that contain each member of the tuple-value:
+    /// ```ignore
+    /// tuple@(a,b) := label;
+    ///
+    /// becomes
+    ///
+    /// a := label._0;
+    /// b := label._1;
+    ///
+    /// likewise:
+    ///
+    /// tup@((a,b),c)) = label;
+    ///
+    /// becomes:
+    ///
+    /// (a,b) := label._0;
+    /// c := label._1;
+    ///
+    ///
+    ///
+    /// ```
+    ///
+    /// That is, for each member of the assignment-pattern, generate a new initialization,
+    /// That gets assigned one field of the value
+    fn simplify_tuple(
+        &mut self,
+        tuple: &Vec<AssignmentPattern>,
+        value: Expression,
+    ) -> Vec<Initialisation> {
+        let mut assignees = vec![];
+        for (field, assignee) in tuple.iter().enumerate() {
+            let id = self.label();
+            let kind = PackedInitialisation {
+                typ: None,
+                assignee: assignee.clone(),
+                value: Expression::label_member_access(self, value.clone(), field),
+            };
+            let init = Initialisation {
+                id,
+                kind: InitialisationKind::Packed(kind),
+            };
+            assignees.push(init);
+        }
+
+        assignees
+    }
+}
+
+pub trait AcceptsAssignmentSimplifier {
+    /// Let the expander perform some transformation on `self`. Return false if no changes have been made.
+    /// Repeatedly calling this method is guaranteed to eventually return false:
+    ///
+    /// ```ignore
+    /// let ast = StatementBlock {
+    ///     id: 0,
+    ///     statements: vec![...]
+    /// };
+    /// let mut expander = NodeExpander::new()
+    /// while !ast.accept(&mut expander) {} // will always terminate
+    /// ```
+    fn accept(&mut self, simplifier: &mut NodeExpander) -> bool;
+    fn is_expanded(&self, simplifier: &mut NodeExpander) -> bool;
+}
+
+impl AcceptsAssignmentSimplifier for Initialisation {
+    fn accept(&mut self, simplifier: &mut NodeExpander) -> bool {
+        match self.kind {
+            InitialisationKind::Packed(p) => match p.assignee {
+                AssignmentPattern::Identifier(_) => false,
+                AssignmentPattern::Tuple(tup) => {
+                    let (id, label) = simplifier.label_unpack();
+                    let kind = UnpackedInitialisation {
+                        typ: p.typ.clone(),
+                        assignee: label.clone(),
+                        value: p.value.clone(),
+                    };
+                    let temp = Initialisation {
+                        id, 
+                        kind: InitialisationKind::Unpacked(vec![kind])
+                    };
+                    let mut unpackees =
+                        simplifier.simplify_tuple(&tup, Expression::ident(simplifier, label));
+                    todo!()
+                }
+            },
+        }
+        !AcceptsAssignmentSimplifier::is_expanded(self, simplifier)
+    }
+
+    fn is_expanded(&self, simplifier: &mut NodeExpander) -> bool {
+        match self.kind {
+            InitialisationKind::Unpacked(_) => true,
+            _ => false,
+        }
+    }
+}
+impl AcceptsAssignmentSimplifier for Statement {
+    fn accept(&mut self, tuple_namer: &mut NodeExpander) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
