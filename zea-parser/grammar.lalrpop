@@ -1,0 +1,265 @@
+use std::str::FromStr;
+use zea_ast::zea::*;
+use crate::{NodeIdGenerator, ModuleItem, separate, binop, unop};
+
+grammar<'ast>(generator: &'ast mut NodeIdGenerator);
+
+Comma0<T>: Vec<T> = {
+    <items:(<T> ",")*> <last:T?> => {
+        let mut items = items;
+        items.extend(last);
+        items
+    }
+};
+
+Comma1<T>: Vec<T> = {
+    <first:T> <rest:("," <T>)*> ","? => {
+        let mut items = vec![first];
+        items.extend(rest);
+        items
+    }
+};
+
+TTypedIdent: TypedIdentifier = {
+    <i:ExprIdent> ":" <t:TType> => TypedIdentifier::new(t, i)
+};
+
+pub Mod: Module = {
+    <name:ModName> <imports:ModImports?> <exports:ModExports?> <(globs, functions):ModSymbols> => {
+        Module {
+            id: generator.get(),
+            imports: imports.unwrap_or(vec![]),
+            exports:exports.unwrap_or(vec![]),
+            globs,
+            functions,
+        }
+ }
+};
+
+ModName: String = {
+    "module" <name:ExprIdent> => name
+};
+
+ModImports: Vec<String> = {
+    "imports" "{" <imps:Comma0<ExprIdent>> "}" => imps
+};
+
+ModExports: Vec<String> = {
+    "exports"  "{" <imps:Comma0<ExprIdent>>  "}"=> imps
+};
+
+ModSymbols: (Vec<Initialisation>, Vec<Function>) = {
+    ModSymbolsHelper => separate(<>)
+};
+
+ModSymbolsHelper: Vec<ModuleItem> = {
+    => vec![],
+    <cur: Init> <rest:ModSymbolsHelper> => {
+        let mut v = rest;
+        v.push(ModuleItem::Init(cur));
+        v
+    },
+    <cur: Func> <rest:ModSymbolsHelper> => {
+            let mut v = rest;
+                    v.push(ModuleItem::Func(cur));
+                    v
+        },
+};
+
+pub Init: Initialisation = {
+    <p:AssignPat> ":" "=" <val:Expr> ";" => {
+    Initialisation {
+        id: generator.get(),
+        typ: None,
+        assignee: p,
+        value: val
+    }
+ },
+    <p:AssignPat> ":" <typ:TType> "=" <val:Expr> ";" => {
+    Initialisation {
+            id: generator.get(),
+            typ: Some(typ),
+            assignee: p,
+            value: val
+        }
+ },
+}
+
+pub AssignPat: AssignmentPattern = {
+    <i:ExprIdent> => AssignmentPattern::Identifier(i),
+    "(" <pats:Comma1<AssignPat>> ")" => AssignmentPattern::Tuple(pats)
+}
+
+pub Reassign: Reassignment = {
+    <i:ExprIdent> "=" <v:Expr> ";" => {
+        Reassignment {
+            id: generator.get(),
+            assignee: i,
+            value: v
+        }
+ }
+};
+
+pub FuncCall: FunctionCall = {
+    <name:ExprIdent> "(" <args:Comma0<Expr>> ")" => {
+        FunctionCall {
+            id: generator.get(),
+            name,
+            args
+        }
+    }
+};
+
+
+pub Func: Function = {
+    "fn" <name:ExprIdent>
+    "(" <args:Comma0<TTypedIdent>> ")"
+    <funcbody:Block> => {
+        Function {
+            id: generator.get(),
+            name,
+            args: args,
+            returns: Type::Basic("Void".to_string()),
+            body: funcbody
+        }
+    },
+    "fn" <name:ExprIdent>
+    "(" <args:Comma0<TTypedIdent>> ")"
+    "->" <funcreturns:TType> <funcbody:Block> => {
+        Function {
+            id: generator.get(),
+            name,
+            args: args,
+            returns: funcreturns,
+            body: funcbody
+        }
+    }
+
+};
+
+TType: Type = {
+    TypeIdent => {Type::Basic(<>)},
+    <t:TType> "*" => {Type::Pointer(Box::new(t))},
+    "[" <t:TType> "]" => {Type::ArrayOf(Box::new(t))},
+};
+
+Block: StatementBlock = {
+    "{" <stmts:(<Stmt>)*> <tail:Expr?> "}" => {
+        let mut stmts = stmts;
+        if let Some(tail) = tail {
+            let tail = Statement {id:generator.get(), kind:StatementKind::BlockTail(tail)};
+            stmts.push(tail);
+        }
+        StatementBlock {
+            id: generator.get(),
+            statements: stmts
+        }
+    }
+};
+
+pub Stmt: Statement = {
+    "return" <e:Expr> ";" => {
+        Statement {
+            id: generator.get(),
+            kind: StatementKind::Return(e)
+        }
+    },
+    <init:Init> => Statement {
+        id: generator.get(),
+        kind: StatementKind::Initialisation(init)
+    },
+    <reinit:Reassign> => Statement {
+            id: generator.get(),
+            kind: StatementKind::Reassignment(reinit)
+    },
+    <block:Block> => Statement {
+        id: generator.get(),
+        kind: StatementKind::Block(block)
+    },
+    <call:FuncCall> ";" => Statement {
+        id: generator.get(),
+        kind: StatementKind::FunctionCall(call)
+    }
+};
+
+pub Expr: Expression = ExprOr;
+
+ExprOr: Expression = {
+    <l:ExprOr> "||" <r:ExprXor> => binop(generator, BinOp::LogOr, l, r),
+    ExprXor,
+};
+ExprXor: Expression = {
+    <l:ExprXor> "^^" <r:ExprAnd> => binop(generator, BinOp::LogXor, l, r),
+    ExprAnd,
+};
+ExprAnd: Expression = {
+    <l:ExprAnd> "&&" <r:ExprBitOr> => binop(generator, BinOp::LogAnd, l, r),
+    ExprBitOr,
+};
+ExprBitOr: Expression = {
+    <l:ExprBitOr> "|" <r:ExprBitXor> => binop(generator, BinOp::BitOr, l, r),
+    ExprBitXor,
+};
+ExprBitXor: Expression = {
+    <l:ExprBitXor> "^" <r:ExprBitAnd> => binop(generator, BinOp::BitXor, l, r),
+    ExprBitAnd,
+};
+ExprBitAnd: Expression = {
+    <l:ExprBitAnd> "&" <r:ExprEq> => binop(generator, BinOp::BitAnd, l, r),
+    ExprEq,
+};
+ExprEq: Expression = {
+    <l:ExprEq> "==" <r:ExprCmp> => binop(generator, BinOp::Eq, l, r),
+    <l:ExprEq> "!=" <r:ExprCmp> => binop(generator, BinOp::Neq, l, r),
+    ExprCmp,
+};
+ExprCmp: Expression = {
+    <l:ExprCmp> "<"  <r:ExprShift> => binop(generator, BinOp::LT, l, r),
+    <l:ExprCmp> ">"  <r:ExprShift> => binop(generator, BinOp::GT, l, r),
+    <l:ExprCmp> "<=" <r:ExprShift> => binop(generator, BinOp::Leq, l, r),
+    <l:ExprCmp> ">=" <r:ExprShift> => binop(generator, BinOp::Geq, l, r),
+    ExprShift,
+};
+ExprShift: Expression = {
+    <l:ExprShift> "<<" <r:ExprAdd> => binop(generator, BinOp::Lsh, l, r),
+    <l:ExprShift> ">>" <r:ExprAdd> => binop(generator, BinOp::Rsh, l, r),
+    ExprAdd,
+};
+ExprAdd: Expression = {
+    <l:ExprAdd> "+" <r:ExprMul> => binop(generator, BinOp::Add, l, r),
+    <l:ExprAdd> "-" <r:ExprMul> => binop(generator, BinOp::Sub, l, r),
+    ExprMul,
+};
+ExprMul: Expression = {
+    <l:ExprMul> "*" <r:ExprUnary> => binop(generator, BinOp::Mul, l, r),
+    <l:ExprMul> "/" <r:ExprUnary> => binop(generator, BinOp::Div, l, r),
+    <l:ExprMul> "%" <r:ExprUnary> => binop(generator, BinOp::Mod, l, r),
+    ExprUnary,
+};
+ExprUnary: Expression = {
+    "!" <e:ExprUnary> => unop(generator, UnOp::LogNot, e),
+    "~" <e:ExprUnary> => unop(generator, UnOp::BitNot, e),
+    "-" <e:ExprUnary> => unop(generator, UnOp::Neg, e),
+    ExprPostfix,
+};
+ExprPostfix: Expression = {
+    <t:ExprPostfix> "." <m:ExprIdent> => Expression {
+        id: generator.get(),
+        kind: ExpressionKind::MemberAccess(Box::new(t), m),
+    },
+    <t:ExprPostfix> "[" <i:Expr> "]" => binop(generator, BinOp::Subscript, t, i),
+    <c:FuncCall> => Expression { id: generator.get(), kind: ExpressionKind::FuncCall(c) },
+    ExprAtom,
+};
+ExprAtom: Expression = {
+    <n:Num>       => Expression { id: generator.get(), kind: ExpressionKind::IntegerLiteral(n) },
+    <s:ExprIdent> => Expression { id: generator.get(), kind: ExpressionKind::Ident(s) },
+};
+
+Num: u64 = {
+    r"[0-9_]+" => u64::from_str(&<>.replace("_", "")).unwrap(),
+    r"0x[0-9a-fA-F_]+" => u64::from_str_radix(&<>[2..].replace("_", ""), 16).unwrap(),
+    r"0b[01_]+" => u64::from_str_radix(&<>[2..].replace("_", ""), 2).unwrap(),
+};
+TypeIdent: String = {r"[A-Z][a-zA-Z_0-9]*" => String::from(<>)}
+ExprIdent: String = {r"[a-z][a-z0-9-]*[?!]*" => String::from(<>)}

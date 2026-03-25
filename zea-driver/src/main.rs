@@ -1,17 +1,13 @@
-use clap::Parser;
-use std::fs::read_to_string;
-use std::process::exit;
-// use zea_parser::parse;
-
-#[derive(Parser, Debug)]
-#[command(version, about)]
-pub struct Args {
-    #[arg(short, long)]
-    pub filename: String,
-}
+// #[derive(Parser, Debug)]
+// #[command(version, about)]
+// pub struct Args {
+//     #[arg(short, long)]
+//     pub filename: String,
+// }
 
 fn main() {
-    let src = read_to_string("zea-driver/test.zea").unwrap();
+    // let src = read_to_string("zea-driver/test.zea").unwrap();
+    // let c = grammar::ExprParser::new();
     // let module = parse(&src);
     // let module = match module {
     //     Ok((module, errs)) => {

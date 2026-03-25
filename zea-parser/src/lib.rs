@@ -1,17 +1,33 @@
 #![allow(unused)]
 
-pub mod error;
-pub mod expression;
-pub mod statement;
-pub mod token;
-
-use crate::token::Token;
-use zea_macros::VariantToStr;
+mod grammar;
+pub use grammar::ExprParser as ExpressionParser;
+pub use grammar::ModParser as ModuleParser;
+pub use grammar::StmtParser as StatementParser;
+use zea_ast::zea::{BinOp, Expression, ExpressionKind, Function, Initialisation, UnOp};
 
 #[derive(Default, Clone, Copy)]
 pub struct NodeIdGenerator {
     cur: usize,
 }
+
+pub(crate) enum ModuleItem {
+    Init(Initialisation),
+    Func(Function),
+}
+
+pub(crate) fn separate(items: Vec<ModuleItem>) -> (Vec<Initialisation>, Vec<Function>) {
+    let mut globs = vec![];
+    let mut funcs = vec![];
+    for item in items {
+        match item {
+            ModuleItem::Init(i) => globs.push(i),
+            ModuleItem::Func(f) => funcs.push(f),
+        }
+    }
+    (globs, funcs)
+}
+
 impl NodeIdGenerator {
     pub fn new() -> Self {
         Self::default()
@@ -22,871 +38,781 @@ impl NodeIdGenerator {
         cur
     }
 }
-//
-// pub fn parse<'src>(src: &'src str) -> Result<(Module, Vec<ParseError<'src>>), String> {
-//     let mut node_generator = NodeIdGenerator::new();
-//     let res = ParseState::new(src).p_module(&mut node_generator);
-//     match res {
-//         Ok(((module, errs), _)) => Ok((module, errs)),
-//         Err(e) => Err(format!("{e}")),
-//     }
-// }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct ParseState<'a> {
-    tokens: &'a [Token<'a>],
-    index: usize,
+fn binop(g: &mut NodeIdGenerator, op: BinOp, l: Expression, r: Expression) -> Expression {
+    Expression {
+        id: g.get(),
+        kind: ExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),
+    }
+}
+fn unop(g: &mut NodeIdGenerator, op: UnOp, e: Expression) -> Expression {
+    Expression {
+        id: g.get(),
+        kind: ExpressionKind::UnOpExpr(op, Box::new(e)),
+    }
 }
 
-#[derive(Debug, PartialEq, VariantToStr)]
-pub enum ParseError<'a> {
-    UnexpectedEOF(ParseState<'a>),
-    LiteralNotMatched(String, ParseState<'a>),
-    InvalidValueIdentifier(String, ParseState<'a>),
-    InvalidTypeIdentifier(String, ParseState<'a>),
-    UnexpectedInput(String, ParseState<'a>),
-    InvalidFloatLiteral(String, ParseState<'a>),
-}
+#[cfg(test)]
+mod tests {
+    use crate::NodeIdGenerator;
+    use crate::grammar::{
+        AssignPatParser, ExprParser, FuncParser, InitParser, ModParser, StmtParser,
+    };
+    use zea_ast::zea::*;
 
-type ParseResult<'a, T> = Result<(T, ParseState<'a>), ParseError<'a>>;
-//
-// impl<'state> ParseState<'state> {
-//     pub fn new(input: &'state str) -> ParseState<'state> {
-//         ParseState {
-//             input,
-//             line: 1,
-//             column: 1,
-//             index: 0,
-//         }
-//     }
-//     fn peek(self) -> Option<char> {
-//         self.input.chars().nth(self.index)
-//     }
-//
-//     /// Peek n characters forward,
-//     /// or return UnexpectedEOF if there is less than n characters of input left
-//     fn peek_n(self, n: usize) -> Result<&'state str, ParseError<'state>> {
-//         self.input.get(self.index + n..).ok_or(UnexpectedEOF(self))
-//     }
-//     /// Peek the remaining input (i.e. The after starting from the state's index)
-//     fn peek_remaining(self) -> &'state str {
-//         &self.input[self.index..]
-//     }
-//     fn peek_parsed(self) -> &'state str {
-//         &self.input[..self.index]
-//     }
-//
-//     /// Advance the state by one character, but discards that character.
-//     fn eat_ignore(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         let (line, column) = if self.peek().ok_or(UnexpectedEOF(self))? == '\n' {
-//             (self.line + 1, 1)
-//         } else {
-//             (self.line, self.column + 1)
-//         };
-//
-//         Ok(ParseState {
-//             line,
-//             column,
-//             index: self.index + 1,
-//             ..self
-//         })
-//     }
-//
-//     /// Advance the state by one character and return it
-//     fn eat(self) -> ParseResult<'state, char> {
-//         if self.index >= self.input.len() {
-//             return Err(UnexpectedEOF(self));
-//         }
-//
-//         let c = self.peek().unwrap();
-//
-//         let (line, column) = if c == '\n' {
-//             (self.line + 1, 1)
-//         } else {
-//             (self.line, self.column + 1)
-//         };
-//
-//         Ok((
-//             c,
-//             ParseState {
-//                 line,
-//                 column,
-//                 index: self.index + 1,
-//                 ..self
-//             },
-//         ))
-//     }
-//
-//     /// Advance the state by n characters,
-//     /// returning the consumed characters.
-//     fn eat_bigly(self, n: usize) -> ParseResult<'state, &'state str> {
-//         let mut state = self;
-//         let mut s = String::with_capacity(n);
-//
-//         for _ in 0..n {
-//             // let try_eat = state.eat().unwrap();
-//             let (ch, p_char) = state.eat()?;
-//             s.push(ch);
-//             state = p_char;
-//         }
-//
-//         Ok((self.peek_n(n)?, state))
-//     }
-//
-//     /// Skip any whitespace at the current input onwards.
-//     /// Guarantees the state to end up at a non-whitespace character.
-//     fn whitespace(self) -> ParseState<'state> {
-//         let mut state = self;
-//
-//         loop {
-//             match state.peek() {
-//                 Some(c) if c.is_whitespace() => state = state.eat_ignore().unwrap(),
-//                 _ => break,
-//             }
-//         }
-//
-//         state
-//     }
-//
-//     /// Skip any whitespace at the current input onwards.
-//     /// Guarantees the state to end up at a non-whitespace character.
-//     /// Returns an error if there is not at least one whitespace character consumed.
-//     fn require_whitespace(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         let mut state = self;
-//         if state.peek().is_some_and(|ch| !ch.is_whitespace()) {
-//             return Err(ParseError::UnexpectedInput(
-//                 state.peek().unwrap().to_string(),
-//                 state,
-//             ));
-//         }
-//         loop {
-//             match state.peek() {
-//                 Some(c) if c.is_whitespace() => state = state.eat_ignore()?,
-//                 _ => break,
-//             }
-//         }
-//
-//         Ok(state)
-//     }
-//
-//     /// Get the input span between two states
-//     pub fn peek_diff(self, other: ParseState<'state>) -> &'state str {
-//         let start = self.index.min(other.index);
-//         let end = self.index.max(other.index);
-//         &self.input[start..end]
-//     }
-//
-//     /// Wrap some value with a state into an Ok-ParseResult
-//     pub fn succeed_with<T>(self, value: T) -> ParseResult<'state, T> {
-//         Ok((value, self))
-//     }
-//
-//     pub fn no_eof(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         match self.peek() {
-//             Some(_) => Ok(self),
-//             None => Err(UnexpectedEOF(self)),
-//         }
-//     }
-//
-//     /// Keep consuming characters while some predicate holds.
-//     /// Will return an error if `can_be_eof` is `false` and the state encounters EOF.
-//     /// returns a result containing the consumed characters otherwise.
-//     fn eat_while(
-//         self,
-//         predicate: impl Fn(char) -> bool,
-//         can_be_eof: bool,
-//     ) -> ParseResult<'state, &'state str> {
-//         let mut state = self;
-//         loop {
-//             match state.eat() {
-//                 Ok((ch, p_char)) if predicate(ch) => {
-//                     state = p_char;
-//                 }
-//                 Ok((_ch, p_char)) => return Ok((self.peek_diff(state), state)),
-//                 Err(e) => {
-//                     return if can_be_eof {
-//                         Ok((self.peek_diff(state), state))
-//                     } else {
-//                         Err(e)
-//                     };
-//                 }
-//             }
-//         }
-//     }
-//
-//     /// Parse some digit in base `radix`
-//     /// A valid radix is one between 2 and 32: `2 <= radix <= 32`.
-//     fn digit(self, radix: u32) -> ParseResult<'state, u64> {
-//         if radix < 2 || radix > 32 {
-//             panic!("invalid radix {radix}")
-//         }
-//         let d = self.peek().ok_or(UnexpectedEOF(self))?;
-//         let d = d
-//             .to_digit(radix)
-//             .ok_or(ParseError::UnexpectedInput(d.to_string(), self))?;
-//         Ok((d as u64, self.eat_ignore()?))
-//     }
-//
-//     pub fn starts_with(self, s: &str) -> bool {
-//         match self.input.get(self.index..) {
-//             None => false,
-//             Some(slice) => slice.starts_with(s),
-//         }
-//     }
-//     /// Parse some literal string.
-//     /// Does not check that the literal ends with a whitespace.
-//     pub fn literal<'token: 'state>(
-//         self,
-//         literal: &'token str,
-//     ) -> Result<ParseState<'state>, ParseError<'state>> {
-//         if !self.starts_with(literal) {
-//             return Err(ParseError::LiteralNotMatched(literal.to_string(), self));
-//         }
-//         let (_, state) = self.eat_bigly(literal.len())?;
-//
-//         Ok(state)
-//     }
-//
-//     pub fn p_identifier(self) -> ParseResult<'state, String> {
-//         let invalid = match self.peek() {
-//             None => return Err(UnexpectedEOF(self)),
-//             Some(c) => !c.is_lowercase(),
-//         };
-//         fn is_valid_char(ch: char) -> bool {
-//             ch.is_lowercase() || ch.is_ascii_digit() || "-?!".contains(ch)
-//         }
-//
-//         let mut state = self;
-//
-//         loop {
-//             match state.eat() {
-//                 Ok((c, p_char)) if is_valid_char(c) => {
-//                     state = p_char;
-//                 }
-//                 _ => break,
-//             }
-//         }
-//
-//         let identifier = self.peek_diff(state).to_string();
-//         if invalid {
-//             Err(InvalidValueIdentifier(identifier, self))
-//         } else {
-//             Ok((identifier, state))
-//         }
-//     }
-//
-//     pub fn p_type_identifier(self) -> ParseResult<'state, String> {
-//         let invalid = match self.peek() {
-//             None => return Err(UnexpectedEOF(self)),
-//             Some(c) => !c.is_uppercase(),
-//         };
-//         fn is_valid_char(ch: char) -> bool {
-//             ch.is_alphabetic() || ch.is_ascii_digit() || "_?!".contains(ch)
-//         }
-//
-//         let mut state = self;
-//
-//         loop {
-//             match state.eat() {
-//                 Ok((c, p_char)) if is_valid_char(c) => {
-//                     state = p_char;
-//                 }
-//                 _ => break,
-//             }
-//         }
-//
-//         let identifier = self.peek_diff(state).to_string();
-//         if invalid {
-//             Err(InvalidValueIdentifier(identifier, self))
-//         } else {
-//             Ok((identifier, state))
-//         }
-//     }
-//
-//     pub fn open_paren(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal("(")
-//     }
-//
-//     pub fn close_paren(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal(")")
-//     }
-//
-//     pub fn open_brace(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal("{")
-//     }
-//
-//     pub fn close_brace(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal("}")
-//     }
-//
-//     pub fn comma(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal(",")
-//     }
-//
-//     pub fn colon(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal(":")
-//     }
-//
-//     pub fn semicolon(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal(";")
-//     }
-//
-//     pub fn fn_arrow(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal(FN_ARROW)
-//     }
-//
-//     pub fn kw_func(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.keyword(KW_FUNC)
-//     }
-//     pub fn kw_return(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.keyword(KW_RETURN)
-//     }
-//
-//     pub fn kw_unit(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.keyword(KW_UNIT)
-//     }
-//
-//     pub fn op_assign(self) -> Result<ParseState<'state>, ParseError<'state>> {
-//         self.literal(OP_ASSIGN)
-//     }
-//
-//     /// Consume some literal token, asserting that the token is followed by whitespace
-//     pub fn keyword<'token: 'state>(
-//         self,
-//         keyword: &'token str,
-//     ) -> Result<ParseState<'state>, ParseError<'state>> {
-//         let state = self.literal(keyword)?;
-//         let state = state.require_whitespace()?;
-//         Ok(state)
-//     }
-//
-//     pub fn p_import_header(self) -> ParseResult<'state, Vec<String>> {
-//         if let Err(_) = self.keyword(KW_IMPORTS) {
-//             return Ok((vec![], self));
-//         }
-//
-//         let mut state = self.literal(KW_IMPORTS)?.whitespace().open_brace()?;
-//         let mut imports = Vec::new();
-//
-//         loop {
-//             match state.whitespace().p_identifier() {
-//                 Ok((import, p_import)) => {
-//                     eprintln!("import {import}");
-//                     imports.push(import);
-//                     state = p_import;
-//                 }
-//                 Err(_) => break,
-//             }
-//             match state.whitespace().comma() {
-//                 Ok(p_comma) => state = p_comma,
-//                 Err(_) => break,
-//             }
-//         }
-//         let state = state.whitespace().close_brace()?;
-//         Ok((imports, state))
-//     }
-//
-//     pub fn p_export_header(self) -> ParseResult<'state, Vec<String>> {
-//         let mut state = self.literal(KW_EXPORTS)?.whitespace().open_brace()?;
-//         let mut exports = Vec::new();
-//
-//         loop {
-//             match state.p_identifier() {
-//                 Ok((export, p_export)) => {
-//                     exports.push(export);
-//                     state = p_export;
-//                 }
-//                 Err(_) => break,
-//             }
-//             match state.comma() {
-//                 Ok(p_comma) => state = p_comma,
-//                 Err(_) => break,
-//             }
-//         }
-//         let state = state.close_brace()?;
-//         Ok((exports, state))
-//     }
-//
-//     pub fn p_module(
-//         self,
-//         node_id_generator: &mut NodeIdGenerator,
-//     ) -> ParseResult<'state, (Module, Vec<ParseError<'state>>)> {
-//         let state = self;
-//         let (_module_name, state) = state.keyword(KW_MODULE)?.p_identifier()?;
-//         let state = state.require_whitespace()?;
-//         let (imports, state) = state.whitespace().p_import_header()?;
-//         let (exports, mut state) = state.whitespace().p_export_header()?;
-//         let mut globs = Vec::new();
-//         let mut functions = Vec::new();
-//         // let mut errors: Vec<ParseError<'state>> = Vec::new();
-//         loop {
-//             match state.whitespace().p_function(node_id_generator) {
-//                 Ok((function, p_function)) => {
-//                     functions.push(function);
-//                     state = p_function;
-//                     continue;
-//                 }
-//                 Err(e) => {
-//                     // errors.push(e);
-//                 }
-//             }
-//             match state.whitespace().p_initialisation(node_id_generator) {
-//                 Ok((glob, p_glob)) => {
-//                     globs.push(glob);
-//                     state = p_glob;
-//                     continue;
-//                 }
-//                 Err(e) => {
-//                     // errors.push(e);
-//                 }
-//             }
-//             break;
-//         }
-//
-//         let module = Module {
-//             id: node_id_generator.get(),
-//             imports,
-//             exports,
-//             globs,
-//             functions,
-//         };
-//         Ok(((module, vec![]), state))
-//     }
-//
-//     fn p_pointer_type(self) -> ParseResult<'state, Type> {
-//         let state = self;
-//         let (ident, mut state) = self.p_type_identifier()?;
-//         let mut res = Type::Basic(ident);
-//
-//         loop {
-//             if let Ok(p_pointer) = state.literal("*") {
-//                 res = Type::Pointer(Box::new(res));
-//                 state = p_pointer;
-//                 continue;
-//             } else {
-//                 break;
-//             }
-//         }
-//         Ok((res, state))
-//     }
-//
-//     fn p_array_type(self) -> ParseResult<'state, Type> {
-//         let state = self.whitespace().literal("[")?;
-//
-//         let (typ, state): (Type, ParseState<'state>) = state.p_type()?;
-//         let state: ParseState<'state> = state.whitespace();
-//
-//         let state = state.literal("]")?.whitespace();
-//         let typ = Type::ArrayOf(Box::new(typ));
-//         Ok((typ, state))
-//     }
-//
-//     fn p_type(self) -> ParseResult<'state, Type> {
-//         self.p_array_type().or(self.p_pointer_type())
-//     }
-//
-//     pub fn p_func_param(self) -> ParseResult<'state, TypedIdentifier> {
-//         let (ident, state) = self.whitespace().p_identifier()?;
-//         let state = state.whitespace();
-//         let state = state.colon()?;
-//         let state = state.whitespace();
-//         let (typ, state) = state.p_type()?;
-//         let state = state.whitespace();
-//         Ok((TypedIdentifier::new(typ, ident), state))
-//     }
-//
-//     pub fn p_func_param_list(self) -> ParseResult<'state, Vec<TypedIdentifier>> {
-//         let mut state = self.whitespace();
-//         let mut res = vec![];
-//
-//         loop {
-//             if let Ok((param, parsed_param)) = state.whitespace().p_func_param() {
-//                 res.push(param);
-//                 state = parsed_param.whitespace();
-//
-//                 if let Ok(p_comma) = state.whitespace().comma() {
-//                     state = p_comma.whitespace();
-//                     continue;
-//                 }
-//             }
-//             break;
-//         }
-//
-//         Ok((res, state))
-//     }
-//
-//     pub fn p_function_head(self) -> ParseResult<'state, (String, Vec<TypedIdentifier>, Type)> {
-//         let state = self.whitespace().keyword(KW_FUNC)?;
-//         let (name, state) = state.p_identifier()?;
-//         let state = state.whitespace().open_paren()?;
-//         let (params, state) = state.whitespace().p_func_param_list()?;
-//         let mut state = state.whitespace().close_paren()?;
-//
-//         let returns = match state.whitespace().fn_arrow() {
-//             Ok(p_arrow) => {
-//                 let (returns, p_type) = p_arrow.whitespace().p_type()?;
-//                 state = p_type.whitespace();
-//                 returns
-//             }
-//             _ => Type::Basic("Void".to_string()),
-//         };
-//         let res = (name, params, returns);
-//         Ok((res, state))
-//     }
-//
-//     pub fn p_function_body(
-//         self,
-//         node_id_generator: &mut NodeIdGenerator,
-//     ) -> ParseResult<'state, StatementBlock> {
-//         let mut state = self.open_brace()?;
-//         let mut block = StatementBlock {
-//             id: node_id_generator.get(),
-//             statements: Vec::new(),
-//         };
-//         loop {
-//             match state.whitespace().p_statement(node_id_generator) {
-//                 Ok((stmt, p_stmt)) => {
-//                     block.statements.push(stmt);
-//                     state = p_stmt;
-//                 }
-//                 Err(_) => break,
-//             }
-//         }
-//
-//         let state = state.close_brace()?;
-//         Ok((block, state))
-//     }
-//
-//     pub fn p_function(
-//         self,
-//         node_id_generator: &mut NodeIdGenerator,
-//     ) -> ParseResult<'state, Function> {
-//         let ((name, args, returns), state) = self.p_function_head()?;
-//         let (body, state) = state.p_function_body(node_id_generator)?;
-//         let function = Function {
-//             id: node_id_generator.get(),
-//             name,
-//             args,
-//             returns,
-//             body,
-//         };
-//         Ok((function, state))
-//     }
-// }
-//
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::tests::types::typ;
-//     mod types {
-//         use zea_ast::zea::Type;
-//
-//         macro_rules! typ {
-//             ($t:ident) => {
-//                 typ(stringify!($t).to_string())
-//             };
-//
-//             ($t:ident*) => {
-//                 ptr(typ!(t))
-//             };
-//             ([$t:ident]) => {
-//                 arr(typ!(t))
-//             };
-//         }
-//
-//         macro_rules! typed_ident {
-//             ($t:ident: $i:ident) => {
-//                 TypedIdentifier::new()
-//             };
-//         }
-//
-//         pub fn typ(typ: &str) -> Type {
-//             Type::Basic(typ.to_string())
-//         }
-//
-//         pub fn ptr(typ: Type) -> Type {
-//             Type::Pointer(Box::new(typ))
-//         }
-//
-//         pub fn arr(typ: Type) -> Type {
-//             Type::ArrayOf(Box::new(typ))
-//         }
-//     }
-//
-//     #[test]
-//     fn test_parse_state_new() {
-//         let state = ParseState::new("Hello");
-//         assert_eq!(0, state.index);
-//         assert_eq!(1, state.line);
-//         assert_eq!(1, state.column);
-//     }
-//
-//     #[test]
-//     fn test_parse_state_peek() {
-//         let state = ParseState::new("abc");
-//         assert_eq!(Some('a'), state.peek());
-//
-//         let state = ParseState::new("");
-//         assert_eq!(None, state.peek());
-//     }
-//
-//     #[test]
-//     fn test_parse_state_eat() {
-//         let state = ParseState::new("abc");
-//         assert_eq!(Some('a'), state.peek());
-//         let state = state.eat_ignore().unwrap();
-//         assert_eq!(Some('b'), state.peek());
-//         let state = state.eat_ignore().unwrap();
-//         assert_eq!(Some('c'), state.peek());
-//         let state = state.eat_ignore().unwrap();
-//         assert_eq!(None, state.peek());
-//     }
-//
-//     #[test]
-//     fn test_parse_state_eat_bigly() {
-//         let state = ParseState::new("abc");
-//         let (_, bigly) = state.eat_bigly(0).unwrap();
-//         assert!(bigly.index == state.index);
-//         let (_, bigly) = state.eat_bigly(1).unwrap();
-//         assert!(bigly.index == state.index + 1);
-//         let (_, bigly) = state.eat_bigly(2).unwrap();
-//         assert!(bigly.index == state.index + 2);
-//
-//         let err = state.eat_bigly(4).unwrap_err();
-//         assert_eq!(
-//             UnexpectedEOF(ParseState {
-//                 index: 3,
-//                 column: 4,
-//                 ..state
-//             }),
-//             err
-//         );
-//     }
-//
-//     #[test]
-//     fn test_parse_identifier() {
-//         let state = ParseState::new("xyz abracadabra");
-//         let (identifier, state) = state.p_identifier().unwrap();
-//
-//         assert_eq!("xyz", identifier);
-//
-//         let state = ParseState::new("xyz? bob");
-//         let (identifier, state) = state.p_identifier().unwrap();
-//
-//         assert_eq!("xyz?", identifier);
-//
-//         let state = ParseState::new("xyz! bob");
-//         let (identifier, state) = state.p_identifier().unwrap();
-//
-//         assert_eq!("xyz!", identifier);
-//
-//         let state = ParseState::new("xyz!?? bob");
-//         let (identifier, state) = state.p_identifier().unwrap();
-//
-//         assert_eq!("xyz!??", identifier);
-//
-//         let state = ParseState::new("bob-is-cool");
-//         let (identifier, state) = state.p_identifier().unwrap();
-//
-//         assert_eq!("bob-is-cool", identifier);
-//         let state = ParseState::new("is-even? no its not bro");
-//         let (identifier, state) = state.p_identifier().unwrap();
-//
-//         assert_eq!("is-even?", identifier);
-//     }
-//
-//     #[test]
-//     fn test_parse_type() {
-//         use types::*;
-//
-//         let (typ_, _) = ParseState::new("Int").p_type().unwrap();
-//         assert_eq!(typ_, typ("Int"));
-//
-//         let (typ_, _) = ParseState::new("Int*").p_type().unwrap();
-//         assert_eq!(typ_, ptr(typ("Int")));
-//
-//         let (typ_, _) = (ParseState::new("[Int]").p_type()).unwrap();
-//         assert_eq!(typ_, arr(typ("Int")));
-//
-//         let (typ_, _) = (ParseState::new("[[Int]]").p_type()).unwrap();
-//         assert_eq!(typ_, arr(arr(typ("Int"))));
-//
-//         let (typ_, _) = (ParseState::new("[Int*]").p_type()).unwrap();
-//         assert_eq!(typ_, arr(ptr(typ("Int"))));
-//
-//         let (typ_, _) = (ParseState::new("[Int**]").p_type()).unwrap();
-//         assert_eq!(typ_, arr(ptr(ptr(typ("Int")))));
-//
-//         // let state = ParseState::new("[Int");
-//         // let (_, expstate) = state.eat_bigly(4).unwrap();
-//         // let err = state.parse_type().unwrap_err();
-//         // assert_eq!(
-//         //     ParseError::LiteralNotMatched("]".to_string(), expstate),
-//         //     err
-//         // );
-//
-//         // let state = ParseState::new("int");
-//         // let err = state.parse_type().unwrap_err();
-//         // assert_eq!(
-//         //     ParseError::InvalidTypeIdentifier("int".to_string(), state),
-//         //     err
-//         // );
-//     }
-//
-//     #[test]
-//     fn test_parse_func_param() {
-//         use types::*;
-//         let (param, _) = ParseState::new("a : Int").p_func_param().unwrap();
-//         assert_eq!(TypedIdentifier::new(typ("Int"), "a"), param);
-//
-//         let (param, _) = ParseState::new("a : Int*").p_func_param().unwrap();
-//         assert_eq!(TypedIdentifier::new(ptr(typ("Int")), "a"), param);
-//
-//         let (param, _) = ParseState::new("a? : Int*").p_func_param().unwrap();
-//         assert_eq!(TypedIdentifier::new(ptr(typ("Int")), "a?"), param);
-//
-//         // let state = ParseState::new("Inv : [Int]");
-//         // let err = state.parse_func_param().unwrap_err();
-//         // assert_eq!(InvalidValueIdentifier("Inv".to_string(), state), err);
-//     }
-//     #[test]
-//     fn test_parse_func_params() {
-//         use types::*;
-//
-//         let (params, _) = ParseState::new("").p_func_param_list().unwrap();
-//         let exp: Vec<TypedIdentifier> = vec![];
-//         assert_eq!(exp, params);
-//
-//         let (params, _) = ParseState::new("a: Int").p_func_param_list().unwrap();
-//         let exp: Vec<TypedIdentifier> = vec![TypedIdentifier::new(typ("Int"), "a")];
-//         assert_eq!(exp, params);
-//
-//         let (params, _) = ParseState::new("a: Int,").p_func_param_list().unwrap();
-//         let exp: Vec<TypedIdentifier> = vec![TypedIdentifier::new(typ("Int"), "a")];
-//         assert_eq!(exp, params);
-//
-//         let (params, _) = ParseState::new("a: Int, b: Bool")
-//             .p_func_param_list()
-//             .unwrap();
-//         let exp: Vec<TypedIdentifier> = vec![
-//             TypedIdentifier::new(typ("Int"), "a"),
-//             TypedIdentifier::new(typ("Bool"), "b"),
-//         ];
-//         assert_eq!(exp, params);
-//
-//         let (params, _) = ParseState::new("a: Int, b: Bool,")
-//             .p_func_param_list()
-//             .unwrap();
-//         let exp: Vec<TypedIdentifier> = vec![
-//             TypedIdentifier::new(typ("Int"), "a"),
-//             TypedIdentifier::new(typ("Bool"), "b"),
-//         ];
-//         assert_eq!(exp, params);
-//
-//         let (params, _) = ParseState::new("a:Int,b:Bool").p_func_param_list().unwrap();
-//         let exp: Vec<TypedIdentifier> = vec![
-//             TypedIdentifier::new(typ("Int"), "a"),
-//             TypedIdentifier::new(typ("Bool"), "b"),
-//         ];
-//         assert_eq!(exp, params);
-//
-//         let (params, _) = ParseState::new("a : Int , b : Bool")
-//             .p_func_param_list()
-//             .unwrap();
-//         let exp: Vec<TypedIdentifier> = vec![
-//             TypedIdentifier::new(typ("Int"), "a"),
-//             TypedIdentifier::new(typ("Bool"), "b"),
-//         ];
-//         assert_eq!(exp, params);
-//     }
-//
-//     #[test]
-//     fn test_parse_func_head() {
-//         let (head, _) = ParseState::new("fn f() -> Int").p_function_head().unwrap();
-//
-//         let (head, _) = ParseState::new("fn f(a:Int) -> Int")
-//             .p_function_head()
-//             .unwrap();
-//
-//         let (head, _) = ParseState::new("fn exit()").p_function_head().unwrap();
-//
-//         let (head, _) = ParseState::new("fn print(s: String)")
-//             .p_function_head()
-//             .unwrap();
-//
-//         let (head, _) = ParseState::new("fn print(s: String,)")
-//             .p_function_head()
-//             .unwrap();
-//
-//         let (head, _) = ParseState::new("fn print(s: String,) -> Int")
-//             .p_function_head()
-//             .unwrap();
-//     }
-//
-//     #[test]
-//     fn test_parse_digit() {
-//         let state = ParseState::new("123");
-//         let (d, advanced) = state.digit(10).unwrap();
-//         assert_eq!(1, d);
-//         assert_eq!("23", advanced.peek_remaining());
-//         let (d, advanced) = advanced.digit(10).unwrap();
-//         assert_eq!(2, d);
-//         assert_eq!("3", advanced.peek_remaining());
-//         let (d, advanced) = advanced.digit(10).unwrap();
-//         assert_eq!(3, d);
-//         assert_eq!("", advanced.peek_remaining());
-//
-//         let (d, _) = state.digit(2).unwrap();
-//         assert_eq!(1, d);
-//         let (d, _) = state.digit(16).unwrap();
-//         assert_eq!(1, d);
-//
-//         let nine = ParseState::new("9");
-//         let (d, _) = nine.digit(10).unwrap();
-//         assert_eq!(9, d);
-//         let (d, _) = nine.digit(16).unwrap();
-//         assert_eq!(9, d);
-//         let err = nine.digit(2).unwrap_err();
-//         assert_eq!(ParseError::UnexpectedInput("9".to_string(), nine), err);
-//
-//         let f = ParseState::new("f");
-//         let err = f.digit(2).unwrap_err();
-//         assert_eq!(ParseError::UnexpectedInput("f".to_string(), f), err);
-//         let f = ParseState::new("f");
-//         let err = f.digit(10).unwrap_err();
-//         assert_eq!(ParseError::UnexpectedInput("f".to_string(), f), err);
-//         let (d, _) = f.digit(16).unwrap();
-//         assert_eq!(15, d);
-//     }
-//     #[test]
-//     fn test_parse_import_statement() {
-//         let state = ParseState::new("imports {io}");
-//         match state.p_import_header() {
-//             Ok((identifiers, _state)) => assert_eq!(vec![String::from("io")], identifiers),
-//             Err(error) => panic!("{:?}", error),
-//         }
-//     }
-//
-//     #[test]
-//     fn test_parse_function() {
-//         let state = ParseState::new("fn main() -> Int {}");
-//         let mut ids = NodeIdGenerator::new();
-//         let (func, _) = state.p_function(&mut ids).unwrap();
-//         assert_eq!(func.returns, typ("Int"));
-//         assert_eq!(func.name, "main");
-//         assert_eq!(func.args, vec![]);
-//         assert_eq!(func.body.statements, vec![]);
-//
-//         let state = ParseState::new("fn main()->Int{}");
-//         let mut ids = NodeIdGenerator::new();
-//         let (func, _) = state.p_function(&mut ids).unwrap();
-//         assert_eq!(func.returns, typ("Int"));
-//         assert_eq!(func.name, "main");
-//         assert_eq!(func.args, vec![]);
-//         assert_eq!(func.body.statements, vec![]);
-//
-//         let state = ParseState::new("fnmain () ->Int{}");
-//         let mut ids = NodeIdGenerator::new();
-//         assert!(state.p_function(&mut ids).is_err());
-//     }
-// }
+    // ── helpers ───────────────────────────────────────────────────────────────
+
+    fn idgen() -> NodeIdGenerator {
+        NodeIdGenerator::new()
+    }
+
+    fn parse_expr(src: &str) -> Expression {
+        ExprParser::new()
+            .parse(&mut idgen(), src)
+            .unwrap_or_else(|e| panic!("expr parse failed for {src:?}:\n  {e}"))
+    }
+
+    fn parse_stmt(src: &str) -> Statement {
+        StmtParser::new()
+            .parse(&mut idgen(), src)
+            .unwrap_or_else(|e| panic!("stmt parse failed for {src:?}:\n  {e}"))
+    }
+
+    fn parse_func(src: &str) -> Function {
+        FuncParser::new()
+            .parse(&mut idgen(), src)
+            .unwrap_or_else(|e| panic!("func parse failed for {src:?}:\n  {e}"))
+    }
+
+    fn parse_init(src: &str) -> Initialisation {
+        InitParser::new()
+            .parse(&mut idgen(), src)
+            .unwrap_or_else(|e| panic!("init parse failed for {src:?}:\n  {e}"))
+    }
+
+    fn parse_mod(src: &str) -> Module {
+        ModParser::new()
+            .parse(&mut idgen(), src)
+            .unwrap_or_else(|e| panic!("module parse failed for {src:?}:\n  {e}"))
+    }
+
+    fn parse_pat(src: &str) -> AssignmentPattern {
+        AssignPatParser::new()
+            .parse(&mut idgen(), src)
+            .unwrap_or_else(|e| panic!("pattern parse failed for {src:?}:\n  {e}"))
+    }
+
+    fn kind(e: &Expression) -> &ExpressionKind {
+        &e.kind
+    }
+
+    // ── atoms ─────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn integer_decimal() {
+        assert!(matches!(
+            kind(&parse_expr("42")),
+            ExpressionKind::IntegerLiteral(42)
+        ));
+    }
+
+    #[test]
+    fn integer_hex() {
+        assert!(matches!(
+            kind(&parse_expr("0xFF")),
+            ExpressionKind::IntegerLiteral(255)
+        ));
+    }
+
+    #[test]
+    fn integer_hex_lowercase() {
+        assert!(matches!(
+            kind(&parse_expr("0xff")),
+            ExpressionKind::IntegerLiteral(255)
+        ));
+    }
+
+    #[test]
+    fn integer_binary() {
+        assert!(matches!(
+            kind(&parse_expr("0b1010")),
+            ExpressionKind::IntegerLiteral(10)
+        ));
+    }
+
+    #[test]
+    fn integer_decimal_underscores() {
+        assert!(matches!(
+            kind(&parse_expr("1_000_000")),
+            ExpressionKind::IntegerLiteral(1_000_000)
+        ));
+    }
+
+    #[test]
+    fn integer_hex_underscores() {
+        assert!(matches!(
+            kind(&parse_expr("0xFF_FF")),
+            ExpressionKind::IntegerLiteral(0xFFFF)
+        ));
+    }
+
+    #[test]
+    fn integer_binary_underscores() {
+        assert!(matches!(
+            kind(&parse_expr("0b1111_0000")),
+            ExpressionKind::IntegerLiteral(0b1111_0000)
+        ));
+    }
+
+    #[test]
+    fn identifier_simple() {
+        assert!(matches!(kind(&parse_expr("foo")), ExpressionKind::Ident(s) if s == "foo"));
+    }
+
+    #[test]
+    fn identifier_with_digits() {
+        assert!(matches!(kind(&parse_expr("foo123")), ExpressionKind::Ident(s) if s == "foo123"));
+    }
+
+    #[test]
+    fn identifier_with_hyphens() {
+        assert!(matches!(kind(&parse_expr("my-var")), ExpressionKind::Ident(s) if s == "my-var"));
+    }
+
+    #[test]
+    fn identifier_question_mark() {
+        assert!(matches!(kind(&parse_expr("empty?")), ExpressionKind::Ident(s) if s == "empty?"));
+    }
+
+    #[test]
+    fn identifier_bang() {
+        assert!(matches!(kind(&parse_expr("reset!")), ExpressionKind::Ident(s) if s == "reset!"));
+    }
+
+    // ── unary ops ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn unary_negate() {
+        assert!(matches!(
+            kind(&parse_expr("-1")),
+            ExpressionKind::UnOpExpr(UnOp::Neg, _)
+        ));
+    }
+
+    #[test]
+    fn unary_logical_not() {
+        assert!(matches!(
+            kind(&parse_expr("!x")),
+            ExpressionKind::UnOpExpr(UnOp::LogNot, _)
+        ));
+    }
+
+    #[test]
+    fn unary_bitwise_not() {
+        assert!(matches!(
+            kind(&parse_expr("~x")),
+            ExpressionKind::UnOpExpr(UnOp::BitNot, _)
+        ));
+    }
+
+    #[test]
+    fn unary_chained() {
+        // !!x — outer LogNot wrapping inner LogNot
+        let e = parse_expr("!!x");
+        assert!(matches!(kind(&e),
+            ExpressionKind::UnOpExpr(UnOp::LogNot, inner)
+            if matches!(kind(inner), ExpressionKind::UnOpExpr(UnOp::LogNot, _))
+        ));
+    }
+
+    // ── binary ops — one test per tier ───────────────────────────────────────
+
+    macro_rules! binop_test {
+        ($name:ident, $src:expr, $op:pat) => {
+            #[test]
+            fn $name() {
+                assert!(matches!(
+                    kind(&parse_expr($src)),
+                    ExpressionKind::BinOpExpr($op, _, _)
+                ));
+            }
+        };
+    }
+
+    binop_test!(binop_mul, "a * b", BinOp::Mul);
+    binop_test!(binop_div, "a / b", BinOp::Div);
+    binop_test!(binop_mod, "a % b", BinOp::Mod);
+    binop_test!(binop_add, "a + b", BinOp::Add);
+    binop_test!(binop_sub, "a - b", BinOp::Sub);
+    binop_test!(binop_lsh, "a << b", BinOp::Lsh);
+    binop_test!(binop_rsh, "a >> b", BinOp::Rsh);
+    binop_test!(binop_lt, "a < b", BinOp::LT);
+    binop_test!(binop_gt, "a > b", BinOp::GT);
+    binop_test!(binop_leq, "a <= b", BinOp::Leq);
+    binop_test!(binop_geq, "a >= b", BinOp::Geq);
+    binop_test!(binop_eq, "a == b", BinOp::Eq);
+    binop_test!(binop_neq, "a != b", BinOp::Neq);
+    binop_test!(binop_bitand, "a & b", BinOp::BitAnd);
+    binop_test!(binop_bitxor, "a ^ b", BinOp::BitXor);
+    binop_test!(binop_bitor, "a | b", BinOp::BitOr);
+    binop_test!(binop_logand, "a && b", BinOp::LogAnd);
+    binop_test!(binop_logxor, "a ^^ b", BinOp::LogXor);
+    binop_test!(binop_logor, "a || b", BinOp::LogOr);
+
+    // ── precedence ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn prec_mul_over_add() {
+        // a + b * c  =>  Add(a, Mul(b, c))
+        match kind(&parse_expr("a + b * c")) {
+            ExpressionKind::BinOpExpr(BinOp::Add, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::Mul, _, _)
+            )),
+            other => panic!("expected Add at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_add_over_shift() {
+        // a << b + c  =>  Lsh(a, Add(b, c))
+        match kind(&parse_expr("a << b + c")) {
+            ExpressionKind::BinOpExpr(BinOp::Lsh, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::Add, _, _)
+            )),
+            other => panic!("expected Lsh at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_shift_over_cmp() {
+        // a < b << c  =>  LT(a, Lsh(b, c))
+        match kind(&parse_expr("a < b << c")) {
+            ExpressionKind::BinOpExpr(BinOp::LT, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::Lsh, _, _)
+            )),
+            other => panic!("expected LT at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_cmp_over_eq() {
+        // a == b < c  =>  Eq(a, LT(b, c))
+        match kind(&parse_expr("a == b < c")) {
+            ExpressionKind::BinOpExpr(BinOp::Eq, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::LT, _, _)
+            )),
+            other => panic!("expected Eq at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_eq_over_bitand() {
+        // a & b == c  =>  BitAnd(a, Eq(b, c))
+        match kind(&parse_expr("a & b == c")) {
+            ExpressionKind::BinOpExpr(BinOp::BitAnd, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::Eq, _, _)
+            )),
+            other => panic!("expected BitAnd at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_bitand_over_bitxor() {
+        // a ^ b & c  =>  BitXor(a, BitAnd(b, c))
+        match kind(&parse_expr("a ^ b & c")) {
+            ExpressionKind::BinOpExpr(BinOp::BitXor, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::BitAnd, _, _)
+            )),
+            other => panic!("expected BitXor at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_bitxor_over_bitor() {
+        // a | b ^ c  =>  BitOr(a, BitXor(b, c))
+        match kind(&parse_expr("a | b ^ c")) {
+            ExpressionKind::BinOpExpr(BinOp::BitOr, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::BitXor, _, _)
+            )),
+            other => panic!("expected BitOr at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_bitor_over_logand() {
+        // a && b | c  =>  LogAnd(a, BitOr(b, c))
+        match kind(&parse_expr("a && b | c")) {
+            ExpressionKind::BinOpExpr(BinOp::LogAnd, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::BitOr, _, _)
+            )),
+            other => panic!("expected LogAnd at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_logand_over_logxor() {
+        // a ^^ b && c  =>  LogXor(a, LogAnd(b, c))
+        match kind(&parse_expr("a ^^ b && c")) {
+            ExpressionKind::BinOpExpr(BinOp::LogXor, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::LogAnd, _, _)
+            )),
+            other => panic!("expected LogXor at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_logxor_over_logor() {
+        // a || b ^^ c  =>  LogOr(a, LogXor(b, c))
+        match kind(&parse_expr("a || b ^^ c")) {
+            ExpressionKind::BinOpExpr(BinOp::LogOr, _, rhs) => assert!(matches!(
+                kind(rhs),
+                ExpressionKind::BinOpExpr(BinOp::LogXor, _, _)
+            )),
+            other => panic!("expected LogOr at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_unary_over_mul() {
+        // -a * b  =>  Mul(Neg(a), b)
+        match kind(&parse_expr("-a * b")) {
+            ExpressionKind::BinOpExpr(BinOp::Mul, lhs, _) => {
+                assert!(matches!(kind(lhs), ExpressionKind::UnOpExpr(UnOp::Neg, _)))
+            }
+            other => panic!("expected Mul at root, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn prec_postfix_over_unary() {
+        // -a.b  =>  Neg(MemberAccess(a, b)),  NOT  MemberAccess(Neg(a), b)
+        match kind(&parse_expr("-a.b")) {
+            ExpressionKind::UnOpExpr(UnOp::Neg, inner) => {
+                assert!(matches!(kind(inner), ExpressionKind::MemberAccess(_, _)))
+            }
+            other => panic!("expected Neg at root, got {other:?}"),
+        }
+    }
+
+    // ── associativity ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn left_assoc_add() {
+        // a + b + c  =>  Add(Add(a, b), c)
+        match kind(&parse_expr("a + b + c")) {
+            ExpressionKind::BinOpExpr(BinOp::Add, lhs, _) => assert!(matches!(
+                kind(lhs),
+                ExpressionKind::BinOpExpr(BinOp::Add, _, _)
+            )),
+            other => panic!("expected Add(Add, _), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn left_assoc_sub() {
+        // a - b - c  =>  Sub(Sub(a, b), c), i.e. NOT a-(b-c)
+        match kind(&parse_expr("a - b - c")) {
+            ExpressionKind::BinOpExpr(BinOp::Sub, lhs, _) => assert!(matches!(
+                kind(lhs),
+                ExpressionKind::BinOpExpr(BinOp::Sub, _, _)
+            )),
+            other => panic!("expected Sub(Sub, _), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn left_assoc_mul() {
+        match kind(&parse_expr("a * b * c")) {
+            ExpressionKind::BinOpExpr(BinOp::Mul, lhs, _) => assert!(matches!(
+                kind(lhs),
+                ExpressionKind::BinOpExpr(BinOp::Mul, _, _)
+            )),
+            other => panic!("expected Mul(Mul, _), got {other:?}"),
+        }
+    }
+
+    // ── postfix ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn member_access() {
+        assert!(matches!(kind(&parse_expr("foo.bar")),
+            ExpressionKind::MemberAccess(_, m) if m == "bar"));
+    }
+
+    #[test]
+    fn chained_member_access() {
+        // a.b.c  =>  MemberAccess(MemberAccess(a, b), c)
+        match kind(&parse_expr("a.b.c")) {
+            ExpressionKind::MemberAccess(inner, c) => {
+                assert_eq!(c, "c");
+                assert!(matches!(kind(inner), ExpressionKind::MemberAccess(_, b) if b == "b"));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn subscript() {
+        assert!(matches!(
+            kind(&parse_expr("arr[0]")),
+            ExpressionKind::BinOpExpr(BinOp::Subscript, _, _)
+        ));
+    }
+
+    #[test]
+    fn chained_subscript() {
+        // a[0][1]  =>  Subscript(Subscript(a, 0), 1)
+        match kind(&parse_expr("a[0][1]")) {
+            ExpressionKind::BinOpExpr(BinOp::Subscript, lhs, _) => assert!(matches!(
+                kind(lhs),
+                ExpressionKind::BinOpExpr(BinOp::Subscript, _, _)
+            )),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn member_then_subscript() {
+        // foo.bar[0]  =>  Subscript(MemberAccess(foo, bar), 0)
+        match kind(&parse_expr("foo.bar[0]")) {
+            ExpressionKind::BinOpExpr(BinOp::Subscript, lhs, _) => {
+                assert!(matches!(kind(lhs), ExpressionKind::MemberAccess(_, _)))
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    // ── function calls ────────────────────────────────────────────────────────
+
+    #[test]
+    fn call_no_args() {
+        assert!(matches!(kind(&parse_expr("foo()")),
+            ExpressionKind::FuncCall(FunctionCall { args, .. }) if args.is_empty()));
+    }
+
+    // Comma0 — all four trailing-comma variants
+
+    #[test]
+    fn call_one_arg_no_trailing() {
+        match kind(&parse_expr("foo(1)")) {
+            ExpressionKind::FuncCall(fc) => assert_eq!(fc.args.len(), 1),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn call_one_arg_trailing_comma() {
+        match kind(&parse_expr("foo(1,)")) {
+            ExpressionKind::FuncCall(fc) => assert_eq!(fc.args.len(), 1),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn call_many_args_no_trailing() {
+        match kind(&parse_expr("add(a, b, c)")) {
+            ExpressionKind::FuncCall(fc) => assert_eq!(fc.args.len(), 3),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn call_many_args_trailing_comma() {
+        match kind(&parse_expr("add(a, b, c,)")) {
+            ExpressionKind::FuncCall(fc) => assert_eq!(fc.args.len(), 3),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn call_expr_arg() {
+        match kind(&parse_expr("f(a + b)")) {
+            ExpressionKind::FuncCall(fc) => assert!(matches!(
+                kind(&fc.args[0]),
+                ExpressionKind::BinOpExpr(BinOp::Add, _, _)
+            )),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn call_name_recorded() {
+        match kind(&parse_expr("my-func(x)")) {
+            ExpressionKind::FuncCall(fc) => assert_eq!(fc.name, "my-func"),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    // ── assignment patterns ───────────────────────────────────────────────────
+
+    #[test]
+    fn pat_identifier() {
+        assert!(matches!(parse_pat("x"), AssignmentPattern::Identifier(s) if s == "x"));
+    }
+
+    #[test]
+    fn pat_tuple_no_trailing() {
+        assert!(matches!(parse_pat("(a, b)"), AssignmentPattern::Tuple(v) if v.len() == 2));
+    }
+
+    #[test]
+    fn pat_tuple_trailing_comma() {
+        assert!(matches!(parse_pat("(a, b,)"), AssignmentPattern::Tuple(v) if v.len() == 2));
+    }
+
+    #[test]
+    fn pat_nested_tuple() {
+        match parse_pat("((a, b), c)") {
+            AssignmentPattern::Tuple(outer) => {
+                assert_eq!(outer.len(), 2);
+                assert!(matches!(&outer[0], AssignmentPattern::Tuple(_)));
+            }
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    // ── initialisations ───────────────────────────────────────────────────────
+
+    #[test]
+    fn init_inferred() {
+        let i = parse_init("x := 42;");
+        assert!(i.typ.is_none());
+        assert!(matches!(&i.assignee, AssignmentPattern::Identifier(s) if s == "x"));
+    }
+
+    #[test]
+    fn init_explicit_type() {
+        let i = parse_init("x : U64 = 42;");
+        assert!(matches!(&i.typ, Some(Type::Basic(t)) if t == "U64"));
+    }
+
+    #[test]
+    fn init_pointer_type() {
+        let i = parse_init("p : U8* = ptr;");
+        assert!(matches!(&i.typ, Some(Type::Pointer(inner))
+            if matches!(inner.as_ref(), Type::Basic(t) if t == "U8")));
+    }
+
+    #[test]
+    fn init_array_type() {
+        let i = parse_init("xs : [U32] = arr;");
+        assert!(matches!(&i.typ, Some(Type::ArrayOf(_))));
+    }
+
+    #[test]
+    fn init_tuple_destructure() {
+        let i = parse_init("(a, b) := pair;");
+        assert!(matches!(&i.assignee, AssignmentPattern::Tuple(v) if v.len() == 2));
+    }
+
+    // ── statements ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn stmt_return_literal() {
+        assert!(matches!(
+            parse_stmt("return 0;").kind,
+            StatementKind::Return(_)
+        ));
+    }
+
+    #[test]
+    fn stmt_return_expr() {
+        match parse_stmt("return a + b;").kind {
+            StatementKind::Return(e) => assert!(matches!(
+                kind(&e),
+                ExpressionKind::BinOpExpr(BinOp::Add, _, _)
+            )),
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+
+    #[test]
+    fn stmt_init() {
+        assert!(matches!(
+            parse_stmt("x := 1;").kind,
+            StatementKind::Initialisation(_)
+        ));
+    }
+
+    #[test]
+    fn stmt_reassign() {
+        assert!(matches!(
+            parse_stmt("x = 2;").kind,
+            StatementKind::Reassignment(_)
+        ));
+    }
+
+    #[test]
+    fn stmt_nested_block() {
+        assert!(matches!(
+            parse_stmt("{ x := 1; }").kind,
+            StatementKind::Block(_)
+        ));
+    }
+
+    // ── functions ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn func_no_args_void_return() {
+        let f = parse_func("fn greet() {}");
+        assert_eq!(f.name, "greet");
+        assert!(f.args.is_empty());
+        assert!(matches!(&f.returns, Type::Basic(s) if s == "Void"));
+    }
+
+    #[test]
+    fn func_args_no_trailing() {
+        let f = parse_func("fn add(a: U64, b: U64) -> U64 { return a + b; }");
+        assert_eq!(f.args.len(), 2);
+        assert_eq!(f.args[0].name, "a");
+        assert_eq!(f.args[1].name, "b");
+    }
+
+    #[test]
+    fn func_args_trailing_comma() {
+        let f = parse_func("fn add(a: U64, b: U64,) -> U64 { return a + b; }");
+        assert_eq!(f.args.len(), 2);
+    }
+
+    #[test]
+    fn func_return_pointer() {
+        let f = parse_func("fn foo() -> U64* {}");
+        assert!(matches!(&f.returns, Type::Pointer(inner)
+            if matches!(inner.as_ref(), Type::Basic(s) if s == "U64")));
+    }
+
+    #[test]
+    fn func_return_array() {
+        let f = parse_func("fn foo() -> [U8] {}");
+        assert!(matches!(&f.returns, Type::ArrayOf(_)));
+    }
+
+    #[test]
+    fn func_body_statements() {
+        let f = parse_func("fn foo() { x := 1; y := 2; }");
+        assert_eq!(f.body.statements.len(), 2);
+    }
+
+    #[test]
+    fn func_body_tail_expr() {
+        let f = parse_func("fn foo() -> U64 { x := 1; x }");
+        assert!(matches!(
+            f.body.statements.last().unwrap().kind,
+            StatementKind::BlockTail(_)
+        ));
+    }
+
+    #[test]
+    fn func_empty_body() {
+        assert!(parse_func("fn noop() {}").body.statements.is_empty());
+    }
+
+    // ── modules ───────────────────────────────────────────────────────────────
+
+    #[test]
+    fn module_minimal() {
+        let m = parse_mod("module mymod");
+        assert!(m.imports.is_empty());
+        assert!(m.exports.is_empty());
+        assert!(m.globs.is_empty());
+        assert!(m.functions.is_empty());
+    }
+
+    #[test]
+    fn module_imports_no_trailing() {
+        let m = parse_mod("module mymod imports { foo, bar }");
+        assert_eq!(m.imports, vec!["foo", "bar"]);
+    }
+
+    #[test]
+    fn module_imports_trailing_comma() {
+        let m = parse_mod("module mymod imports { foo, bar, }");
+        assert_eq!(m.imports, vec!["foo", "bar"]);
+    }
+
+    #[test]
+    fn module_exports_no_trailing() {
+        let m = parse_mod("module mymod exports { baz }");
+        assert_eq!(m.exports, vec!["baz"]);
+    }
+
+    #[test]
+    fn module_exports_trailing_comma() {
+        let m = parse_mod("module mymod exports { baz, }");
+        assert_eq!(m.exports, vec!["baz"]);
+    }
+
+    #[test]
+    fn module_with_global() {
+        let m = parse_mod("module mymod x := 42;");
+        assert_eq!(m.globs.len(), 1);
+    }
+
+    #[test]
+    fn module_with_function() {
+        let m = parse_mod("module mymod fn greet() {}");
+        assert_eq!(m.functions.len(), 1);
+        assert_eq!(m.functions[0].name, "greet");
+    }
+
+    #[test]
+    fn module_multiple_functions() {
+        let m = parse_mod("module mymod fn a() {} fn b() {}");
+        assert_eq!(m.functions.len(), 2);
+    }
+
+    #[test]
+    fn module_full() {
+        let src = r#"
+            module mymod
+            imports { io, math }
+            exports { main }
+            max-val : U64 = 100;
+            fn main() {
+                x := max-val;
+                io-print(x);
+            }
+        "#;
+        let m = parse_mod(src);
+        assert_eq!(m.imports, vec!["io", "math"]);
+        assert_eq!(m.exports, vec!["main"]);
+        assert_eq!(m.globs.len(), 1);
+        assert_eq!(m.functions.len(), 1);
+    }
+
+    // ── reject cases ──────────────────────────────────────────────────────────
+
+    macro_rules! reject {
+        ($name:ident, $parser:ident, $src:expr) => {
+            #[test]
+            fn $name() {
+                assert!(
+                    $parser::new().parse(&mut idgen(), $src).is_err(),
+                    "expected parse failure for {:?}",
+                    $src
+                );
+            }
+        };
+    }
+
+    reject!(reject_uppercase_ident, ExprParser, "Foo");
+    reject!(reject_bare_plus, ExprParser, "+ 1");
+    reject!(reject_unclosed_call, ExprParser, "foo(1");
+    reject!(reject_unclosed_subscript, ExprParser, "a[0");
+    reject!(reject_missing_semicolon, StmtParser, "return 0");
+    reject!(reject_reassign_no_semi, StmtParser, "x = 1");
+    reject!(reject_init_no_semi, InitParser, "x := 1");
+    reject!(reject_empty_tuple_pat, InitParser, "() := x;");
+    reject!(reject_double_colon_eq, InitParser, "x ::= 1;");
+    reject!(reject_func_missing_brace, FuncParser, "fn foo()");
+    reject!(reject_module_no_name, ModParser, "module");
+}

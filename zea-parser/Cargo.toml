@@ -4,5 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-zea-ast = {path = "../zea-ast"}
-zea-macros = {path = "../zea-macros"}
+zea-ast = { path = "../zea-ast" }
+zea-macros = { path = "../zea-macros" }
+lalrpop-util = { version = "0.23.1", features = ["lexer", "unicode"] }
+
+[build-dependencies]
+lalrpop = { version = "0.23.1" }
+
+[lib]
+doctest = false

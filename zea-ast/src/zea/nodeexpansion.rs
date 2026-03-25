@@ -124,6 +124,7 @@ impl AcceptsBlockExpander for Expression {
             ExpressionKind::FloatLiteral(_) => false,
             ExpressionKind::StringLiteral(_) => false,
             ExpressionKind::Ident(_) => false,
+            ExpressionKind::MemberAccess(_, _) => false,
         };
 
         !self.is_expanded(block_expander)
