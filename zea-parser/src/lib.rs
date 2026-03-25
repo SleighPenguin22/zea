@@ -54,10 +54,10 @@ fn unop(g: &mut NodeIdGenerator, op: UnOp, e: Expression) -> Expression {
 
 #[cfg(test)]
 mod tests {
-    use crate::NodeIdGenerator;
     use crate::grammar::{
         AssignPatParser, ExprParser, FuncParser, InitParser, ModParser, StmtParser,
     };
+    use crate::NodeIdGenerator;
     use zea_ast::zea::*;
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -585,19 +585,30 @@ mod tests {
     #[test]
     fn init_inferred() {
         let i = parse_init("x := 42;");
-        assert!(i.typ.is_none());
+        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
+        let (InitialisationKind::Packed(i)) = i.kind else {
+            unreachable!()
+        };
         assert!(matches!(&i.assignee, AssignmentPattern::Identifier(s) if s == "x"));
     }
 
     #[test]
     fn init_explicit_type() {
         let i = parse_init("x : U64 = 42;");
+        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
+        let (InitialisationKind::Packed(i)) = i.kind else {
+            unreachable!()
+        };
         assert!(matches!(&i.typ, Some(Type::Basic(t)) if t == "U64"));
     }
 
     #[test]
     fn init_pointer_type() {
         let i = parse_init("p : U8* = ptr;");
+        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
+        let (InitialisationKind::Packed(i)) = i.kind else {
+            unreachable!()
+        };
         assert!(matches!(&i.typ, Some(Type::Pointer(inner))
             if matches!(inner.as_ref(), Type::Basic(t) if t == "U8")));
     }
@@ -605,12 +616,20 @@ mod tests {
     #[test]
     fn init_array_type() {
         let i = parse_init("xs : [U32] = arr;");
+        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
+        let (InitialisationKind::Packed(i)) = i.kind else {
+            unreachable!()
+        };
         assert!(matches!(&i.typ, Some(Type::ArrayOf(_))));
     }
 
     #[test]
     fn init_tuple_destructure() {
         let i = parse_init("(a, b) := pair;");
+        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
+        let (InitialisationKind::Packed(i)) = i.kind else {
+            unreachable!()
+        };
         assert!(matches!(&i.assignee, AssignmentPattern::Tuple(v) if v.len() == 2));
     }
 

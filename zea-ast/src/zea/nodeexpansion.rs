@@ -1,9 +1,10 @@
 // #![allow(unused)]
 
 use crate::zea::{
-    AssignmentPattern, ExpandedBlockExpr, ExpandedInitialisation, Expression, ExpressionKind,
-    Function, FunctionCall, Initialisation, InitialisationKind, Module, PackedInitialisation,
-    Statement, StatementBlock, StatementKind, UnpackedInitialisation,
+    AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
+    Initialisation, InitialisationKind, Module, PackedInitialisation,
+    PartiallyUnpackedInitialisation, Statement, StatementBlock, StatementKind,
+    UnpackedInitialisation,
 };
 use std::collections::HashSet;
 
@@ -14,7 +15,7 @@ pub struct ASTValidator {
 }
 pub trait AcceptsASTValidator {
     /// Returns true if this node is considered valid
-    fn accept(&self, validator: &mut ASTValidator) -> bool;
+    fn ast_validate(&self, validator: &mut ASTValidator) -> bool;
 }
 
 pub trait AcceptsBlockExpander {
@@ -29,8 +30,11 @@ pub trait AcceptsBlockExpander {
     /// let mut expander = NodeExpander
     /// while !ast.accept(&mut expander) {} // will always terminate
     /// ```
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool;
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool;
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool;
+    /// Does this node have only block-expanded descendants?
+    ///
+    /// Returns false if any descendant is not yet expanded.
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool;
 }
 
 pub trait AcceptsTupleNamer {
@@ -50,8 +54,8 @@ pub trait AcceptsTupleNamer {
 }
 
 impl AcceptsBlockExpander for Statement {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.has_blocks_expanded(block_expander) {
             return false;
         }
         match &mut self.kind {
@@ -59,49 +63,64 @@ impl AcceptsBlockExpander for Statement {
                 self.kind = StatementKind::ExpandedBlock(block_expander.expand_expr_block(b));
                 true
             }
-            StatementKind::Initialisation(i) => i.value.accept(block_expander),
-            StatementKind::Reassignment(r) => r.value.accept(block_expander),
-            StatementKind::FunctionCall(call) => call.accept(block_expander),
-            StatementKind::Return(expr) => expr.accept(block_expander),
-            StatementKind::BlockTail(expr) => expr.accept(block_expander),
-            StatementKind::ExpandedInitialisation(init) => init.accept(block_expander),
-            StatementKind::SimpleInitialisation(sinit) => sinit.value.accept(block_expander),
-            StatementKind::ExpandedBlock(b) => b.accept(block_expander),
+            StatementKind::Initialisation(i) => i.accept_block_expander(block_expander),
+            StatementKind::Reassignment(r) => r.value.accept_block_expander(block_expander),
+            StatementKind::FunctionCall(call) => call.accept_block_expander(block_expander),
+            StatementKind::Return(expr) => expr.accept_block_expander(block_expander),
+            StatementKind::BlockTail(expr) => expr.accept_block_expander(block_expander),
+            StatementKind::ExpandedBlock(b) => b.accept_block_expander(block_expander),
         };
-        !self.is_expanded(block_expander)
+        !self.has_blocks_expanded(block_expander)
     }
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
         match &self.kind {
             StatementKind::Block(_) => false,
 
-            StatementKind::Initialisation(i) => i.value.is_expanded(block_expander),
-            StatementKind::Reassignment(r) => r.value.is_expanded(block_expander),
-            StatementKind::FunctionCall(call) => call.is_expanded(block_expander),
-            StatementKind::Return(expr) => expr.is_expanded(block_expander),
-            StatementKind::BlockTail(expr) => expr.is_expanded(block_expander),
-            StatementKind::ExpandedInitialisation(init) => init.is_expanded(block_expander),
-            StatementKind::SimpleInitialisation(sinit) => sinit.value.is_expanded(block_expander),
-            StatementKind::ExpandedBlock(b) => b.is_expanded(block_expander),
+            StatementKind::Initialisation(i) => i.has_blocks_expanded(block_expander),
+            StatementKind::Reassignment(r) => r.value.has_blocks_expanded(block_expander),
+            StatementKind::FunctionCall(call) => call.has_blocks_expanded(block_expander),
+            StatementKind::Return(expr) => expr.has_blocks_expanded(block_expander),
+            StatementKind::BlockTail(expr) => expr.has_blocks_expanded(block_expander),
+            StatementKind::ExpandedBlock(b) => b.has_blocks_expanded(block_expander),
         }
     }
 }
 impl AcceptsBlockExpander for Initialisation {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.has_blocks_expanded(block_expander) {
             return false;
         }
 
-        self.value.accept(block_expander);
-        !self.is_expanded(block_expander)
+        match &mut self.kind {
+            InitialisationKind::Packed(p) => {
+                p.value.accept_block_expander(block_expander);
+            }
+            InitialisationKind::PartiallyUnpacked(p) => {
+                p.temporary.value.accept_block_expander(block_expander);
+                for s in p.unpacked_assignments.iter_mut() {
+                    s.accept_block_expander(block_expander);
+                }
+            }
+        }
+
+        !self.has_blocks_expanded(block_expander)
     }
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
-        self.value.is_expanded(block_expander)
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        match &self.kind {
+            InitialisationKind::Packed(p) => p.value.has_blocks_expanded(block_expander),
+            InitialisationKind::PartiallyUnpacked(p) => {
+                p.temporary.value.has_blocks_expanded(block_expander)
+                    && p.unpacked_assignments
+                        .iter()
+                        .all(|s| s.has_blocks_expanded(block_expander))
+            }
+        }
     }
 }
 
 impl AcceptsBlockExpander for Expression {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.has_blocks_expanded(block_expander) {
             return false;
         }
 
@@ -112,12 +131,13 @@ impl AcceptsBlockExpander for Expression {
                 ));
                 true
             }
-            ExpressionKind::FuncCall(call) => call.accept(block_expander),
+            ExpressionKind::FuncCall(call) => call.accept_block_expander(block_expander),
             ExpressionKind::BinOpExpr(_, lhs, rhs) => {
-                lhs.accept(block_expander) || rhs.accept(block_expander)
+                lhs.accept_block_expander(block_expander)
+                    || rhs.accept_block_expander(block_expander)
             }
-            ExpressionKind::UnOpExpr(_, arg) => arg.accept(block_expander),
-            ExpressionKind::ExpandedBlock(block) => block.accept(block_expander),
+            ExpressionKind::UnOpExpr(_, arg) => arg.accept_block_expander(block_expander),
+            ExpressionKind::ExpandedBlock(block) => block.accept_block_expander(block_expander),
             ExpressionKind::Unit => false,
             ExpressionKind::IntegerLiteral(_) => false,
             ExpressionKind::BoolLiteral(_) => false,
@@ -127,133 +147,150 @@ impl AcceptsBlockExpander for Expression {
             ExpressionKind::MemberAccess(_, _) => false,
         };
 
-        !self.is_expanded(block_expander)
+        !self.has_blocks_expanded(block_expander)
     }
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
         match &self.kind {
             ExpressionKind::Block(_block) => false,
-            ExpressionKind::FuncCall(call) => call.is_expanded(block_expander),
+            ExpressionKind::FuncCall(call) => call.has_blocks_expanded(block_expander),
             ExpressionKind::BinOpExpr(_, lhs, rhs) => {
-                lhs.is_expanded(block_expander) && rhs.is_expanded(block_expander)
+                lhs.has_blocks_expanded(block_expander) && rhs.has_blocks_expanded(block_expander)
             }
-            ExpressionKind::UnOpExpr(_, arg) => arg.is_expanded(block_expander),
-            ExpressionKind::ExpandedBlock(block) => block.is_expanded(block_expander),
+            ExpressionKind::UnOpExpr(_, arg) => arg.has_blocks_expanded(block_expander),
+            ExpressionKind::ExpandedBlock(block) => block.has_blocks_expanded(block_expander),
             _ => true,
         }
     }
 }
 
-impl AcceptsBlockExpander for ExpandedInitialisation {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
-            return false;
-        }
-
-        self.temporary.value.accept(block_expander);
-        for assign in &mut self.unpacked_assignments {
-            assign.accept(block_expander);
-        }
-        !self.is_expanded(block_expander)
-    }
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
-        self.unpacked_assignments
-            .iter()
-            .all(|a| a.is_expanded(block_expander))
-    }
-}
-
 impl AcceptsBlockExpander for FunctionCall {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.has_blocks_expanded(block_expander) {
             return false;
         }
 
         for arg in self.args.iter_mut() {
-            arg.accept(block_expander);
+            arg.accept_block_expander(block_expander);
         }
 
-        !self.is_expanded(block_expander)
+        !self.has_blocks_expanded(block_expander)
     }
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
-        self.args.iter().all(|e| e.is_expanded(block_expander))
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.args
+            .iter()
+            .all(|e| e.has_blocks_expanded(block_expander))
     }
 }
 
 impl AcceptsBlockExpander for Function {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.has_blocks_expanded(block_expander) {
             return false;
         }
-        self.body.accept(block_expander);
-        !self.is_expanded(block_expander)
+        self.body.accept_block_expander(block_expander);
+        !self.has_blocks_expanded(block_expander)
     }
 
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
-        self.body.is_expanded(block_expander)
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.body.has_blocks_expanded(block_expander)
     }
 }
 
 impl AcceptsBlockExpander for StatementBlock {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.has_blocks_expanded(block_expander) {
             return false;
         }
 
         for stmt in self.statements.iter_mut() {
-            stmt.accept(block_expander);
+            stmt.accept_block_expander(block_expander);
         }
-        !self.is_expanded(block_expander)
+        !self.has_blocks_expanded(block_expander)
     }
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
         self.statements
             .iter()
-            .all(|s| s.is_expanded(block_expander))
+            .all(|s| s.has_blocks_expanded(block_expander))
     }
 }
 
 impl AcceptsBlockExpander for ExpandedBlockExpr {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.has_blocks_expanded(block_expander) {
             return false;
         }
-        self.last.accept(block_expander);
+        self.last.accept_block_expander(block_expander);
         for stmt in self.statements.iter_mut() {
             eprintln!("expanding stmt with id {}", stmt.id);
-            stmt.accept(block_expander);
+            stmt.accept_block_expander(block_expander);
         }
-        !self.is_expanded(block_expander)
+        !self.has_blocks_expanded(block_expander)
     }
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
-        self.last.is_expanded(block_expander)
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.last.has_blocks_expanded(block_expander)
             && self
                 .statements
                 .iter()
-                .all(|s| s.is_expanded(block_expander))
+                .all(|s| s.has_blocks_expanded(block_expander))
     }
 }
 
 impl AcceptsBlockExpander for Module {
-    fn accept(&mut self, block_expander: &mut NodeExpander) -> bool {
-        if self.is_expanded(block_expander) {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        if self.has_blocks_expanded(block_expander) {
             return false;
         }
 
         for func in self.functions.iter_mut() {
             eprintln!("expanding function with name {}", func.name);
-            func.accept(block_expander);
+            func.accept_block_expander(block_expander);
         }
-        !self.is_expanded(block_expander)
+        !self.has_blocks_expanded(block_expander)
     }
 
-    fn is_expanded(&self, block_expander: &mut NodeExpander) -> bool {
-        self.functions.iter().all(|f| f.is_expanded(block_expander))
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.functions
+            .iter()
+            .all(|f| f.has_blocks_expanded(block_expander))
+    }
+}
+
+impl AcceptsAssignmentSimplifier for Function {
+    fn accept_assignment_simplifier(&mut self, simplifier: &mut NodeExpander) -> bool {
+        self.body.accept_assignment_simplifier(simplifier)
+    }
+
+    fn has_assignments_unpacked(&self, simplifier: &mut NodeExpander) -> bool {
+        self.body.has_assignments_unpacked(simplifier)
+    }
+}
+
+impl AcceptsAssignmentSimplifier for Module {
+    fn accept_assignment_simplifier(&mut self, simplifier: &mut NodeExpander) -> bool {
+        for f in self.functions.iter_mut() {
+            f.accept_assignment_simplifier(simplifier);
+        }
+        // we do not simplify globs, as globs may only be simple assignments.
+        !self.has_assignments_unpacked(simplifier)
+    }
+    fn has_assignments_unpacked(&self, simplifier: &mut NodeExpander) -> bool {
+        self.functions
+            .iter()
+            .all(|f| f.has_assignments_unpacked(simplifier))
     }
 }
 
 impl Module {
     pub fn expand_blocks(mut self, block_expander: &mut NodeExpander) -> Module {
-        while self.accept(block_expander) {
-            eprintln!("expanding still...")
+        while self.accept_block_expander(block_expander) {
+            eprintln!("expanding blocks still...")
+        }
+        self
+    }
+
+    pub fn simplify_assignments(mut self, assignment_simplifier: &mut NodeExpander) -> Module {
+        while self.accept_assignment_simplifier(assignment_simplifier) {
+            eprintln!("simplifying assignments still...")
         }
         self
     }
@@ -378,7 +415,7 @@ impl NodeExpander {
     */
 
     /// Given a tuple-value to unpack,
-    /// generate a sequence of initializations that contain each member of the tuple-value:
+    /// generate a sequence of initializations that assign each member of the tuple-value:
     /// ```ignore
     /// tuple@(a,b) := label;
     ///
@@ -438,52 +475,112 @@ pub trait AcceptsAssignmentSimplifier {
     /// let mut expander = NodeExpander::new()
     /// while !ast.accept(&mut expander) {} // will always terminate
     /// ```
-    fn accept(&mut self, simplifier: &mut NodeExpander) -> bool;
-    fn is_expanded(&self, simplifier: &mut NodeExpander) -> bool;
+    fn accept_assignment_simplifier(&mut self, simplifier: &mut NodeExpander) -> bool;
+    fn has_assignments_unpacked(&self, simplifier: &mut NodeExpander) -> bool;
 }
 
 impl AcceptsAssignmentSimplifier for Initialisation {
-    fn accept(&mut self, simplifier: &mut NodeExpander) -> bool {
-        match self.kind {
-            InitialisationKind::Packed(p) => match p.assignee {
-                AssignmentPattern::Identifier(_) => false,
+    fn accept_assignment_simplifier(&mut self, simplifier: &mut NodeExpander) -> bool {
+        match &mut self.kind {
+            InitialisationKind::Packed(p) => match &p.assignee {
+                AssignmentPattern::Identifier(_) => {}
                 AssignmentPattern::Tuple(tup) => {
-                    let (id, label) = simplifier.label_unpack();
-                    let kind = UnpackedInitialisation {
+                    let (_id, label) = simplifier.label_unpack();
+                    let temporary = UnpackedInitialisation {
                         typ: p.typ.clone(),
                         assignee: label.clone(),
                         value: p.value.clone(),
                     };
-                    let temp = Initialisation {
-                        id, 
-                        kind: InitialisationKind::Unpacked(vec![kind])
+                    let label = Expression::ident(simplifier, label);
+                    let unpacked_assignments = simplifier.simplify_tuple(&tup, label);
+                    let partially_unpacked = PartiallyUnpackedInitialisation {
+                        temporary,
+                        unpacked_assignments,
                     };
-                    let mut unpackees =
-                        simplifier.simplify_tuple(&tup, Expression::ident(simplifier, label));
-                    todo!()
+                    self.kind = InitialisationKind::PartiallyUnpacked(partially_unpacked);
                 }
             },
-        }
-        !AcceptsAssignmentSimplifier::is_expanded(self, simplifier)
+
+            InitialisationKind::PartiallyUnpacked(p) => {
+                let inits = &mut p.unpacked_assignments;
+                for init in inits.iter_mut() {
+                    init.accept_assignment_simplifier(simplifier);
+                }
+            }
+        };
+        !self.has_assignments_unpacked(simplifier)
     }
 
-    fn is_expanded(&self, simplifier: &mut NodeExpander) -> bool {
-        match self.kind {
-            InitialisationKind::Unpacked(_) => true,
-            _ => false,
+    fn has_assignments_unpacked(&self, simplifier: &mut NodeExpander) -> bool {
+        match &self.kind {
+            InitialisationKind::PartiallyUnpacked(p) => p
+                .unpacked_assignments
+                .iter()
+                .all(|init| init.has_assignments_unpacked(simplifier)),
+            InitialisationKind::Packed(p) => matches!(p.assignee, AssignmentPattern::Identifier(_)),
         }
     }
 }
+
+impl AcceptsAssignmentSimplifier for StatementBlock {
+    fn accept_assignment_simplifier(&mut self, simplifier: &mut NodeExpander) -> bool {
+        for s in self.statements.iter_mut() {
+            s.accept_assignment_simplifier(simplifier);
+        }
+        !self.has_assignments_unpacked(simplifier)
+    }
+    fn has_assignments_unpacked(&self, simplifier: &mut NodeExpander) -> bool {
+        self.statements
+            .iter()
+            .all(|s| s.has_assignments_unpacked(simplifier))
+    }
+}
+
+impl AcceptsAssignmentSimplifier for ExpandedBlockExpr {
+    fn accept_assignment_simplifier(&mut self, simplifier: &mut NodeExpander) -> bool {
+        for s in self.statements.iter_mut() {
+            s.accept_assignment_simplifier(simplifier);
+        }
+        !self.has_assignments_unpacked(simplifier)
+    }
+    fn has_assignments_unpacked(&self, simplifier: &mut NodeExpander) -> bool {
+        self.statements
+            .iter()
+            .all(|s| s.has_assignments_unpacked(simplifier))
+    }
+}
+
 impl AcceptsAssignmentSimplifier for Statement {
-    fn accept(&mut self, tuple_namer: &mut NodeExpander) -> bool {
-        true
+    fn accept_assignment_simplifier(&mut self, simplifier: &mut NodeExpander) -> bool {
+        match &mut self.kind {
+            StatementKind::Initialisation(i) => i.accept_assignment_simplifier(simplifier),
+            StatementKind::Block(b) => b.accept_assignment_simplifier(simplifier),
+            StatementKind::ExpandedBlock(b) => b.accept_assignment_simplifier(simplifier),
+            _ => false,
+        }
+    }
+
+    fn has_assignments_unpacked(&self, simplifier: &mut NodeExpander) -> bool {
+        match &self.kind {
+            StatementKind::Initialisation(i) => i.has_assignments_unpacked(simplifier),
+            StatementKind::Block(b) => b.has_assignments_unpacked(simplifier),
+            StatementKind::ExpandedBlock(b) => b.has_assignments_unpacked(simplifier),
+            _ => true,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::zea::nodeexpansion::{AcceptsBlockExpander, NodeExpander};
-    use crate::zea::{Expression, ExpressionKind, Function, Module, StatementBlock, Type};
+    use crate::zea::nodeexpansion::{
+        AcceptsAssignmentSimplifier, AcceptsBlockExpander, NodeExpander,
+    };
+    use crate::zea::{
+        AssignmentPattern, Expression, ExpressionKind, Function, Initialisation,
+        InitialisationKind, Module, PackedInitialisation, Statement, StatementBlock, StatementKind,
+        Type,
+    };
+    use crate::PrettyAST;
 
     macro_rules! block {
         {} => {
@@ -540,20 +637,59 @@ mod tests {
             }
         }};
 
-        (init $name:ident := $val:expr) => {
+        (init $p:expr ;= $val:expr) => {
             {
                 use crate::zea::{AssignmentPattern,Initialisation,Statement,StatementKind};
             Statement {
                 id: 0,
                 kind: StatementKind::Initialisation(Initialisation {
                     id: 0,
-                    assignee: AssignmentPattern::Identifier(String::from(stringify!($name))),
+                    kind: InitialisationKind::Packed(
+                        PackedInitialisation {
+                    assignee: $p,
                     typ: None,
                     value: $val,
+                        }
+                    )
                 })
             }
         }};
     }
+
+    // generated by claude code, prompt:
+    // "can you make the pat macro a tt muncher
+    // that accepts things like (a,(b,c)) and converts it to a nested assignment pattern"
+    // + pat macro
+    macro_rules! pat {
+    // Single identifier — base case
+    ($i:ident) => {
+        AssignmentPattern::Identifier(String::from(stringify!($i)))
+    };
+    // Outer tuple — kick off the muncher with an empty accumulator
+    (($($t:tt)*)) => {
+        pat!(@munch [] $($t)*)
+    };
+    // Muncher: accumulator is complete, nothing left to consume
+    (@munch [$($acc:expr),*]) => {
+        AssignmentPattern::Tuple(vec![$($acc),*])
+    };
+    // Muncher: next item is a nested tuple, more items follow
+    (@munch [$($acc:expr),*] ($($inner:tt)*), $($rest:tt)*) => {
+        pat!(@munch [$($acc,)* pat!(($($inner)*))] $($rest)*)
+    };
+    // Muncher: next item is a nested tuple, nothing follows
+    (@munch [$($acc:expr),*] ($($inner:tt)*)) => {
+        pat!(@munch [$($acc,)* pat!(($($inner)*))])
+    };
+    // Muncher: next item is an identifier, more items follow
+    (@munch [$($acc:expr),*] $i:ident, $($rest:tt)*) => {
+        pat!(@munch [$($acc,)* pat!($i)] $($rest)*)
+    };
+    // Muncher: next item is an identifier, nothing follows
+    (@munch [$($acc:expr),*] $i:ident) => {
+        pat!(@munch [$($acc,)* pat!($i)])
+    };
+}
 
     macro_rules! expr {
         (ident $($l:tt)+) => {{
@@ -665,7 +801,7 @@ mod tests {
     #[test]
     fn test_expand_block() {
         let mut block_expander = NodeExpander::new();
-        let mut ast = zea_module! {
+        let ast = zea_module! {
             imports {}
             exports {}
             globs {}
@@ -678,18 +814,155 @@ mod tests {
 
         let ast = ast.expand_blocks(&mut block_expander);
         // eprintln!("{:?}", ast.functions[0]);
-        assert!(ast.is_expanded(&mut block_expander));
+        assert!(ast.has_blocks_expanded(&mut block_expander));
         let mut ast = expr!(block block! {
-            stmt!(init a := expr!(litint 3));
+            stmt!(init pat!(a) ;= expr!(litint 3));
             stmt!(tail expr!(ident a))
         });
-        let before = ast.clone();
-        ast.accept(&mut block_expander);
+        ast.accept_block_expander(&mut block_expander);
         let after = ast;
         let ExpressionKind::ExpandedBlock(expanded) = after.kind else {
             unreachable!()
         };
-        assert_eq!(expanded.statements, vec![stmt!(init a := expr!(litint 3))]);
+        assert_eq!(
+            expanded.statements,
+            vec![stmt!(init pat!(a) ;= expr!(litint 3))]
+        );
         assert_eq!(expanded.last, expr!(ident a));
+    }
+
+    fn wrap_in_module(init: Initialisation) -> Module {
+        Module {
+            id: 0,
+            imports: vec![],
+            exports: vec![],
+            globs: vec![],
+            functions: vec![Function {
+                id: 0,
+                name: "test".to_string(),
+                args: vec![],
+                returns: Type::Basic("Unit".to_string()),
+                body: StatementBlock {
+                    id: 0,
+                    statements: vec![Statement {
+                        id: 0,
+                        kind: StatementKind::Initialisation(init),
+                    }],
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn test_simple_ident_init_is_already_done() {
+        let mut simplifier = NodeExpander::new();
+
+        let stmt = stmt!(init pat!(a) ;= expr!(litint 1));
+        let StatementKind::Initialisation(ref init) = stmt.kind else {
+            unreachable!()
+        };
+
+        assert!(
+            init.has_assignments_unpacked(&mut simplifier),
+            "Packed(Identifier) should already be considered unpacked"
+        );
+    }
+
+    #[test]
+    fn test_single_level_tuple_unpack() {
+        let mut simplifier = NodeExpander::new();
+
+        let mut stmt = stmt!(init pat!((a, b)) ;= expr!(ident some_tuple));
+        let StatementKind::Initialisation(ref mut init) = stmt.kind else {
+            unreachable!()
+        };
+
+        assert!(
+            !init.has_assignments_unpacked(&mut simplifier),
+            "Tuple init should not be considered done before simplification"
+        );
+
+        init.accept_assignment_simplifier(&mut simplifier);
+
+        let InitialisationKind::PartiallyUnpacked(ref p) = init.kind else {
+            panic!(
+                "Expected PartiallyUnpacked after one pass, got {:?}",
+                init.kind
+            );
+        };
+
+        assert_eq!(p.temporary.assignee, "__unpack0");
+        assert_eq!(p.unpacked_assignments.len(), 2);
+
+        for sub in &p.unpacked_assignments {
+            let InitialisationKind::Packed(ref packed) = sub.kind else {
+                panic!("Expected Packed sub-assignment");
+            };
+            assert!(matches!(packed.assignee, AssignmentPattern::Identifier(_)));
+            assert!(matches!(
+                packed.value.kind,
+                ExpressionKind::MemberAccess(_, _)
+            ));
+        }
+
+        assert!(init.has_assignments_unpacked(&mut simplifier));
+    }
+
+    #[test]
+    fn test_nested_tuple_requires_two_passes() {
+        let mut simplifier = NodeExpander::new();
+
+        // ((a, b), c) := nested_tuple
+        let mut stmt = stmt!(init pat!(((a, b), c)) ;= expr!(ident nested_tuple));
+        let StatementKind::Initialisation(ref mut init) = stmt.kind else {
+            unreachable!()
+        };
+
+        let changed = init.accept_assignment_simplifier(&mut simplifier);
+        eprintln!("\nafter p1:\n{}", init.pretty_print(0));
+        assert!(changed, "First pass should report a change");
+        assert!(
+            !init.has_assignments_unpacked(&mut simplifier),
+            "Inner tuple should still need unpacking after first pass"
+        );
+
+        let changed = init.accept_assignment_simplifier(&mut simplifier);
+        eprintln!("\nafter p2:\n{}", init.pretty_print(0));
+        assert!(changed, "Second pass should report a change");
+        assert!(
+            init.has_assignments_unpacked(&mut simplifier),
+            "Should be fully done after second pass"
+        );
+    }
+
+    #[test]
+    fn test_module_simplify_assignments_end_to_end() {
+        let mut simplifier = NodeExpander::new();
+
+        let stmt = stmt!(init pat!((a, b, c)) ;= expr!(ident v));
+        let StatementKind::Initialisation(init) = stmt.kind else {
+            unreachable!()
+        };
+
+        let module = wrap_in_module(init).simplify_assignments(&mut simplifier);
+
+        assert!(module.has_assignments_unpacked(&mut simplifier));
+
+        for func in &module.functions {
+            for stmt in &func.body.statements {
+                let StatementKind::Initialisation(ref i) = stmt.kind else {
+                    continue;
+                };
+                let InitialisationKind::PartiallyUnpacked(ref p) = i.kind else {
+                    panic!("Expected PartiallyUnpacked at top level");
+                };
+                for sub in &p.unpacked_assignments {
+                    assert!(
+                        sub.has_assignments_unpacked(&mut simplifier),
+                        "All sub-assignments should be fully simplified"
+                    );
+                }
+            }
+        }
     }
 }

@@ -103,6 +103,20 @@ impl PrettyAST for StatementBlock {
             .join(";\n")
     }
 }
+
+impl PrettyAST for ExpandedBlockExpr {
+    fn pretty_print(&self, depth: usize) -> String {
+        self.statements
+            .iter()
+            .map(|s| s.pretty_print(depth + 1))
+            .collect::<Vec<_>>()
+            .join(";\n")
+            + "\n"
+            + &self.last.pretty_print(depth)
+            + ";\n"
+    }
+}
+
 impl PrettyAST for Statement {
     fn pretty_print(&self, depth: usize) -> String {
         match &self.kind {
@@ -117,19 +131,61 @@ impl PrettyAST for Statement {
 }
 impl PrettyAST for Initialisation {
     fn pretty_print(&self, depth: usize) -> String {
+        match &self.kind {
+            InitialisationKind::Packed(p) => p.pretty_print(depth),
+            InitialisationKind::PartiallyUnpacked(p) => p.pretty_print(depth),
+        }
+    }
+}
+
+impl PrettyAST for PackedInitialisation {
+    fn pretty_print(&self, depth: usize) -> String {
         format!(
-            "INIT(\n\
-        {0}PATTERN:\n\
-        {1}\n\
-        {0}TYPE {2:?}\n\
-        {0}VALUE:\n\
-        {3}\n\
-        {0})",
+            "{0}P_INIT(\n\
+        {1}PATTERN:\n\
+        {2}{3}\n\
+        {1}TYPE {4:?}\n\
+        {1}VALUE:\n\
+        {1}{5}\n\
+        {0})\n",
             indent!(depth),
-            self.assignee.pretty_print(depth),
+            indent!(depth+1),
+            indent!(depth+2),
+            self.assignee,
             self.typ,
             self.value.pretty_print(depth + 1)
         )
+    }
+}
+
+impl PrettyAST for UnpackedInitialisation {
+    fn pretty_print(&self, depth: usize) -> String {
+        format!(
+            "{0}UNP_INIT(\n\
+        {0}PATTERN:\n\
+        {1}{2}\n\
+        {0}TYPE {3:?}\n\
+        {0}VALUE:\n\
+        {1}{4}\n\
+        {0})\n",
+            indent!(depth),
+            indent!(depth+1),
+            self.assignee,
+            self.typ,
+            self.value.pretty_print(depth + 1)
+        )
+    }
+}
+
+impl PrettyAST for PartiallyUnpackedInitialisation {
+    fn pretty_print(&self, depth: usize) -> String {
+        let unpacks: Vec<String> = self
+            .unpacked_assignments
+            .iter()
+            .map(|assign| assign.pretty_print(depth+1))
+            .collect();
+        let unpacks = unpacks.join("\n");
+        self.temporary.pretty_print(depth) + "\n" + &unpacks + "\n"
     }
 }
 
@@ -200,6 +256,12 @@ impl PrettyAST for Expression {
                     Self::depth_str(depth + 1),
                 )
             }
+            ExpressionKind::MemberAccess(e, m) => {
+                format!(
+                    "{}.{m}",
+                    e.pretty_print(depth)
+                )
+            }
             _ => todo!("pretty print expression of kind {:?}", self.kind),
         }
     }
@@ -209,6 +271,24 @@ impl PrettyAST for Expression {
 pub struct Initialisation {
     pub id: usize,
     pub kind: InitialisationKind,
+}
+
+impl Initialisation {
+    pub fn packed(
+        id: usize,
+        typ: Option<Type>,
+        assignee: AssignmentPattern,
+        value: Expression,
+    ) -> Self {
+        Self {
+            id,
+            kind: InitialisationKind::Packed(PackedInitialisation {
+                typ,
+                assignee,
+                value,
+            }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -229,13 +309,12 @@ pub struct UnpackedInitialisation {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PartiallyUnpackedInitialisation {
     pub temporary: UnpackedInitialisation,
-    pub unpacked_assignments: Vec<PartiallyUnpackedInitialisation>,
+    pub unpacked_assignments: Vec<Initialisation>,
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum InitialisationKind {
     Packed(PackedInitialisation),
     PartiallyUnpacked(PartiallyUnpackedInitialisation),
-    Unpacked(Vec<UnpackedInitialisation>),
 }
 
 #[derive(Debug, Clone, HashEqById)]

@@ -68,20 +68,20 @@ ModSymbolsHelper: Vec<ModuleItem> = {
 
 pub Init: Initialisation = {
     <p:AssignPat> ":" "=" <val:Expr> ";" => {
-    Initialisation {
-        id: generator.get(),
-        typ: None,
-        assignee: p,
-        value: val
-    }
+    Initialisation::packed (
+        generator.get(),
+        None,
+        p,
+        val
+    )
  },
     <p:AssignPat> ":" <typ:TType> "=" <val:Expr> ";" => {
-    Initialisation {
-            id: generator.get(),
-            typ: Some(typ),
-            assignee: p,
-            value: val
-        }
+    Initialisation::packed (
+            generator.get(),
+            Some(typ),
+            p,
+            val
+        )
  },
 }
 
