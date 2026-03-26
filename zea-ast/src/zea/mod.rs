@@ -1,6 +1,8 @@
 #![allow(dead_code, unused_imports)]
 mod nodeexpansion;
-pub use nodeexpansion::NodeExpander;
+pub use crate::zea::nodeexpansion::NodeExpander;
+use crate::PrettyAST;
+use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_macros::{HashEqById, VariantToStr};
 
@@ -20,24 +22,36 @@ macro_rules! indent {
 }
 impl PrettyAST for Module {
     fn pretty_print(&self, depth: usize) -> String {
+        let imports = if self.imports.is_empty() {
+            "IMPORTS NOTHING"
+        } else {
+            &format!(
+                "IMPORTS(\n{}\n)",
+                &self.imports.join(&(indent!(depth + 1) + "\n"))
+            )
+        };
+
+        let exports = if self.imports.is_empty() {
+            "EXPORTS NOTHING"
+        } else {
+            &format!(
+                "EXPORTS(\n{}\n)",
+                &self.imports.join(&(indent!(depth + 1) + "\n"))
+            )
+        };
+
         format!(
             "MODULE(\n\
-        {0}IMPORTS(\n\
+        {0}{imports}\n\
+        {0}{exports}\n\
+        {0}GLOBS(\n\
         {1}\
         \n{0})\n\
-        {0}EXPORTS(\n\
-        {2}\
-        \n{0})\n\
-        {0}GLOBS(\n\
-        {3}\
-        \n{0})\n\
         {0}FUNCS(\n\
-        {4}\
+        {2}\
         \n{0})\n\
         )",
             indent!(depth),
-            indent!(depth + 1) + &self.imports.join(&(indent!(depth + 1) + "\n")),
-            indent!(depth + 1) + &self.exports.join(&(indent!(depth + 1) + "\n")),
             indent!(depth + 1)
                 + &self
                     .globs
@@ -150,8 +164,8 @@ impl PrettyAST for PackedInitialisation {
         {1}{5}\n\
         {0})\n",
             indent!(depth),
-            indent!(depth+1),
-            indent!(depth+2),
+            indent!(depth + 1),
+            indent!(depth + 2),
             self.assignee,
             self.typ,
             self.value.pretty_print(depth + 1)
@@ -170,7 +184,7 @@ impl PrettyAST for UnpackedInitialisation {
         {1}{4}\n\
         {0})\n",
             indent!(depth),
-            indent!(depth+1),
+            indent!(depth + 1),
             self.assignee,
             self.typ,
             self.value.pretty_print(depth + 1)
@@ -183,7 +197,7 @@ impl PrettyAST for PartiallyUnpackedInitialisation {
         let unpacks: Vec<String> = self
             .unpacked_assignments
             .iter()
-            .map(|assign| assign.pretty_print(depth+1))
+            .map(|assign| assign.pretty_print(depth + 1))
             .collect();
         let unpacks = unpacks.join("\n");
         self.temporary.pretty_print(depth) + "\n" + &unpacks + "\n"
@@ -258,10 +272,7 @@ impl PrettyAST for Expression {
                 )
             }
             ExpressionKind::MemberAccess(e, m) => {
-                format!(
-                    "{}.{m}",
-                    e.pretty_print(depth)
-                )
+                format!("{}.{m}", e.pretty_print(depth))
             }
             _ => todo!("pretty print expression of kind {:?}", self.kind),
         }
@@ -543,10 +554,6 @@ impl std::fmt::Display for AssignmentPattern {
         write!(f, "{}", s)
     }
 }
-
-use crate::zea::nodeexpansion::NodeExpander;
-use crate::PrettyAST;
-use std::fmt::{Debug, Formatter};
 
 /// The Zea named Struct type / product type
 pub struct StructDefinition {
