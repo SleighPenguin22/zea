@@ -22,51 +22,45 @@ macro_rules! indent {
 }
 impl PrettyAST for Module {
     fn pretty_print(&self, depth: usize) -> String {
+        let mut buffer = String::from("Module(\n");
         let imports = if self.imports.is_empty() {
-            "IMPORTS NOTHING"
+            indent!(depth + 1) + "IMPORTS NOTHING\n"
         } else {
-            &format!(
-                "IMPORTS(\n{}\n)",
-                &self.imports.join(&(indent!(depth + 1) + "\n"))
-            )
+            let mut imp_buffer = indent!(depth + 1) + "IMPORTS(\n";
+            for e in self.imports.iter() {
+                imp_buffer += &format!("{}{e}\n", indent!(depth + 2));
+            }
+            imp_buffer += &(indent!(depth + 1) + ")\n");
+            imp_buffer
         };
+        buffer += &imports;
 
-        let exports = if self.imports.is_empty() {
-            "EXPORTS NOTHING"
+        let exports = if self.exports.is_empty() {
+            indent!(depth + 1) + "EXPORTS NOTHING\n"
         } else {
-            &format!(
-                "EXPORTS(\n{}\n)",
-                &self.imports.join(&(indent!(depth + 1) + "\n"))
-            )
+            let mut exp_buffer = indent!(depth + 1) + "EXPORTS(\n";
+            for e in self.exports.iter() {
+                exp_buffer += &format!("{}{e}\n", indent!(depth + 2));
+            }
+            exp_buffer += &(indent!(depth + 1) + ")\n");
+            exp_buffer
         };
+        buffer += &exports;
 
-        format!(
-            "MODULE(\n\
-        {0}{imports}\n\
-        {0}{exports}\n\
-        {0}GLOBS(\n\
-        {1}\
-        \n{0})\n\
-        {0}FUNCS(\n\
-        {2}\
-        \n{0})\n\
-        )",
-            indent!(depth),
-            indent!(depth + 1)
-                + &self
-                    .globs
-                    .iter()
-                    .map(|glob| glob.pretty_print(depth))
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            indent!(depth + 1)
-                + &self
-                    .functions
-                    .iter()
-                    .map(|f| f.pretty_print(depth))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-        )
+        buffer += &(indent!(depth + 1) + "GLOBS(\n");
+        for glob in self.globs.iter() {
+            buffer += &format!("{}{}\n", indent!(depth + 2), glob.pretty_print(depth + 2));
+        }
+        buffer += &(indent!(depth + 1) + ")\n");
+
+        buffer += &(indent!(depth + 1) + "FUNCS(\n");
+        for func in self.functions.iter() {
+            buffer += &format!("{}\n", func.pretty_print(depth + 2));
+        }
+        buffer += &(indent!(depth + 1) + ")\n");
+
+        buffer += &(indent!(depth) + ")\n");
+        buffer
     }
 }
 
@@ -93,13 +87,33 @@ pub struct Function {
     pub body: StatementBlock,
 }
 
+#[derive(Debug, Clone, HashEqById)]
+pub struct HoistedFunctionSignature {
+    pub id: usize,
+    pub name: String,
+    pub args: Vec<TypedIdentifier>,
+    pub returns: Type,
+}
+
+impl From<Function> for HoistedFunctionSignature {
+    fn from(value: Function) -> Self {
+        HoistedFunctionSignature {
+            id: value.id,
+            name: value.name,
+            args: value.args,
+            returns: value.returns,
+        }
+    }
+}
+
 impl PrettyAST for Function {
     fn pretty_print(&self, depth: usize) -> String {
         format!(
-            "{1}{2:?} -> {3:?}\n\
-            {0}BODY {{\n\
-            {4}
-            \n{0}}}",
+            "{0}{2}{3:?} -> {4:?}\n\
+            {1}BODY {{\n\
+            {5}\
+            {1}}}",
+            indent!(depth),
             indent!(depth + 1),
             self.name,
             self.args,
@@ -111,24 +125,26 @@ impl PrettyAST for Function {
 
 impl PrettyAST for StatementBlock {
     fn pretty_print(&self, depth: usize) -> String {
-        self.statements
-            .iter()
-            .map(|s| s.pretty_print(depth + 1))
-            .collect::<Vec<_>>()
-            .join(";\n")
+        let mut buffer = String::new();
+
+        for s in self.statements.iter() {
+            buffer += &format!("{}{};\n", indent!(depth), s.pretty_print(depth));
+        }
+
+        buffer
     }
 }
 
 impl PrettyAST for ExpandedBlockExpr {
     fn pretty_print(&self, depth: usize) -> String {
-        self.statements
-            .iter()
-            .map(|s| s.pretty_print(depth + 1))
-            .collect::<Vec<_>>()
-            .join(";\n")
-            + "\n"
-            + &self.last.pretty_print(depth)
-            + ";\n"
+        let mut buffer = String::new();
+
+        for s in self.statements.iter() {
+            buffer += &format!("{}{};\n", indent!(depth), s.pretty_print(depth));
+        }
+        buffer += &format!("{}{};\n", indent!(depth), self.last.pretty_print(depth));
+
+        buffer
     }
 }
 
@@ -139,7 +155,9 @@ impl PrettyAST for Statement {
                 format!("{}RETURN({})", indent!(depth), e.pretty_print(depth))
             }
             StatementKind::Initialisation(i) => i.pretty_print(depth),
-            StatementKind::BlockTail(e) => indent!(depth) + &e.pretty_print(depth),
+            StatementKind::BlockTail(e) => {
+                format!("{}TAIL({})", indent!(depth), e.pretty_print(depth))
+            }
             _ => todo!("pretty print statement with kind {:?}", self.kind),
         }
     }
@@ -161,8 +179,8 @@ impl PrettyAST for PackedInitialisation {
         {2}{3}\n\
         {1}TYPE {4:?}\n\
         {1}VALUE:\n\
-        {1}{5}\n\
-        {0})\n",
+        {2}{5}\n\
+        {0})P_INIT",
             indent!(depth),
             indent!(depth + 1),
             indent!(depth + 2),
@@ -177,14 +195,15 @@ impl PrettyAST for UnpackedInitialisation {
     fn pretty_print(&self, depth: usize) -> String {
         format!(
             "{0}UNP_INIT(\n\
-        {0}PATTERN:\n\
-        {1}{2}\n\
-        {0}TYPE {3:?}\n\
-        {0}VALUE:\n\
-        {1}{4}\n\
-        {0})\n",
+        {1}PATTERN:\n\
+        {2}{3}\n\
+        {1}TYPE {4:?}\n\
+        {1}VALUE:\n\
+        {2}{5}\n\
+        {0})UNP_INIT",
             indent!(depth),
             indent!(depth + 1),
+            indent!(depth + 2),
             self.assignee,
             self.typ,
             self.value.pretty_print(depth + 1)
@@ -194,13 +213,12 @@ impl PrettyAST for UnpackedInitialisation {
 
 impl PrettyAST for PartiallyUnpackedInitialisation {
     fn pretty_print(&self, depth: usize) -> String {
-        let unpacks: Vec<String> = self
-            .unpacked_assignments
-            .iter()
-            .map(|assign| assign.pretty_print(depth + 1))
-            .collect();
-        let unpacks = unpacks.join("\n");
-        self.temporary.pretty_print(depth) + "\n" + &unpacks + "\n"
+        let mut buffer = self.temporary.pretty_print(depth);
+        buffer += "\n";
+        for u in self.unpacked_assignments.iter() {
+            buffer += &format!("{}\n", u.pretty_print(depth + 1));
+        }
+        buffer
     }
 }
 
@@ -255,24 +273,25 @@ impl PrettyAST for Expression {
             ExpressionKind::FloatLiteral(i) => format!("Float({i})"),
             ExpressionKind::BinOpExpr(op, l, r) => {
                 format!(
-                    "{op:?}(\n{}{}\n{}{}\n{})",
-                    Self::depth_str(depth + 1),
+                    "{op:?}(\n{0}{1}\n{0}{2}\n{0})",
+                    indent!(depth + 1),
                     l.pretty_print(depth + 1),
-                    Self::depth_str(depth + 1),
                     r.pretty_print(depth + 1),
-                    Self::depth_str(depth + 1),
                 )
             }
             ExpressionKind::UnOpExpr(op, arg) => {
                 format!(
-                    "{op:?}(\n{}{}\n{})",
-                    Self::depth_str(depth + 1),
+                    "{op:?}(\n{0}{1}\n{0})",
+                    indent!(depth + 1),
                     arg.pretty_print(depth + 1),
-                    Self::depth_str(depth + 1),
                 )
             }
             ExpressionKind::MemberAccess(e, m) => {
-                format!("{}.{m}", e.pretty_print(depth))
+                format!(
+                    "MEMBER(\n{0}{1}\n{0}{m})",
+                    indent!(depth + 1),
+                    e.pretty_print(depth)
+                )
             }
             _ => todo!("pretty print expression of kind {:?}", self.kind),
         }

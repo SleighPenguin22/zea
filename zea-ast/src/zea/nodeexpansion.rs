@@ -2,11 +2,11 @@
 
 use crate::zea::{
     AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
-    Initialisation, InitialisationKind, Module, PackedInitialisation,
-    PartiallyUnpackedInitialisation, Statement, StatementBlock, StatementKind,
-    UnpackedInitialisation,
+    HoistedFunctionSignature, Initialisation, InitialisationKind, Module, PackedInitialisation,
+    PartiallyUnpackedInitialisation, Statement, StatementBlock, StatementKind, StructDefinition,
+    TypedIdentifier, UnpackedInitialisation,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// This visitor will be called after each of the expansion-visitors
 /// to ensure a correct AST before moving on to static analysis.
@@ -295,10 +295,15 @@ impl Module {
         self
     }
 }
+
 #[derive(Default)]
 pub struct NodeExpander {
     labeler: usize,
-    // expanded_nodes: HashMap<usize, bool>,
+    hoisted_global_decls: HashSet<HoistedFunctionSignature>,
+    /// All the types needed for a
+    hoisted_global_types: HashSet<StructDefinition>,
+    /// All the hoisted variable declarations within a function (blocks as expressions)
+    hoisted_local_function_decls: HashMap<HoistedFunctionSignature, Vec<TypedIdentifier>>,
 }
 
 /// Tranform some node into a given variant, and label it.
@@ -344,75 +349,6 @@ impl NodeExpander {
             last,
         }
     }
-
-    // pub fn expand_func_body(&mut self, func: &mut Function) -> ExpandedBlockExpr {
-    //     let body = &mut func.body;
-    //     let (statements, last) = match body.statements.last() {
-    //         Some(Statement {
-    //             kind: StatementKind::Return(_),
-    //             ..
-    //         }) => {
-    //             let tail = body.statements.last().cloned().unwrap();
-    //             let StatementKind::Return(e) = tail.kind else {
-    //                 unreachable!()
-    //             };
-    //             (body.statements.clone(), e)
-    //         }
-    //         _ => (body.statements.clone(), Expression::unit(self.label())),
-    //     };
-    //
-    //     ExpandedBlockExpr {
-    //         id: self.label(),
-    //         statements,
-    //         last,
-    //     }
-    // }
-
-    // pub fn expand_statement(&mut self, statement: Statement) -> Statement {
-    //     let kind = match statement.kind {
-    //         StatementKind::Block(b) => StatementKind::ExpandedBlock(self.expand_expr_block(&b)),
-    //         StatementKind::Initialisation(assignment) => {
-    //             StatementKind::ExpandedInitialisation(self.expand_assignment(assignment))
-    //         }
-    //         _ => return statement,
-    //     };
-    //     Statement {
-    //         id: self.label(),
-    //         kind,
-    //     }
-    // }
-    //
-    // pub fn expand_expression(&mut self, expression: Expression) -> Expression {
-    //     let kind = match expression.kind {
-    //         ExpressionKind::Block(block) => {
-    //             ExpressionKind::ExpandedBlock(Box::new(self.expand_expr_block(&block)))
-    //         }
-    //         ref _other => return expression,
-    //     };
-    //     Expression {
-    //         id: self.label(),
-    //         kind,
-    //     }
-    // }
-
-    /*
-    (a,b) = c
-
-    __u = c;
-    a = __u.0;
-    b = __u.1;
-
-    ((a,b),c) = d;
-    __0 = d;
-    (a,b) = d.0;
-       __1 = __0;
-       a = __1.0;
-       b = __1.1;
-    c = d.1;
-
-
-
-    */
 
     /// Given a tuple-value to unpack,
     /// generate a sequence of initializations that assign each member of the tuple-value:
