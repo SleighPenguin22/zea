@@ -1,5 +1,6 @@
 #![allow(dead_code, unused_imports)]
 mod nodeexpansion;
+pub use nodeexpansion::NodeExpander;
 use std::hash::{Hash, Hasher};
 use zea_macros::{HashEqById, VariantToStr};
 
