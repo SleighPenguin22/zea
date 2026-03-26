@@ -36,7 +36,7 @@ fn square(x: U32) -> U32 {
 
 fn read-to-string(path: String) -> *String {
     // option type and early return
-    f : File = fs:open(path) ?> nil; 
+    f : File = fs:open(path) else return nil; 
     buffer := String:new();
     fs:drain-into!(buffer, f);
     buffer
@@ -60,7 +60,7 @@ fn is-even?(x: U32) -> Bool {
 // Bangs are encouraged for mutating functions,
 // Annotating the parameters that get mutated
 fn extend!(a!: [I32], b: [I32]) -> [I32] {
-    [I32]:extend-capacity-by!(b.len, a!)!;
+    [I32]:extend-capacity-by!(b.len, a!);
     [I32]:copy-into!(a!, b);
     a!
 }

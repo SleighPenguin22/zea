@@ -539,7 +539,7 @@ mod tests {
     #[test]
     fn test_expand_block() {
         let mut block_expander = NodeExpander::new();
-        let mut ast = zea_module! {
+        let ast = zea_module! {
             imports {}
             exports {}
             globs {}
@@ -557,7 +557,6 @@ mod tests {
             stmt!(init a := expr!(litint 3));
             stmt!(tail expr!(ident a))
         });
-        let before = ast.clone();
         ast.accept(&mut block_expander);
         let after = ast;
         let ExpressionKind::ExpandedBlock(expanded) = after.kind else {
