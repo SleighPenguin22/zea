@@ -22,44 +22,42 @@ macro_rules! indent {
 }
 impl PrettyAST for Module {
     fn pretty_print(&self, depth: usize) -> String {
-        let mut buffer = String::from("Module(\n");
+        let mut buffer = "Module(\n".pretty_print(depth);
         let imports = if self.imports.is_empty() {
-            indent!(depth + 1) + "IMPORTS NOTHING\n"
+            "#IMPORTS NOTHING\n".pretty_print(depth + 1)
         } else {
-            let mut imp_buffer = indent!(depth + 1) + "IMPORTS(\n";
+            let mut imp_buffer = "#IMPORTS".pretty_print(depth + 1);
             for e in self.imports.iter() {
-                imp_buffer += &format!("{}{e}\n", indent!(depth + 2));
+                imp_buffer += &e.pretty_print(depth + 2);
             }
-            imp_buffer += &(indent!(depth + 1) + ")\n");
             imp_buffer
         };
         buffer += &imports;
 
         let exports = if self.exports.is_empty() {
-            indent!(depth + 1) + "EXPORTS NOTHING\n"
+            "#EXPORTS NOTHING\n".pretty_print(depth + 1)
         } else {
-            let mut exp_buffer = indent!(depth + 1) + "EXPORTS(\n";
+            let mut exp_buffer = "#EXPORTS".pretty_print(depth + 1);
             for e in self.exports.iter() {
-                exp_buffer += &format!("{}{e}\n", indent!(depth + 2));
+                exp_buffer += &e.pretty_print(depth + 1);
             }
-            exp_buffer += &(indent!(depth + 1) + ")\n");
             exp_buffer
         };
         buffer += &exports;
 
-        buffer += &(indent!(depth + 1) + "GLOBS(\n");
+        buffer += &"#GLOBS".pretty_print(depth + 1);
         for glob in self.globs.iter() {
-            buffer += &format!("{}{}\n", indent!(depth + 2), glob.pretty_print(depth + 2));
+            buffer += &glob.pretty_print(depth + 2);
         }
-        buffer += &(indent!(depth + 1) + ")\n");
+        buffer += &"/#GLOBS".pretty_print(depth + 1);
 
-        buffer += &(indent!(depth + 1) + "FUNCS(\n");
+        buffer += &"#FUNCS".pretty_print(depth + 1);
         for func in self.functions.iter() {
-            buffer += &format!("{}\n", func.pretty_print(depth + 2));
+            buffer += &func.pretty_print(depth + 2);
         }
-        buffer += &(indent!(depth + 1) + ")\n");
+        buffer += &"/#FUNCS\n".pretty_print(depth + 1);
 
-        buffer += &(indent!(depth) + ")\n");
+        buffer += &"/MODULE".pretty_print(depth);
         buffer
     }
 }
@@ -110,26 +108,28 @@ impl PrettyAST for Function {
     fn pretty_print(&self, depth: usize) -> String {
         format!(
             "{0}{2}{3:?} -> {4:?}\n\
-            {1}BODY {{\n\
+            {1}BODY\n\
             {5}\
-            {1}}}",
+            {1}/BODY\n\
+            {0}/FUNC {2}\n",
             indent!(depth),
             indent!(depth + 1),
             self.name,
             self.args,
             self.returns,
-            self.body.pretty_print(depth + 1)
+            self.body.pretty_print(depth + 2)
         )
     }
 }
 
 impl PrettyAST for StatementBlock {
     fn pretty_print(&self, depth: usize) -> String {
-        let mut buffer = String::new();
+        let mut buffer = indent!(depth) + "BLOCK\n";
 
         for s in self.statements.iter() {
-            buffer += &format!("{}{};\n", indent!(depth), s.pretty_print(depth));
+            buffer += &s.pretty_print(depth + 1);
         }
+        buffer += &"/BLOCK\n".pretty_print(depth);
 
         buffer
     }
@@ -137,12 +137,14 @@ impl PrettyAST for StatementBlock {
 
 impl PrettyAST for ExpandedBlockExpr {
     fn pretty_print(&self, depth: usize) -> String {
-        let mut buffer = String::new();
+        let mut buffer = "BLOCK\n".pretty_print(depth);
 
         for s in self.statements.iter() {
-            buffer += &format!("{}{};\n", indent!(depth), s.pretty_print(depth));
+            buffer += &format!("{}STMT\n{}", indent!(depth), s.pretty_print(depth + 1));
         }
-        buffer += &format!("{}{};\n", indent!(depth), self.last.pretty_print(depth));
+        buffer += &self.last.pretty_print(depth + 1);
+
+        buffer += &"/BLOCK\n".pretty_print(depth);
 
         buffer
     }
@@ -152,11 +154,11 @@ impl PrettyAST for Statement {
     fn pretty_print(&self, depth: usize) -> String {
         match &self.kind {
             StatementKind::Return(e) => {
-                format!("{}RETURN({})", indent!(depth), e.pretty_print(depth))
+                format!("{}RETURN\n{}", indent!(depth), e.pretty_print(depth + 1))
             }
             StatementKind::Initialisation(i) => i.pretty_print(depth),
             StatementKind::BlockTail(e) => {
-                format!("{}TAIL({})", indent!(depth), e.pretty_print(depth))
+                format!("{}TAIL\n{}", indent!(depth), e.pretty_print(depth + 1))
             }
             _ => todo!("pretty print statement with kind {:?}", self.kind),
         }
@@ -174,20 +176,47 @@ impl PrettyAST for Initialisation {
 impl PrettyAST for PackedInitialisation {
     fn pretty_print(&self, depth: usize) -> String {
         format!(
-            "{0}P_INIT(\n\
-        {1}PATTERN:\n\
-        {2}{3}\n\
-        {1}TYPE {4:?}\n\
-        {1}VALUE:\n\
-        {2}{5}\n\
-        {0})P_INIT",
+            "{0}P_INIT\n\
+        {1}#PATTERN:\n\
+        {2}\n\
+        {1}#TYPE\n\
+        {3}\n\
+        {1}#VALUE:\n\
+        {4}\n\
+        {0}/P_INIT\n",
             indent!(depth),
             indent!(depth + 1),
-            indent!(depth + 2),
-            self.assignee,
-            self.typ,
-            self.value.pretty_print(depth + 1)
+            self.assignee.pretty_print(depth + 2),
+            self.typ.pretty_print(depth + 2),
+            self.value.pretty_print(depth + 2)
         )
+    }
+}
+
+impl PrettyAST for String {
+    fn pretty_print(&self, depth: usize) -> String {
+        indent!(depth) + self + "\n"
+    }
+}
+
+impl<'a> PrettyAST for &'a str {
+    fn pretty_print(&self, depth: usize) -> String {
+        indent!(depth) + self + "\n"
+    }
+}
+
+impl PrettyAST for Type {
+    fn pretty_print(&self, depth: usize) -> String {
+        format!("{:?}\n", self).pretty_print(depth)
+    }
+}
+
+impl PrettyAST for Option<Type> {
+    fn pretty_print(&self, depth: usize) -> String {
+        match self {
+            None => String::from("TO BE INFERRED").pretty_print(depth),
+            Some(t) => t.pretty_print(depth),
+        }
     }
 }
 
@@ -195,18 +224,18 @@ impl PrettyAST for UnpackedInitialisation {
     fn pretty_print(&self, depth: usize) -> String {
         format!(
             "{0}UNP_INIT(\n\
-        {1}PATTERN:\n\
-        {2}{3}\n\
-        {1}TYPE {4:?}\n\
-        {1}VALUE:\n\
-        {2}{5}\n\
-        {0})UNP_INIT",
+        {1}#PATTERN:\n\
+        {2}\
+        {1}#TYPE\n\
+        {3}\
+        {1}#VALUE:\n\
+        {4}\
+        {0}/UNP_INIT\n",
             indent!(depth),
             indent!(depth + 1),
-            indent!(depth + 2),
-            self.assignee,
-            self.typ,
-            self.value.pretty_print(depth + 1)
+            self.assignee.pretty_print(depth + 1),
+            self.typ.pretty_print(depth + 2),
+            self.value.pretty_print(depth + 2)
         )
     }
 }
@@ -214,9 +243,8 @@ impl PrettyAST for UnpackedInitialisation {
 impl PrettyAST for PartiallyUnpackedInitialisation {
     fn pretty_print(&self, depth: usize) -> String {
         let mut buffer = self.temporary.pretty_print(depth);
-        buffer += "\n";
         for u in self.unpacked_assignments.iter() {
-            buffer += &format!("{}\n", u.pretty_print(depth + 1));
+            buffer += &u.pretty_print(depth + 1);
         }
         buffer
     }
@@ -268,29 +296,30 @@ impl PrettyAST for Expression {
     fn pretty_print(&self, depth: usize) -> String {
         let kind_str = self.kind.variant_as_str();
         match &self.kind {
-            ExpressionKind::Ident(i) => format!("{kind_str}({i})"),
-            ExpressionKind::IntegerLiteral(i) => format!("Int({i})"),
-            ExpressionKind::FloatLiteral(i) => format!("Float({i})"),
+            ExpressionKind::Ident(i) => format!("{}{kind_str}({i})\n", indent!(depth)),
+            ExpressionKind::IntegerLiteral(i) => format!("{}Int({i})\n", indent!(depth)),
+            ExpressionKind::FloatLiteral(i) => format!("{}Float({i})\n", indent!(depth)),
             ExpressionKind::BinOpExpr(op, l, r) => {
                 format!(
-                    "{op:?}(\n{0}{1}\n{0}{2}\n{0})",
-                    indent!(depth + 1),
+                    "{0}{op:?}\n{1}{2}{0}/`{op:?}`\n",
+                    indent!(depth),
                     l.pretty_print(depth + 1),
                     r.pretty_print(depth + 1),
                 )
             }
             ExpressionKind::UnOpExpr(op, arg) => {
                 format!(
-                    "{op:?}(\n{0}{1}\n{0})",
-                    indent!(depth + 1),
+                    "{0}{op:?}\n{1}{0}/`{op:?}`\n",
+                    indent!(depth),
                     arg.pretty_print(depth + 1),
                 )
             }
             ExpressionKind::MemberAccess(e, m) => {
                 format!(
-                    "MEMBER(\n{0}{1}\n{0}{m})",
-                    indent!(depth + 1),
-                    e.pretty_print(depth)
+                    "{0}MEMBER\n{1}{2}",
+                    indent!(depth),
+                    e.pretty_print(depth + 1),
+                    m.pretty_print(depth + 1),
                 )
             }
             _ => todo!("pretty print expression of kind {:?}", self.kind),

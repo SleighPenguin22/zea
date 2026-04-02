@@ -136,7 +136,6 @@ pub Func: Function = {
     }
 
 };
-
 TType: Type = {
     TypeIdent => {Type::Basic(<>)},
     <t:TType> "*" => {Type::Pointer(Box::new(t))},
