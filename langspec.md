@@ -32,6 +32,9 @@ Version 0.1
 <initialisation> =
      <assignment pattern> ":" <type specifier>? "=" <expression> ";"
 
+<reassignment> =
+     <expr ident> "=" <expression> ";"
+
 
 <assignment pattern> =
     <expr ident> // simple assignee
@@ -50,6 +53,16 @@ Version 0.1
 
 <typed ident> =
     <expr ident> ":" <type specifier>
+
+<struct definition> = 
+    "struct" <type ident> "{"
+        <typed identifier>,+
+    "}"
+
+<if branch> =
+    "if" <expression> <statement block>
+|   "if" <expression> <statement block> "else" <statement block>
+
 
 <expression> = 
 #precedence 0
@@ -96,10 +109,31 @@ Version 0.1
 |   <float literal>
 |   "true" | "false"
 
+<statement> =
+    <initialisation>
+|   <function call> ";"
+|   "return" <expression> ";"
+|   <reassignment>
+|   <statement block>
+
+<function call> =
+    <expr ident> "(" <expression>,* ")"
+
+<statement block> =
+    "{" <statement>+  <expression>? "}"
+
 <numeric literal> =
     regex/(0d)?[_0123456789]+/i
 |   regex/0x[_0123456789abcdef]+/i
 |   regex/0b[01][_01]*/i
 
+<float literal> =
+#helper <sign> = "+" | "-"
+#helper  <e> = "e" | "E"
+#helper <exponent> = <e> <sign>? regex/[0123456789]+/
+    <sign>? regex/[0123456789]+/ "." <exponent>?
+|   <sign>? "." regex/[0123456789]+/ <exponent>?
+|   <sign>? regex/[0123456789]+/ "." regex/[0123456789]+/ <exponent>?
+    
 ```
 
