@@ -4,7 +4,7 @@ mod grammar;
 pub use grammar::ExprParser as ExpressionParser;
 pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
-use zea_ast::zea::{BinOp, Expression, ExpressionKind, Function, Initialisation, UnOp};
+use zea_ast::zea::{BinOp, Expression, ExpressionKind, Function, Initialisation, NodeExpander, StatementBlock, UnOp};
 
 #[derive(Default, Clone, Copy)]
 pub struct NodeIdGenerator {
@@ -50,6 +50,13 @@ fn unop(g: &mut NodeIdGenerator, op: UnOp, e: Expression) -> Expression {
         id: g.get(),
         kind: ExpressionKind::UnOpExpr(op, Box::new(e)),
     }
+}
+
+fn exprify_block(g: &mut NodeIdGenerator, b: StatementBlock) -> Box<Expression> {
+    Box::new(Expression {
+        id: g.get(),
+        kind: ExpressionKind::Block(b),
+    })
 }
 
 #[cfg(test)]

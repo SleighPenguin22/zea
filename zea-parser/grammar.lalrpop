@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use zea_ast::zea::*;
-use crate::{NodeIdGenerator, ModuleItem, separate, binop, unop};
+use crate::{NodeIdGenerator, ModuleItem, separate, binop, unop, exprify_block};
 
 grammar<'ast>(generator: &'ast mut NodeIdGenerator);
 
@@ -34,6 +34,25 @@ pub Mod: Module = {
             functions,
         }
  }
+};
+
+CondBranch: IfThenElse = {
+    "if" <condition:Expr> <true_case:Block> => {
+        IfThenElse {
+            id: generator.get(),
+            condition: Box::new(condition),
+            true_case: exprify_block(generator, true_case),
+            false_case: None
+        }
+    },
+    "if" <condition:Expr> <true_case:Block> "else" <false_case:Block> => {
+            IfThenElse {
+                id: generator.get(),
+                condition: Box::new(condition),
+                true_case: exprify_block(generator, true_case),
+                false_case: Some(exprify_block(generator, false_case))
+            }
+        }
 };
 
 ModName: String = {
@@ -178,10 +197,19 @@ pub Stmt: Statement = {
     <call:FuncCall> ";" => Statement {
         id: generator.get(),
         kind: StatementKind::FunctionCall(call)
+    },
+    <branch:CondBranch> ";" => Statement {
+        id: generator.get(),
+        kind: StatementKind::CondBranch(branch),
     }
 };
 
-pub Expr: Expression = ExprOr;
+pub Expr: Expression = ExprBranch;
+
+ExprBranch: Expression = {
+    <b:CondBranch> => Expression {id: generator.get(), kind: ExpressionKind::CondBranch(b)},
+    ExprOr,
+};
 
 ExprOr: Expression = {
     <l:ExprOr> "||" <r:ExprXor> => binop(generator, BinOp::LogOr, l, r),

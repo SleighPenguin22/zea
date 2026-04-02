@@ -2,9 +2,9 @@
 
 use crate::zea::{
     AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
-    HoistedFunctionSignature, Initialisation, InitialisationKind, Module, PackedInitialisation,
-    PartiallyUnpackedInitialisation, Statement, StatementBlock, StatementKind, StructDefinition,
-    TypedIdentifier, UnpackedInitialisation,
+    HoistedFunctionSignature, IfThenElse, Initialisation, InitialisationKind, Module,
+    PackedInitialisation, PartiallyUnpackedInitialisation, Statement, StatementBlock,
+    StatementKind, StructDefinition, TypedIdentifier, UnpackedInitialisation,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -69,6 +69,7 @@ impl AcceptsBlockExpander for Statement {
             StatementKind::Return(expr) => expr.accept_block_expander(block_expander),
             StatementKind::BlockTail(expr) => expr.accept_block_expander(block_expander),
             StatementKind::ExpandedBlock(b) => b.accept_block_expander(block_expander),
+            StatementKind::CondBranch(b) => b.accept_block_expander(block_expander),
         };
         !self.has_blocks_expanded(block_expander)
     }
@@ -82,9 +83,31 @@ impl AcceptsBlockExpander for Statement {
             StatementKind::Return(expr) => expr.has_blocks_expanded(block_expander),
             StatementKind::BlockTail(expr) => expr.has_blocks_expanded(block_expander),
             StatementKind::ExpandedBlock(b) => b.has_blocks_expanded(block_expander),
+            StatementKind::CondBranch(b) => b.has_blocks_expanded(block_expander),
         }
     }
 }
+
+impl AcceptsBlockExpander for IfThenElse {
+    fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
+        self.condition.accept_block_expander(block_expander);
+        self.true_case.accept_block_expander(block_expander);
+        if let Some(e) = &mut self.false_case {
+            e.accept_block_expander(block_expander);
+        }
+        !self.has_blocks_expanded(block_expander)
+    }
+
+    fn has_blocks_expanded(&self, block_expander: &mut NodeExpander) -> bool {
+        self.condition.has_blocks_expanded(block_expander)
+            && self.true_case.has_blocks_expanded(block_expander)
+            && self
+                .false_case
+                .as_ref()
+                .is_none_or(|e| e.has_blocks_expanded(block_expander))
+    }
+}
+
 impl AcceptsBlockExpander for Initialisation {
     fn accept_block_expander(&mut self, block_expander: &mut NodeExpander) -> bool {
         if self.has_blocks_expanded(block_expander) {
@@ -145,6 +168,7 @@ impl AcceptsBlockExpander for Expression {
             ExpressionKind::StringLiteral(_) => false,
             ExpressionKind::Ident(_) => false,
             ExpressionKind::MemberAccess(_, _) => false,
+            ExpressionKind::CondBranch(b) => b.accept_block_expander(block_expander),
         };
 
         !self.has_blocks_expanded(block_expander)
@@ -158,6 +182,7 @@ impl AcceptsBlockExpander for Expression {
             }
             ExpressionKind::UnOpExpr(_, arg) => arg.has_blocks_expanded(block_expander),
             ExpressionKind::ExpandedBlock(block) => block.has_blocks_expanded(block_expander),
+            ExpressionKind::CondBranch(b) => b.has_blocks_expanded(block_expander),
             _ => true,
         }
     }
