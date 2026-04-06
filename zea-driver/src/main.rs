@@ -8,7 +8,7 @@
 use std::fs::read_to_string;
 use std::process::exit;
 use zea_ast::zea::NodeExpander;
-use zea_ast::PrettyAST;
+use zea_ast::visualisation::IndentPrint;
 use zea_parser::{ModuleParser, NodeIdGenerator};
 
 fn main() {
@@ -18,7 +18,7 @@ fn main() {
     let module = p.parse(&mut generator, &src);
     let module = match module {
         Ok(module) => {
-            println!("parsed {}", module.pretty_print(0));
+            println!("parsed {}", module.indent_print(0));
             module
         }
         Err(e) => {
@@ -30,5 +30,5 @@ fn main() {
     let mut node_expander = NodeExpander::new();
     let module = module.expand_blocks(&mut node_expander);
     let module = module.simplify_assignments(&mut node_expander);
-    println!("after expansions:\n{}", module.pretty_print(0));
+    println!("after expansions:\n{}", module.indent_print(0));
 }

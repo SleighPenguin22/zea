@@ -2,9 +2,5 @@
 pub mod c;
 pub mod zea;
 
-pub trait PrettyAST {
-    fn pretty_print(&self, depth: usize) -> String;
-    fn depth_str(depth: usize) -> String {
-        " ".repeat(depth * 2)
-    }
-}
+#[cfg(feature = "visualisation")]
+pub mod visualisation;

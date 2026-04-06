@@ -533,7 +533,8 @@ impl AcceptsAssignmentSimplifier for Statement {
 
 #[cfg(test)]
 mod tests {
-    use crate::zea::nodeexpansion::{
+    use crate::visualisation::IndentPrint;
+use crate::zea::nodeexpansion::{
         AcceptsAssignmentSimplifier, AcceptsBlockExpander, NodeExpander,
     };
     use crate::zea::{
@@ -541,7 +542,6 @@ mod tests {
         InitialisationKind, Module, PackedInitialisation, Statement, StatementBlock, StatementKind,
         Type,
     };
-    use crate::PrettyAST;
 
     macro_rules! block {
         {} => {
@@ -880,7 +880,7 @@ mod tests {
         };
 
         let changed = init.accept_assignment_simplifier(&mut simplifier);
-        eprintln!("\nafter p1:\n{}", init.pretty_print(0));
+        eprintln!("\nafter p1:\n{}", init.indent_print(0));
         assert!(changed, "First pass should report a change");
         assert!(
             !init.has_assignments_unpacked(&mut simplifier),
@@ -888,7 +888,7 @@ mod tests {
         );
 
         let changed = init.accept_assignment_simplifier(&mut simplifier);
-        eprintln!("\nafter p2:\n{}", init.pretty_print(0));
+        eprintln!("\nafter p2:\n{}", init.indent_print(0));
         assert!(changed, "Second pass should report a change");
         assert!(
             init.has_assignments_unpacked(&mut simplifier),
