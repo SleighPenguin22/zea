@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 zea-macros = { path = "../zea-macros" }
+indexmap = "2.14.0"
 
 [features]
 visualisation = []

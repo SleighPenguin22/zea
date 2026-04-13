@@ -1,23 +1,20 @@
 use crate::zea;
 pub trait IndentPrint {
     fn indent_print(&self, depth: usize) -> String;
-    fn depth_str(depth: usize) -> String {
-        " ".repeat(depth * 2)
-    }
 }
 
 macro_rules! indent {
     ($d:expr) => {{
         let d: usize = $d;
-        " ".repeat(d * 2)
+        "-".repeat(d * 2)
     }};
 }
 
 impl IndentPrint for zea::Module {
     fn indent_print(&self, depth: usize) -> String {
-        let mut buffer = "Module(\n".indent_print(depth);
+        let mut buffer = "Module".indent_print(depth);
         let imports = if self.imports.is_empty() {
-            "#IMPORTS NOTHING\n".indent_print(depth + 1)
+            "#IMPORTS NOTHING".indent_print(depth + 1)
         } else {
             let mut imp_buffer = "#IMPORTS".indent_print(depth + 1);
             for e in self.imports.iter() {
@@ -28,7 +25,7 @@ impl IndentPrint for zea::Module {
         buffer += &imports;
 
         let exports = if self.exports.is_empty() {
-            "#EXPORTS NOTHING\n".indent_print(depth + 1)
+            "#EXPORTS NOTHING".indent_print(depth + 1)
         } else {
             let mut exp_buffer = "#EXPORTS".indent_print(depth + 1);
             for e in self.exports.iter() {
@@ -48,7 +45,7 @@ impl IndentPrint for zea::Module {
         for func in self.functions.iter() {
             buffer += &func.indent_print(depth + 2);
         }
-        buffer += &"/#FUNCS\n".indent_print(depth + 1);
+        buffer += &"/#FUNCS".indent_print(depth + 1);
 
         buffer += &"/MODULE".indent_print(depth);
         buffer
@@ -116,13 +113,9 @@ impl IndentPrint for zea::Statement {
     fn indent_print(&self, depth: usize) -> String {
         use zea::StatementKind;
         match &self.kind {
-            StatementKind::Return(e) => {
-                format!("{}RETURN\n{}", indent!(depth), e.indent_print(depth + 1))
-            }
+            StatementKind::Return(e) => "RETURN".indent_print(depth) + &e.indent_print(depth + 1),
             StatementKind::Initialisation(i) => i.indent_print(depth),
-            StatementKind::BlockTail(e) => {
-                format!("{}TAIL\n{}", indent!(depth), e.indent_print(depth + 1))
-            }
+            StatementKind::BlockTail(e) => "TAIL".indent_print(depth) + &e.indent_print(depth + 1),
             StatementKind::CondBranch(b) => b.indent_print(depth),
             StatementKind::ExpandedBlock(eb) => eb.indent_print(depth),
             StatementKind::FunctionCall(c) => c.indent_print(depth),
@@ -244,31 +237,28 @@ impl IndentPrint for zea::Expression {
         use zea::ExpressionKind;
         let kind_str = self.kind.variant_as_str();
         match &self.kind {
-            ExpressionKind::Ident(i) => format!("{}{kind_str}({i})\n", indent!(depth)),
-            ExpressionKind::IntegerLiteral(i) => format!("{}Int({i})\n", indent!(depth)),
-            ExpressionKind::FloatLiteral(i) => format!("{}Float({i})\n", indent!(depth)),
+            ExpressionKind::Ident(i) => format!("{kind_str}({i})").indent_print(depth),
+            ExpressionKind::IntegerLiteral(i) => format!("Int({i})").indent_print(depth),
+            ExpressionKind::FloatLiteral(i) => format!("Float({i})").indent_print(depth),
             ExpressionKind::BinOpExpr(op, l, r) => {
-                format!(
-                    "{0}{op:?}\n{1}{2}{0}/`{op:?}`\n",
-                    indent!(depth),
-                    l.indent_print(depth + 1),
-                    r.indent_print(depth + 1),
-                )
+                let mut buffer = format!("OP`{op:?}`").indent_print(depth);
+                buffer += &l.indent_print(depth + 1);
+                buffer += &r.indent_print(depth + 1);
+                buffer += &format!("/OP`{op:?}`").indent_print(depth);
+                buffer
             }
             ExpressionKind::UnOpExpr(op, arg) => {
-                format!(
-                    "{0}{op:?}\n{1}{0}/`{op:?}`\n",
-                    indent!(depth),
-                    arg.indent_print(depth + 1),
-                )
+                let mut buffer = format!("OP`{op:?}`").indent_print(depth);
+                buffer += &arg.indent_print(depth + 1);
+                buffer += &format!("/OP`{op:?}`").indent_print(depth);
+                buffer
             }
             ExpressionKind::MemberAccess(e, m) => {
-                format!(
-                    "{0}MEMBER\n{1}{2}",
-                    indent!(depth),
-                    e.indent_print(depth + 1),
-                    m.indent_print(depth + 1),
-                )
+                let mut buffer = "MEMBER".indent_print(depth);
+                buffer += &e.indent_print(depth + 1);
+                buffer += &m.indent_print(depth + 1);
+                buffer += &format!("/MEMBER").indent_print(depth);
+                buffer
             }
             ExpressionKind::CondBranch(b) => b.indent_print(depth),
             ExpressionKind::Block(b) => b.indent_print(depth),

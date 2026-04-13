@@ -1,0 +1,10 @@
+[package]
+name = "zea-static-analysis"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+zea-ast = { path = "../zea-ast"}
+
+[lints]
+workspace = true

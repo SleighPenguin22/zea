@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 
-members = ["zea-ast", 'zea-driver', "zea-parser", "zea-codegen", "zea-macros"]
+members = ["zea-ast", 'zea-driver', "zea-parser", "zea-codegen", "zea-macros", "zea-static-analysis"]
 
 [workspace.lints.rust]
 dead_code = "allow"

@@ -1,23 +1,55 @@
 # The Zea language specification
+
 Version 0.1
 (28 Feb 2026)
 
 # Philosophy
 
 # Program Structure
+
 ## Program Entry Point
+
 # Variables and Expressions
+
 # Types
+
 ## Scalar Types
+
 ### Integers
+
 ### Floating-point
+
 ### Boolean
+
 ## Compound types
+
 ### Struct
+
 ### Union
+
 ### Option
+
 ### Result
+
+## Typing Rules
+
+| binop                              | typeof(lhs) | typeof(rhs) | inferred type                             |
+|------------------------------------|-------------|-------------|-------------------------------------------|
+| `+`,`-`,`*`,`/`,`%`, `&`, `\|`,`^` | `Int(s1)`   | `Int(s2)`   | `Int(max(s1,s2))` (zero extension rule)   |
+| `+`,`-`,`*`,`/`,`%`                | `Float(s1)` | `Float(s2)` | `Float(max(s1,s2))` (zero extension rule) |
+| `&&`,`\|\|`,`^^`                   | `Bool`      | `Bool`      | `Bool`                                    |
+| `[]` (indexing)                    | `[t]`       | `Int(s)`    | `t`                                       |
+| `.` (member access)                | `t`         | ...         | `t::m` (struct lookup)                    |
+
+| unop | typeof(arg) | inferred type |
+|------|-------------|---------------|
+| `-`  | `Int(s)`    | `Int(s)`      |
+| `-`  | `Float(s)`  | `Float(s)`    |
+| `~`  | `Int(s)`    | `Int(s)`      |
+| `~`  | `Bool`      | `Bool`        |
+
 # Grammar
+
 ```bnf
 <module> = 
     "module" <expr ident>
@@ -136,4 +168,3 @@ Version 0.1
 |   <sign>? regex/[0123456789]+/ "." regex/[0123456789]+/ <exponent>?
     
 ```
-

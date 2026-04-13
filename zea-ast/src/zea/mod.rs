@@ -1,5 +1,6 @@
 #![allow(dead_code, unused_imports)]
 mod nodeexpansion;
+pub mod typecheck;
 
 pub use crate::zea::nodeexpansion::NodeExpander;
 use std::fmt::{Debug, Formatter};
@@ -136,6 +137,14 @@ pub enum InitialisationKind {
 #[derive(Debug, Clone, HashEqById)]
 pub struct Reassignment {
     pub id: usize,
+    pub assignee: String,
+    pub value: Expression,
+}
+
+#[derive(Debug, Clone, HashEqById)]
+pub struct HoistedDeclaration {
+    pub id: usize,
+    pub typ: Type,
     pub assignee: String,
     pub value: Expression,
 }
@@ -421,6 +430,26 @@ impl From<&str> for Type {
 impl From<String> for Type {
     fn from(val: String) -> Self {
         Type::Basic(val)
+    }
+}
+
+impl Type {
+    pub fn I64() -> Self {
+        Self::from("I64")
+    }
+    pub fn F64() -> Self {
+        Self::from("F64")
+    }
+
+    pub fn Bool() -> Self {
+        Self::from("Bool")
+    }
+    pub fn Unit() -> Self {
+        Self::from("Unit")
+    }
+
+    pub fn Exit() -> Self {
+        Self::from("!EXIT!")
     }
 }
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
