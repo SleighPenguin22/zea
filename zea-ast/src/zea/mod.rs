@@ -5,7 +5,6 @@
 /// - there is no specified order in the id's of nodes.
 ///
 /// As such, you can use these id's as keys in hashtables tables that annotate nodes.
-
 mod nodeexpansion;
 pub mod typecheck;
 
@@ -439,7 +438,7 @@ impl From<String> for Type {
         Type::Basic(val)
     }
 }
-
+#[allow(non_snake_case)]
 impl Type {
     pub fn I64() -> Self {
         Self::from("I64")
