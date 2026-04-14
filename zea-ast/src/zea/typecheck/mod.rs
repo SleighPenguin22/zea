@@ -13,6 +13,7 @@ pub fn BUILTIN_TYPES() -> [zea::Type; 5] {
 
 pub enum TypeCheckError {
     UnifyError(TypeConcreteId, TypeConcreteId),
+    ExpectedResolvedType(InferenceId),
 }
 /// The id that a conrete type gets during type-checking
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
@@ -37,8 +38,8 @@ impl TypeInterningTable {
             type_ids: IndexSet::from_iter(BUILTIN_TYPES()),
         }
     }
-    pub fn introduce(&mut self, typ: zea::Type) -> TypeConcreteId {
-        let (index, _existed) = self.type_ids.insert_full(typ);
+    pub fn introduce(&mut self, typ: &zea::Type) -> TypeConcreteId {
+        let (index, _existed) = self.type_ids.insert_full(typ.clone());
         TypeConcreteId { id: index }
     }
     pub fn get_interned_type(&self, id: TypeConcreteId) -> Option<&zea::Type> {
@@ -65,6 +66,14 @@ impl TypeInterningTable {
         TypeConcreteId {
             id: self.type_ids.get_index_of(&zea::Type::Bool()).unwrap(),
         }
+    }
+
+    pub fn contains_id(&self, id: TypeConcreteId) -> bool {
+        self.type_ids.get_index(id.id).is_some()
+    }
+
+    pub fn contains_type(&self, typ: &zea::Type) -> bool {
+        self.type_ids.get(typ).is_some()
     }
 }
 pub struct TypeVarSubstitutionTable {
@@ -142,12 +151,19 @@ pub enum InferenceId {
     TypeVar(TypeVarId),
 }
 
+impl InferenceId {
+    pub fn is_concrete(&self) -> bool {
+        matches!(self, InferenceId::TypeConcrete(_))
+    }
+}
 struct ModuleInferenceContext<'ast> {
     ast: &'ast Module,
     /// unique types within a program, use a [`TypeConcreteId`] to lookup
     intering_table: TypeInterningTable,
+    /// type variables, use a [`TypeVarId`] to lookup,
+    /// call [`ModuleInferenceContext::follow_inference_id`] to get the possibly known type
     subst_table: TypeVarSubstitutionTable,
-    /// values in this map are references to entries in the arena
+    /// map a node id to its (maybe unknown) type.)
     node_types: IndexMap<usize, InferenceId>,
 }
 
@@ -161,11 +177,11 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
-    pub fn type_bool_id(&self) -> InferenceId {
+    pub fn type_bool_inference_id(&self) -> InferenceId {
         self.intering_table.interned_bool().into()
     }
 
-    pub fn introduce(&mut self, expr: &zea::Expression) -> Result<(), TypeCheckError> {
+    pub fn introduce(&mut self, expr: &zea::Expression) {
         match expr.kind {
             ExpressionKind::Unit
             | ExpressionKind::IntegerLiteral(_)
@@ -183,7 +199,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
-    fn introduce_trivial_type(&mut self, expr: &zea::Expression) -> Result<(), TypeCheckError> {
+    fn introduce_trivial_type(&mut self, expr: &zea::Expression) {
         let inference_id: InferenceId = match expr.kind {
             ExpressionKind::Unit => self.intering_table.interned_unit().into(),
             ExpressionKind::IntegerLiteral(_) => self.intering_table.interned_i64().into(),
@@ -195,9 +211,8 @@ impl<'ast> ModuleInferenceContext<'ast> {
             ),
         };
         self.node_types.insert(expr.id, inference_id);
-        Ok(())
     }
-    fn introduce_non_trivial_type(&mut self, expr: &zea::Expression) -> Result<(), TypeCheckError> {
+    fn introduce_non_trivial_type(&mut self, expr: &zea::Expression) {
         match &expr.kind {
             ExpressionKind::Ident(_) => {
                 let var = self.subst_table.fresh();
@@ -216,7 +231,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
             ExpressionKind::UnOpExpr(_op, arg) => {
                 let var = self.subst_table.fresh();
                 self.node_types.insert(expr.id, var.into());
-                self.introduce(arg.as_ref())?;
+                self.introduce(arg.as_ref());
             }
             ExpressionKind::MemberAccess(datatype, member) => {
                 let var = self.subst_table.fresh();
@@ -226,21 +241,16 @@ impl<'ast> ModuleInferenceContext<'ast> {
             ExpressionKind::CondBranch(branch) => {
                 let var = self.subst_table.fresh();
                 self.node_types.insert(expr.id, var.into());
-                let cond_id = self.get_or_introduce_inference_id(branch.condition.as_ref())?;
-                let true_id = self.get_or_introduce_inference_id(branch.true_case.as_ref())?;
+
+                self.introduce(branch.condition.as_ref());
+                self.introduce(branch.true_case.as_ref());
                 if let Some(ref false_case) = branch.false_case {
-                    let false_id = self.get_or_introduce_inference_id(false_case.as_ref())?;
-                    self.unify_ids(false_id, true_id)?;
-                    self.unify_ids(cond_id, self.type_bool_id())?
+                    self.introduce(false_case.as_ref());
                 }
             }
             ExpressionKind::ExpandedBlock(b) => {
                 let var = self.subst_table.fresh();
                 self.node_types.insert(expr.id, var.into());
-                let self_id = self.get_or_introduce_inference_id(expr)?;
-
-                let last_id = self.get_or_introduce_inference_id(&b.last)?;
-                self.unify_ids(self_id, last_id)?;
             }
             ExpressionKind::Block(_) => {
                 unreachable!("AST should not contain any un-expanded blocks")
@@ -250,17 +260,10 @@ impl<'ast> ModuleInferenceContext<'ast> {
                 expr.id, expr.kind
             ),
         };
-        Ok(())
     }
 
-    pub fn get_or_introduce_inference_id(
-        &mut self,
-        node: &zea::Expression,
-    ) -> Result<InferenceId, TypeCheckError> {
-        if !self.node_types.contains_key(&node.id) {
-            self.introduce(node)?;
-        }
-        Ok(*self.node_types.get(&node.id).unwrap())
+    pub fn get_inference_id(&self, node: &zea::Expression) -> Option<InferenceId> {
+        self.node_types.get(&node.id).cloned()
     }
 
     pub fn follow_inference_id(&mut self, var: InferenceId) -> InferenceId {
@@ -270,13 +273,29 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
+    pub fn resolve_id_to_concrete(&mut self, inference_id: InferenceId) -> Option<TypeConcreteId> {
+        let maybe_con_id = self.follow_inference_id(inference_id);
+        match maybe_con_id {
+            InferenceId::TypeConcrete(c) => Some(c),
+            InferenceId::TypeVar(_) => None,
+        }
+    }
+
+    // pub fn resolve_expr_to_concrete(&mut self, inference_id: InferenceId) -> Option<&zea::Type> {
+    //     let id = self.follow_inference_id(inference_id);
+    //     match id {
+    //         InferenceId::TypeConcrete(c) => self.intering_table.get_interned_type(c),
+    //         InferenceId::TypeVar(_) => None,
+    //     }
+    // }
+
     pub fn try_unify(
         &mut self,
         expr: &zea::Expression,
         with: &zea::Expression,
     ) -> Result<(), TypeCheckError> {
-        let expr = self.get_or_introduce_inference_id(expr)?;
-        let with = self.get_or_introduce_inference_id(with)?;
+        let expr = self.get_inference_id(expr).unwrap();
+        let with = self.get_inference_id(with).unwrap();
         self.unify_ids(expr, with)
     }
 
@@ -291,7 +310,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
             (InferenceId::TypeConcrete(a), InferenceId::TypeConcrete(b)) => {
                 let ta = self.intering_table.get_interned_type(a).unwrap();
                 let tb = self.intering_table.get_interned_type(b).unwrap();
-                if self.valid_subtype(ta, tb) {
+                if self.equal_type(ta, tb) {
                     Ok(())
                 } else {
                     Err(TypeCheckError::UnifyError(a, b))
@@ -344,11 +363,37 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
-    pub fn infer_binop(
-        op: BinOp,
-        lhs_id: InferenceId,
-        rhs_id: InferenceId,
-    ) -> Result<InferenceId, TypeCheckError> {
+    pub fn infer_block(&mut self, block: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        let ExpressionKind::ExpandedBlock(block) = &block.kind else {
+            panic!("infer_block expects block, got {:?}", block.kind)
+        };
+        todo!()
+    }
+
+    pub fn infer_branch(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        let ExpressionKind::CondBranch(branch) = &expr.kind else {
+            panic!("infer_branch expects branch, got {:?}", expr.kind)
+        };
+
+        let cond_id = self.get_inference_id(branch.condition.as_ref()).unwrap();
+        self.unify_ids(cond_id, self.type_bool_inference_id())?;
+
+        let true_id = self.get_inference_id(branch.true_case.as_ref()).unwrap();
+
+        if let Some(false_case) = &branch.false_case {
+            let false_id = self.get_inference_id(false_case.as_ref()).unwrap();
+            self.unify_ids(false_id, true_id)?;
+        };
+
+        let expr_id = self.get_inference_id(expr).unwrap();
+        self.unify_ids(expr_id, true_id)?;
+        self.infer_expr(branch.true_case.as_ref())
+    }
+
+    pub fn infer_binop(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        let ExpressionKind::BinOpExpr(op, lhs, rhs) = &expr.kind else {
+            panic!("infer_binop expects binop, got {:?}", expr.kind)
+        };
         match op {
             BinOp::Add
             | BinOp::Sub
@@ -360,7 +405,96 @@ impl<'ast> ModuleInferenceContext<'ast> {
             | BinOp::BitXor
             | BinOp::Lsh
             | BinOp::Rsh => todo!(),
-            _ => unreachable!()
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn infer_unop(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        let ExpressionKind::UnOpExpr(op, arg) = &expr.kind else {
+            panic!("infer_unop expects unop, got {:?}", expr.kind)
+        };
+        match op {
+            zea::UnOp::BitNot | zea::UnOp::LogNot | zea::UnOp::Neg => todo!(),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn infer_func_call(
+        &mut self,
+        expr: &zea::Expression,
+    ) -> Result<InferenceId, TypeCheckError> {
+        let ExpressionKind::FuncCall(call) = &expr.kind else {
+            panic!("infer_branch expects branch, got {:?}", expr.kind)
+        };
+
+        let func = self
+            .ast
+            .iter_symbols()
+            .find(|func| func.name == call.name)
+            .unwrap();
+        let returns_id: InferenceId = self.intering_table.introduce(&func.returns).into();
+        let expr_inference_id = self.get_inference_id(expr).unwrap();
+        self.unify_ids(returns_id, expr_inference_id)?;
+
+        let param_types: Vec<&zea::Type> = func.args.iter().map(|ti| &ti.typ).collect();
+
+        for (arg, typ) in call.args.iter().zip(param_types) {
+            let param_con_id: InferenceId = self.intering_table.introduce(typ).into();
+            let arg_infer_id = self.infer_expr(arg)?;
+            self.unify_ids(param_con_id, arg_infer_id)?;
+        }
+        Ok(returns_id)
+    }
+
+    pub fn infer_ident(&mut self, ident: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        todo!()
+    }
+
+    pub fn infer_member_access(
+        &mut self,
+        member_access: &zea::Expression,
+    ) -> Result<InferenceId, TypeCheckError> {
+        let ExpressionKind::MemberAccess(datatype, member) = &member_access.kind else {
+            panic!(
+                "infer_member_access expects member_access, got {:?}",
+                member_access.kind
+            )
+        };
+        let datatype = datatype.as_ref();
+        let datatype_infer_id = self.infer_expr(datatype)?;
+        let datatype_con_id = self
+            .resolve_id_to_concrete(datatype_infer_id)
+            .ok_or(TypeCheckError::ExpectedResolvedType(datatype_infer_id))?;
+
+        todo!("datatype")
+    }
+
+    pub fn infer_expr(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        let expr_inference_id = self.get_inference_id(expr).unwrap();
+        if let Some(con_id) = self.resolve_id_to_concrete(expr_inference_id) {
+            let con_id: InferenceId = con_id.into();
+            self.node_types.insert(expr.id, con_id);
+            Ok(con_id)
+        } else {
+            match &expr.kind {
+                ExpressionKind::CondBranch(b) => self.infer_branch(expr),
+                ExpressionKind::ExpandedBlock(b) => self.infer_block(expr),
+                ExpressionKind::Ident(_) => self.infer_ident(expr),
+                ExpressionKind::FuncCall(_) => self.infer_func_call(expr),
+                ExpressionKind::BinOpExpr(_, _, _) => self.infer_binop(expr),
+                ExpressionKind::UnOpExpr(_, _) => self.infer_unop(expr),
+                ExpressionKind::MemberAccess(_, _) => self.infer_member_access(expr),
+
+                ExpressionKind::Block(_) => {
+                    unreachable!("AST should not contain un-expanded blocks")
+                }
+                ExpressionKind::StringLiteral(_) => todo!("string types in Zea"),
+                // ExpressionKind::Unit => {}
+                // ExpressionKind::IntegerLiteral(_) => {}
+                // ExpressionKind::BoolLiteral(_) => {}
+                // ExpressionKind::FloatLiteral(_) => {}
+                _ => unreachable!(),
+            }
         }
     }
 }

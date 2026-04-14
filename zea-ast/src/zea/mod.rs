@@ -1,4 +1,11 @@
 #![allow(dead_code, unused_imports)]
+/// This module contains the AST definition for the Zea language.
+/// Any node that encompasses some structure with meaningful data has an id, this id has the following guarantees:
+/// - the id is unique
+/// - there is no specified order in the id's of nodes.
+///
+/// As such, you can use these id's as keys in hashtables tables that annotate nodes.
+
 mod nodeexpansion;
 pub mod typecheck;
 
