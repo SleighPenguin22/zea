@@ -36,7 +36,7 @@ impl IndentPrint for zea::Module {
         buffer += &exports;
 
         buffer += &"#GLOBS".indent_print(depth + 1);
-        for glob in self.globs.iter() {
+        for glob in self.global_vars.iter() {
             buffer += &glob.indent_print(depth + 2);
         }
         buffer += &"/#GLOBS".indent_print(depth + 1);

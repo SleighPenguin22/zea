@@ -4,7 +4,7 @@ mod grammar;
 pub use grammar::ExprParser as ExpressionParser;
 pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
-use zea_ast::zea::{BinOp, Expression, ExpressionKind, Function, Initialisation, NodeExpander, StatementBlock, UnOp};
+use zea_ast::zea::{BinOp, Expression, ExpressionKind, Function, Initialisation, BlockExpander, StatementBlock, UnOp};
 
 #[derive(Default, Clone, Copy)]
 pub struct NodeIdGenerator {
@@ -749,7 +749,7 @@ mod tests {
         let m = parse_mod("module mymod");
         assert!(m.imports.is_empty());
         assert!(m.exports.is_empty());
-        assert!(m.globs.is_empty());
+        assert!(m.global_vars.is_empty());
         assert!(m.functions.is_empty());
     }
 
@@ -780,7 +780,7 @@ mod tests {
     #[test]
     fn module_with_global() {
         let m = parse_mod("module mymod x := 42;");
-        assert_eq!(m.globs.len(), 1);
+        assert_eq!(m.global_vars.len(), 1);
     }
 
     #[test]
@@ -811,7 +811,7 @@ mod tests {
         let m = parse_mod(src);
         assert_eq!(m.imports, vec!["io", "math"]);
         assert_eq!(m.exports, vec!["main"]);
-        assert_eq!(m.globs.len(), 1);
+        assert_eq!(m.global_vars.len(), 1);
         assert_eq!(m.functions.len(), 1);
     }
 

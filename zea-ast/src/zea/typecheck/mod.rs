@@ -1,6 +1,8 @@
 use crate::zea;
+use crate::zea::visitors::annotating::ScopeAnnotations;
 use crate::zea::{BinOp, ExpressionKind, Module, UnOp};
 use indexmap::{IndexMap, IndexSet};
+
 #[allow(non_snake_case)]
 pub fn BUILTIN_TYPES() -> [zea::Type; 5] {
     [
@@ -165,8 +167,9 @@ struct ModuleInferenceContext<'ast> {
     /// type variables, use a [`TypeVarId`] to lookup,
     /// call [`ModuleInferenceContext::follow_inference_id`] to get the possibly known type
     subst_table: TypeVarSubstitutionTable,
-    /// map a node id to its (maybe unknown) type.)
+    /// map a node id to its (possibly not-yet-known) type.)
     node_types: IndexMap<usize, InferenceId>,
+    scopes: ScopeAnnotations,
 }
 
 impl<'ast> ModuleInferenceContext<'ast> {
@@ -176,6 +179,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
             intering_table: TypeInterningTable::with_zea_types(),
             subst_table: TypeVarSubstitutionTable::new(),
             node_types: IndexMap::new(),
+            scopes: ast.annotate_scopes(),
         }
     }
 
@@ -289,14 +293,6 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
-    // pub fn resolve_expr_to_concrete(&mut self, inference_id: InferenceId) -> Option<&zea::Type> {
-    //     let id = self.follow_inference_id(inference_id);
-    //     match id {
-    //         InferenceId::TypeConcrete(c) => self.intering_table.get_interned_type(c),
-    //         InferenceId::TypeVar(_) => None,
-    //     }
-    // }
-
     pub fn try_unify(
         &mut self,
         expr: &zea::Expression,
@@ -339,8 +335,8 @@ impl<'ast> ModuleInferenceContext<'ast> {
     pub fn equal_type(&self, t1: &zea::Type, t2: &zea::Type) -> bool {
         match (t1, t2) {
             (zea::Type::Basic(s1), zea::Type::Basic(s2)) => s1 == s2,
-            (zea::Type::ArrayOf(t1), zea::Type::ArrayOf(t2)) => self.valid_subtype(t1, t2),
-            (zea::Type::Pointer(t1), zea::Type::Pointer(t2)) => self.valid_subtype(t1, t2),
+            (zea::Type::ArrayOf(t1), zea::Type::ArrayOf(t2)) => self.equal_type(t1, t2),
+            (zea::Type::Pointer(t1), zea::Type::Pointer(t2)) => self.equal_type(t1, t2),
             _ => false,
         }
     }
@@ -440,7 +436,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
             .ast
             .iter_symbols()
             .find(|func| func.name == call.name)
-            .unwrap();
+            .expect("AST should have ");
         let returns_id: InferenceId = self.intering_table.introduce(&func.returns).into();
         let expr_inference_id = self.get_inference_id(expr)?;
         self.unify_ids(returns_id, expr_inference_id)?;
