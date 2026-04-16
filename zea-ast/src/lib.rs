@@ -12,6 +12,7 @@ pub mod zea;
 
 #[cfg(feature = "visualisation")]
 pub mod visualisation;
+pub mod helper_impls;
 
 pub trait StructuralEq {
     fn structural_eq(&self, other: &Self) -> bool;

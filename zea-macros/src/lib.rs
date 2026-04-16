@@ -1,8 +1,7 @@
 mod structures;
 
 use proc_macro::TokenStream;
-use std::fmt::format;
-use proc_macro2::Ident;
+use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::{Data, DataEnum, DataStruct, DeriveInput, Generics, ItemEnum};
 
@@ -61,7 +60,7 @@ pub fn variant_to_str(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             }
         }
     }
-    .into()
+        .into()
 }
 
 fn derive_ast_structural_eq_impl_struct(
@@ -92,38 +91,66 @@ fn derive_ast_structural_eq_impl_struct(
             }
         }
     }
-    .into()
+        .into()
 }
 
-fn derive_ast_structural_eq_impl_enum(data_enum: DataEnum, ident: Ident, generics: Generics) -> TokenStream {
-    let arms = data_enum.variants.iter().map(|variant|
-        {
+fn derive_ast_structural_eq_impl_enum(
+    data_enum: DataEnum,
+    ident: Ident,
+    generics: Generics,
+) -> TokenStream {
+    let arms: Vec<_> = data_enum
+        .variants
+        .iter()
+        .map(|variant| {
             let variant_name = variant.ident.clone();
-            let (self_items, other_items): (Vec<_>, Vec<_>) = (0..variant.fields.len()).map(|i| (format!("s{}", i),format!("o{}", i))).unzip();
+            let (self_variant_subitems, other_variant_subitems): (Vec<_>, Vec<_>) = (0..variant.fields.len())
+                .map(|i| (Ident::new(&format!("s{}", i), Span::call_site()), Ident::new(&format!("o{}", i), Span::call_site())))
+                .unzip();
+            let match_pattern = match variant.fields.len() {
+                0 => quote! {
+                    (#ident::#variant_name, #ident::#variant_name)
+                },
+                _ => quote! {
+                    (
+                        #ident::#variant_name(#(#self_variant_subitems),*),
+                        #ident::#variant_name(#(#other_variant_subitems),*)
+                    )
+                }
+            };
+
             quote! {
-                (#variant_name(#(self_items)),#variant_name(other_items))if #()
+                #match_pattern
+                if {
+                    let mut sub_items_eq = true;
+                    #(sub_items_eq |= #self_variant_subitems.structural_eq(#other_variant_subitems);)*
+                    sub_items_eq
+                } => true,
             }
         })
-    
-    
+        .collect();
+
     quote! {
         impl #generics #ident #generics {
             pub fn structural_eq(&self, other: &Self) -> bool {
-                self.eq(other)
+                match (self, other) {
+                    #(#arms)*
+                    _ => false
+                }
             }
         }
     }
-    .into()
+        .into()
 }
 
 #[proc_macro_derive(ASTStructuralEq)]
 pub fn derive_ast_structural_eq(input: TokenStream) -> TokenStream {
     let parsed = syn::parse_macro_input!(input as DeriveInput);
-    let ident = parsed.ident.clone();
+    let mut ident = parsed.ident.clone();
     let generics = parsed.generics.clone();
     match parsed.data {
         Data::Struct(s) => derive_ast_structural_eq_impl_struct(s, ident, generics),
-        Data::Enum(e) => derive_ast_structural_eq_impl_enum(ident, generics),
+        Data::Enum(e) => derive_ast_structural_eq_impl_enum(e, ident, generics),
         Data::Union(_) => panic!("strucutral equality on Unions is not supported"),
     }
 }

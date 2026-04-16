@@ -1,5 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
+use crate::helper_impls::ASTStructuralEq;
 pub mod typecheck;
 pub mod visitors;
 
@@ -53,7 +54,6 @@ pub(crate) mod test_ast_macros {
         }
     }
 
-    use std::hint::unreachable_unchecked;
     pub(crate) use block;
 
     macro_rules! stmt {
@@ -259,12 +259,10 @@ pub(crate) mod test_ast_macros {
         };
     }
     pub(crate) use ztyp;
-    use crate::zea::{Statement, StatementKind};
-    use crate::zea::visitors::altering::BareNodeLabeler;
 }
 
-
 pub use crate::zea::visitors::altering::BlockExpander;
+use crate::StructuralEq;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_macros::{ASTStructuralEq, HashEqById, VariantToStr};
@@ -470,10 +468,7 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn label_member_access(
-        e: Expression,
-        field: usize,
-    ) -> Expression {
+    pub fn label_member_access(e: Expression, field: usize) -> Expression {
         Expression {
             id: 0,
             kind: ExpressionKind::MemberAccess(Box::new(e), format!("_{field}")),
@@ -587,7 +582,7 @@ pub struct ConditionMatchArm {
 /// the left hand side of an assignment
 ///
 /// The simplest is a basic identifier
-#[derive(Debug, PartialEq, Clone, Eq, Hash, ASTStructuralEq)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum AssignmentPattern {
     /// the pattern
     ///
@@ -607,7 +602,21 @@ pub enum AssignmentPattern {
     Tuple(Vec<AssignmentPattern>),
 }
 
-#[derive(Debug, PartialEq, Clone, Eq, Hash, ASTStructuralEq)]
+impl StructuralEq for AssignmentPattern {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (AssignmentPattern::Identifier(s1), AssignmentPattern::Identifier(s2)) if s1 == s2 => {
+                true
+            }
+            (AssignmentPattern::Tuple(t1), AssignmentPattern::Tuple(t2)) => {
+                t1.iter().zip(t2).all(|(a, b)| a.structural_eq(b))
+            }
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub enum MatchPattern {
     /// the pattern `a => ...`
     Identifier(String),
@@ -615,6 +624,22 @@ pub enum MatchPattern {
     Tuple(Vec<AssignmentPattern>),
 
     UnionVariant(String, String, Box<AssignmentPattern>),
+}
+
+impl StructuralEq for MatchPattern {
+    fn structural_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (MatchPattern::Identifier(s1), MatchPattern::Identifier(s2)) if s1 == s2 => true,
+            (MatchPattern::Tuple(t1), MatchPattern::Tuple(t2)) => t1
+                .iter()
+                .zip(t2)
+                .all(|(a, b)| StructuralEq::structural_eq(a, b)),
+            (MatchPattern::UnionVariant(s1, s2, s3), MatchPattern::UnionVariant(o1, o2, o3)) => {
+                (s1 == o1) && (s2 == o2) && (StructuralEq::structural_eq(s3.as_ref(), o3.as_ref()))
+            }
+            _ => false,
+        }
+    }
 }
 
 impl std::fmt::Display for AssignmentPattern {
