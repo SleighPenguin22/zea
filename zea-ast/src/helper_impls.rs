@@ -43,6 +43,7 @@ where
     fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
             (Some(t1), Some(t2)) if t1.eq_ignore_id(t2) => true,
+            (None, None) => true,
             _ => false,
         }
     }
@@ -52,7 +53,7 @@ where
 macro_rules! assert_structural_eq {
     ($expected:expr, $got:expr) => {{
         use crate::visualisation::IndentPrint;
-        if (&$expected).eq_ignore_id(&$got) {
+        if !(&$expected).eq_ignore_id(&$got) {
             panic!(
                 "expected structure did not match actual structure:\nexpected:\n{}\ngot:\n{}\n",
                 $expected.indent_print(0),

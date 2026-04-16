@@ -86,7 +86,7 @@ fn derive_ast_structural_eq_impl_struct(
         impl #generics StructuralEq for #ident #generics {
             fn eq_ignore_id(&self, other: &Self) -> bool {
                 let mut is_eq = true;
-                #(is_eq |= #self_eq_other_field;)*
+                #(is_eq &= #self_eq_other_field;)*
                 is_eq
             }
         }
@@ -123,7 +123,7 @@ fn derive_ast_structural_eq_impl_enum(
                 #match_pattern
                 if {
                     let mut sub_items_eq = true;
-                    #(sub_items_eq |= #self_variant_subitems.eq_ignore_id(#other_variant_subitems);)*
+                    #(sub_items_eq &= #self_variant_subitems.eq_ignore_id(#other_variant_subitems);)*
                     sub_items_eq
                 } => true,
             }
