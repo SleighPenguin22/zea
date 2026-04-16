@@ -60,7 +60,7 @@ pub fn variant_to_str(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             }
         }
     }
-        .into()
+    .into()
 }
 
 fn derive_ast_structural_eq_impl_struct(
@@ -78,20 +78,20 @@ fn derive_ast_structural_eq_impl_struct(
             });
     let self_eq_other_field: Vec<_> = applicable_fields
         .map(|field_name| {
-            quote! {(self.#field_name) == (other.#field_name)}
+            quote! {(self.#field_name).eq_ignore_id(&other.#field_name)}
         })
         .collect();
 
     quote! {
-        impl #generics #ident #generics {
-            pub fn structural_eq(&self, other: &Self) -> bool {
+        impl #generics StructuralEq for #ident #generics {
+            fn eq_ignore_id(&self, other: &Self) -> bool {
                 let mut is_eq = true;
                 #(is_eq |= #self_eq_other_field;)*
                 is_eq
             }
         }
     }
-        .into()
+    .into()
 }
 
 fn derive_ast_structural_eq_impl_enum(
@@ -123,7 +123,7 @@ fn derive_ast_structural_eq_impl_enum(
                 #match_pattern
                 if {
                     let mut sub_items_eq = true;
-                    #(sub_items_eq |= #self_variant_subitems.structural_eq(#other_variant_subitems);)*
+                    #(sub_items_eq |= #self_variant_subitems.eq_ignore_id(#other_variant_subitems);)*
                     sub_items_eq
                 } => true,
             }
@@ -131,8 +131,8 @@ fn derive_ast_structural_eq_impl_enum(
         .collect();
 
     quote! {
-        impl #generics #ident #generics {
-            pub fn structural_eq(&self, other: &Self) -> bool {
+        impl #generics  StructuralEq for #ident #generics {
+            fn eq_ignore_id(&self, other: &Self) -> bool {
                 match (self, other) {
                     #(#arms)*
                     _ => false
@@ -140,7 +140,7 @@ fn derive_ast_structural_eq_impl_enum(
             }
         }
     }
-        .into()
+    .into()
 }
 
 #[proc_macro_derive(ASTStructuralEq)]

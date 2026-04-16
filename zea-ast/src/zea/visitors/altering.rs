@@ -695,6 +695,8 @@ pub trait AcceptsTupleNamer {
 
 #[cfg(test)]
 mod block_expander_tests {
+    use crate::visualisation::IndentPrint;
+use crate::helper_impls::StructuralEq;
     use crate::zea::test_ast_macros::*;
     use crate::zea::visitors::altering::{AssignmentSimplifier, Relabel};
     use crate::zea::visitors::{AcceptsAssignmentSimplifier, AcceptsBlockExpander, BlockExpander};

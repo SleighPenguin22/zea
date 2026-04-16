@@ -605,13 +605,13 @@ pub enum AssignmentPattern {
 // causes the compiler to say that the bound `&Vec<AssignmentPattern>: StructuralEq`
 // is not satisfied, even though it is???
 impl StructuralEq for AssignmentPattern {
-    fn structural_eq(&self, other: &Self) -> bool {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
             (AssignmentPattern::Identifier(s1), AssignmentPattern::Identifier(s2)) if s1 == s2 => {
                 true
             }
             (AssignmentPattern::Tuple(t1), AssignmentPattern::Tuple(t2)) => {
-                t1.iter().zip(t2).all(|(a, b)| a.structural_eq(b))
+                t1.iter().zip(t2).all(|(a, b)| a.eq_ignore_id(b))
             }
             _ => false,
         }
@@ -629,15 +629,15 @@ pub enum MatchPattern {
 }
 
 impl StructuralEq for MatchPattern {
-    fn structural_eq(&self, other: &Self) -> bool {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
             (MatchPattern::Identifier(s1), MatchPattern::Identifier(s2)) if s1 == s2 => true,
             (MatchPattern::Tuple(t1), MatchPattern::Tuple(t2)) => t1
                 .iter()
                 .zip(t2)
-                .all(|(a, b)| StructuralEq::structural_eq(a, b)),
+                .all(|(a, b)| StructuralEq::eq_ignore_id(a, b)),
             (MatchPattern::UnionVariant(s1, s2, s3), MatchPattern::UnionVariant(o1, o2, o3)) => {
-                (s1 == o1) && (s2 == o2) && (StructuralEq::structural_eq(s3.as_ref(), o3.as_ref()))
+                (s1 == o1) && (s2 == o2) && (StructuralEq::eq_ignore_id(s3.as_ref(), o3.as_ref()))
             }
             _ => false,
         }

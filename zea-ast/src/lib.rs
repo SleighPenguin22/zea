@@ -10,9 +10,9 @@ pub mod c;
 /// As such, you can use these id's as keys in hashtables tables that annotate nodes.
 pub mod zea;
 
+pub mod helper_impls;
 #[cfg(feature = "visualisation")]
 pub mod visualisation;
-pub mod helper_impls;
 
 pub trait StructuralEq {
     fn structural_eq(&self, other: &Self) -> bool;
