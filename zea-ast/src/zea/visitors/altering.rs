@@ -699,9 +699,9 @@ mod block_expander_tests {
     use crate::zea::visitors::altering::{AssignmentSimplifier, Relabel};
     use crate::zea::visitors::{AcceptsAssignmentSimplifier, AcceptsBlockExpander, BlockExpander};
     use crate::zea::{
-        AssignmentPattern, Expression, ExpressionKind, Function, Initialisation,
-        InitialisationKind, Module, PackedInitialisation, Statement, StatementBlock, StatementKind,
-        Type,
+        assert_structural_eq, AssignmentPattern, Expression, ExpressionKind, Function,
+        Initialisation, InitialisationKind, Module, PackedInitialisation, Statement, StatementBlock,
+        StatementKind, Type,
     };
 
     #[test]
@@ -731,12 +731,12 @@ mod block_expander_tests {
         let ExpressionKind::ExpandedBlock(expanded) = after.kind else {
             unreachable!()
         };
-        assert_eq!(
-            expanded.statements,
-            vec![stmt!(init pat!(a) ;= expr!(litint 3))]
+        assert_structural_eq!(
+            expanded.statements[0],
+            stmt!(init pat!(a) ;= expr!(litint 3))
         );
 
-        assert_eq!(expanded.last, expr!(ident a));
+        assert_structural_eq!(expanded.last, expr!(ident a));
     }
 
     fn wrap_in_module(init: Initialisation) -> Module {

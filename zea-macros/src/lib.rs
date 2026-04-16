@@ -151,6 +151,6 @@ pub fn derive_ast_structural_eq(input: TokenStream) -> TokenStream {
     match parsed.data {
         Data::Struct(s) => derive_ast_structural_eq_impl_struct(s, ident, generics),
         Data::Enum(e) => derive_ast_structural_eq_impl_enum(e, ident, generics),
-        Data::Union(_) => panic!("strucutral equality on Unions is not supported"),
+        Data::Union(_) => panic!("structural equality on Unions is not supported"),
     }
 }

@@ -1,6 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
-use crate::helper_impls::ASTStructuralEq;
+use crate::helper_impls::{assert_structural_eq, StructuralEq};
 pub mod typecheck;
 pub mod visitors;
 
@@ -262,7 +262,6 @@ pub(crate) mod test_ast_macros {
 }
 
 pub use crate::zea::visitors::altering::BlockExpander;
-use crate::StructuralEq;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_macros::{ASTStructuralEq, HashEqById, VariantToStr};
@@ -602,6 +601,9 @@ pub enum AssignmentPattern {
     Tuple(Vec<AssignmentPattern>),
 }
 
+// This manual impl exists because deriving it
+// causes the compiler to say that the bound `&Vec<AssignmentPattern>: StructuralEq`
+// is not satisfied, even though it is???
 impl StructuralEq for AssignmentPattern {
     fn structural_eq(&self, other: &Self) -> bool {
         match (self, other) {
