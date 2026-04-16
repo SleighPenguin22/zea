@@ -146,7 +146,7 @@ fn derive_ast_structural_eq_impl_enum(
 #[proc_macro_derive(ASTStructuralEq)]
 pub fn derive_ast_structural_eq(input: TokenStream) -> TokenStream {
     let parsed = syn::parse_macro_input!(input as DeriveInput);
-    let mut ident = parsed.ident.clone();
+    let ident = parsed.ident.clone();
     let generics = parsed.generics.clone();
     match parsed.data {
         Data::Struct(s) => derive_ast_structural_eq_impl_struct(s, ident, generics),

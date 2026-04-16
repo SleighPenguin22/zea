@@ -607,9 +607,7 @@ pub enum AssignmentPattern {
 impl StructuralEq for AssignmentPattern {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
-            (AssignmentPattern::Identifier(s1), AssignmentPattern::Identifier(s2)) if s1 == s2 => {
-                true
-            }
+            (AssignmentPattern::Identifier(s1), AssignmentPattern::Identifier(s2)) => true,
             (AssignmentPattern::Tuple(t1), AssignmentPattern::Tuple(t2)) => {
                 t1.iter().zip(t2).all(|(a, b)| a.eq_ignore_id(b))
             }
@@ -631,13 +629,13 @@ pub enum MatchPattern {
 impl StructuralEq for MatchPattern {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
-            (MatchPattern::Identifier(s1), MatchPattern::Identifier(s2)) if s1 == s2 => true,
+            (MatchPattern::Identifier(_), MatchPattern::Identifier(s2)) => true,
             (MatchPattern::Tuple(t1), MatchPattern::Tuple(t2)) => t1
                 .iter()
                 .zip(t2)
                 .all(|(a, b)| StructuralEq::eq_ignore_id(a, b)),
-            (MatchPattern::UnionVariant(s1, s2, s3), MatchPattern::UnionVariant(o1, o2, o3)) => {
-                (s1 == o1) && (s2 == o2) && (StructuralEq::eq_ignore_id(s3.as_ref(), o3.as_ref()))
+            (MatchPattern::UnionVariant(_, _, s3), MatchPattern::UnionVariant(o1, o2, o3)) => {
+                (StructuralEq::eq_ignore_id(s3.as_ref(), o3.as_ref()))
             }
             _ => false,
         }
@@ -736,8 +734,8 @@ impl Type {
         Self::from("Unit")
     }
 
-    pub fn Exit() -> Self {
-        Self::from("!EXIT!")
+    pub fn Never() -> Self {
+        Self::from("Never")
     }
 }
 #[derive(Debug, Eq, PartialEq, Hash, Clone, ASTStructuralEq)]

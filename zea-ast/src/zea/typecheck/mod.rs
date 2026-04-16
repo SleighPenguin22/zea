@@ -10,7 +10,7 @@ pub fn BUILTIN_TYPES() -> [zea::Type; 5] {
         zea::Type::Bool(),
         zea::Type::F64(),
         zea::Type::Unit(),
-        zea::Type::Exit(),
+        zea::Type::Never(),
     ]
 }
 

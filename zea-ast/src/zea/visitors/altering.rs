@@ -709,7 +709,7 @@ use crate::helper_impls::StructuralEq;
     #[test]
     fn test_expand_block() {
         let mut block_expander = BlockExpander::new();
-        let (mut ast, generator) = label_ast!(using block_expander ; zea_module! {
+        let (ast, generator) = label_ast!(using block_expander ; zea_module! {
             imports {}
             exports {}
             globs {}
@@ -765,7 +765,7 @@ use crate::helper_impls::StructuralEq;
 
     #[test]
     fn test_simple_ident_init_is_already_done() {
-        let simplifier = AssignmentSimplifier::new();
+        let _simplifier = AssignmentSimplifier::new();
 
         let stmt = stmt!(init pat!(a) ;= expr!(litint 1));
         let StatementKind::Initialisation(ref init) = stmt.kind else {
