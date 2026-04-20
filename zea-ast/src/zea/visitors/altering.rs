@@ -51,6 +51,8 @@ impl NodeLabeler for BareNodeLabeler {
 }
 
 pub trait Relabel {
+    /// Give each id=0 in the Parse Tree a new, unique ID.
+    ///
     fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler);
 }
 

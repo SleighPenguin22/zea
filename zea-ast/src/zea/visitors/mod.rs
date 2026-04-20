@@ -2,21 +2,26 @@ use indexmap::IndexSet;
 
 pub mod altering;
 use crate::zea::visitors::altering::{
-    AcceptsAssignmentSimplifier, AssignmentSimplifier, BlockExpander, NodeLabeler,
+    AcceptsAssignmentSimplifier, AssignmentSimplifier, BlockExpander, NodeLabeler, Relabel,
 };
 use crate::zea::visitors::annotating::{
     AcceptScopeBuilder, IntroducesFreshIdentifiers, ScopeAnnotations,
 };
-use crate::zea::Module;
+use crate::zea::{BareNodeLabeler, Module};
 use altering::AcceptsBlockExpander;
 
 pub mod annotating;
 
 impl Module {
+    pub fn give_ids(mut self, last_used_generator: impl NodeLabeler) -> (Module, impl NodeLabeler) {
+        let mut labeler = BareNodeLabeler::continue_from_last_id_of(last_used_generator);
+        self.give_unique_ids(&mut labeler);
+        (self, labeler)
+    }
     pub fn expand_blocks(
         mut self,
         last_used_generator: impl NodeLabeler,
-    ) -> (Module, BlockExpander) {
+    ) -> (Module, impl NodeLabeler) {
         let mut block_expander = BlockExpander::continue_from_last_id_of(last_used_generator);
         while self.accept_block_expander(&mut block_expander) {
             eprintln!("expanding blocks still...")
@@ -27,7 +32,7 @@ impl Module {
     pub fn simplify_assignments(
         mut self,
         last_used_generator: impl NodeLabeler,
-    ) -> (Module, AssignmentSimplifier) {
+    ) -> (Module, impl NodeLabeler) {
         let mut assignment_simplifier =
             AssignmentSimplifier::continue_from_last_id_of(last_used_generator);
         while self.accept_assignment_simplifier(&mut assignment_simplifier) {

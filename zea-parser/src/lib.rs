@@ -1,14 +1,39 @@
 #![allow(unused)]
 
 mod grammar;
+
 pub use grammar::ExprParser as ExpressionParser;
 pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
-use zea_ast::zea::visitors::altering::NodeLabeler;
+use lalrpop_util::ParseError;
+use zea_ast::zea::visitors::altering::{
+    BareNodeLabeler, NodeLabeler, Relabel,
+};
+use zea_ast::zea::visitors::annotating::ASTSemanticViolation;
 use zea_ast::zea::{
-    BinOp, Expression, ExpressionKind, Function, Initialisation, StatementBlock,
+    BinOp, Expression, ExpressionKind, Function, Initialisation, Module, StatementBlock,
     StructDataTypeDefinition, TaggedUnionDataTypeDefinition, UnOp,
 };
+
+pub fn parse_module(
+    src: &'_ str,
+) -> Result<(Module, impl NodeLabeler), ParseError<usize, lalrpop_util::lexer::Token<'_>, &'_ str>> {
+    let p = ModuleParser::new();
+    let mut module = p.parse(src)?;
+    let mut labeler = BareNodeLabeler::new();
+    let (module, mut generator) = module.give_ids(labeler);
+    Ok((module, generator))
+}
+
+pub fn desugar(ast: Module, last_used_generator: impl NodeLabeler) -> (Module, impl NodeLabeler) {
+    let (ast, mut generator) = ast.expand_blocks(last_used_generator);
+    let (ast, mut generator) = ast.simplify_assignments(generator);
+    (ast, generator)
+}
+
+pub fn semantic_annotations(ast: &'_ Module) -> Result<Module, ASTSemanticViolation<'_>> {
+    todo!()
+}
 
 pub(crate) enum ModuleItem {
     Init(Initialisation),

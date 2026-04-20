@@ -160,7 +160,7 @@ impl InferenceId {
         matches!(self, InferenceId::TypeConcrete(_))
     }
 }
-struct ModuleInferenceContext<'ast> {
+pub struct ModuleInferenceContext<'ast> {
     ast: &'ast Module,
     /// unique types within a program, use a [`TypeConcreteId`] to lookup
     intering_table: TypeInterningTable,
@@ -434,7 +434,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
 
         let func = self
             .ast
-            .iter_symbols()
+            .iter_functions()
             .find(|func| func.name == call.name)
             .expect("AST should have ");
         let returns_id: InferenceId = self.intering_table.introduce(&func.returns).into();

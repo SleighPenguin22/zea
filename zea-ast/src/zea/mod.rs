@@ -263,7 +263,7 @@ pub(crate) mod test_ast_macros {
     pub(crate) use ztyp;
 }
 
-pub use crate::zea::visitors::altering::BlockExpander;
+pub use crate::zea::visitors::altering::{BareNodeLabeler, BlockExpander};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_macros::{ASTStructuralEq, HashEqById, VariantToStr};
@@ -280,11 +280,17 @@ pub struct Module {
 
 impl Module {
     pub fn find_entry_point(&self) -> Option<&Function> {
-        self.iter_symbols().find(|func| func.name == "main")
+        self.iter_functions().find(|func| func.name == "main")
     }
 
-    pub fn iter_symbols(&self) -> impl Iterator<Item = &Function> {
+    pub fn iter_functions(&self) -> impl Iterator<Item = &Function> {
         self.functions.iter()
+    }
+    pub fn iter_global_vars(&self) -> impl Iterator<Item = &Initialisation> {
+        self.global_vars.iter()
+    }
+    pub fn iter_structs(&self) -> impl Iterator<Item = &StructDataTypeDefinition> {
+        self.struct_definitions.iter()
     }
 }
 
@@ -353,11 +359,7 @@ pub struct Initialisation {
 }
 
 impl Initialisation {
-    pub fn packed(
-        typ: Option<Type>,
-        assignee: AssignmentPattern,
-        value: Expression,
-    ) -> Self {
+    pub fn packed(typ: Option<Type>, assignee: AssignmentPattern, value: Expression) -> Self {
         Self {
             id: 0,
             kind: InitialisationKind::Packed(PackedInitialisation {
@@ -658,8 +660,7 @@ impl std::fmt::Display for AssignmentPattern {
 }
 
 /// The Zea named Struct type / product type
-#[derive(HashEqById, ASTStructuralEq)]
-#[derive(Debug)]
+#[derive(HashEqById, ASTStructuralEq, Debug)]
 pub struct StructDataTypeDefinition {
     pub id: usize,
     pub name: String,
