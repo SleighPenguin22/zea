@@ -2,7 +2,7 @@ use indexmap::IndexSet;
 
 pub mod altering;
 use crate::zea::visitors::altering::{
-    AcceptsAssignmentSimplifier, AssignmentSimplifier, BlockExpander, NodeLabeler, Relabel,
+    AcceptsAssignmentSimplifier, AssignmentSimplifier, BlockExpander, NodeLabeler, LabelSentinelIDs,
 };
 use crate::zea::visitors::annotating::{
     AcceptScopeBuilder, IntroducesFreshIdentifiers, ScopeAnnotations,
@@ -15,7 +15,7 @@ pub mod annotating;
 impl Module {
     pub fn give_ids(mut self, last_used_generator: impl NodeLabeler) -> (Module, impl NodeLabeler) {
         let mut labeler = BareNodeLabeler::continue_from_last_id_of(last_used_generator);
-        self.give_unique_ids(&mut labeler);
+        self.label_sentinel_id(&mut labeler);
         (self, labeler)
     }
     pub fn expand_blocks(

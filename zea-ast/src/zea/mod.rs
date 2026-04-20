@@ -1,6 +1,27 @@
 #![allow(dead_code, unused_imports)]
-
+/// This module contains the AST definition for the Zea language.
+/// Any node that encompasses some structure with meaningful data has an id, this id has the following guarantees:
+/// - the id is unique
+/// - there is no specified order in the id's of nodes.
+/// - the ID of a node stays the same through the whole compilation process.
+///
+/// As such, you can use these id's as keys in hashtables tables that annotate nodes.
+///
+/// To maintain these invariants, any AST-visitors must not change the ID of an existing node.
+/// When the visitor places a new node in the AST, that node must get a new unique ID.
+///
+/// To make this easier, the [`visitors::altering::NodeLabeler`] trait
+/// may be implemented on a visitor.
+/// This trait provides the [`visitors::altering::NodeLabeler::continue_from_last_id_of`] method
+/// to maintain the generation of unique ID's.
+///
+/// A node having an ID of 0 signals a sentinel ID,
+/// it signifies that the node still requires a unique ID.
+///
+/// The [`visitors::altering::BareNodeLabeler`] visitor
+/// grants a unique ID to node with a sentinel ID.
 use crate::helper_impls::{assert_structural_eq, StructuralEq};
+
 pub mod typecheck;
 pub mod visitors;
 
@@ -8,17 +29,21 @@ pub mod visitors;
 pub(crate) mod test_ast_macros {
     macro_rules! label_ast {
         (fresh $ast:expr) => {{
-            use crate::zea::visitors::altering::BareNodeLabeler;
+            use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
+            use crate::zea::Module;
+
             let mut node_labeler = BareNodeLabeler::new();
             let mut ast = $ast;
-            ast.give_unique_ids(&mut node_labeler);
-            (ast, node_labeler)
+            ast.label_sentinel_id(node_labeler);
+            (ast, generator)
         }};
         (using $l:expr ; $ast:expr) => {{
-            use crate::zea::visitors::altering::BareNodeLabeler;
+            use crate::zea::visitors::altering::NodeLabeler;
+            use crate::zea::Module;
+            let mut generator = $l;
             let mut ast = $ast;
-            ast.give_unique_ids(&mut $l);
-            (ast, $l)
+            ast.label_sentinel_id(&mut generator);
+            (ast, generator)
         }};
     }
     pub(crate) use label_ast;
@@ -261,9 +286,10 @@ pub(crate) mod test_ast_macros {
         };
     }
     pub(crate) use ztyp;
+    use crate::zea::{Module, NodeLabeler};
 }
 
-pub use crate::zea::visitors::altering::{BareNodeLabeler, BlockExpander};
+pub use crate::zea::visitors::altering::{BareNodeLabeler, BlockExpander, NodeLabeler};
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_macros::{ASTStructuralEq, HashEqById, VariantToStr};

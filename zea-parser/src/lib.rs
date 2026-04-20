@@ -7,7 +7,7 @@ pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
 use lalrpop_util::ParseError;
 use zea_ast::zea::visitors::altering::{
-    BareNodeLabeler, NodeLabeler, Relabel,
+    BareNodeLabeler, NodeLabeler, LabelSentinelIDs,
 };
 use zea_ast::zea::visitors::annotating::ASTSemanticViolation;
 use zea_ast::zea::{

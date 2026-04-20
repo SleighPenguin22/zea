@@ -5,38 +5,33 @@ use crate::zea::{
     UnpackedInitialisation,
 };
 
-pub struct BareNodeLabeler {
-    label: usize,
-}
-
 pub trait NodeLabeler {
     /// Start `Self`'s id-generator with the last id that `other_generator` used,
     /// such that [`Self::next_label`] calls will never produce an ID
-    /// equal to any of `other_generator`'s ID's
+    /// equal to any of `other_generator`'s ID's.
     fn continue_from_last_id_of(other_generator: impl NodeLabeler) -> Self;
     /// All implementors must ensure that any ID generated is not equal to 0,
     /// as this is a sentinel ID used to signify the need for a fresh ID
     fn next_label(&mut self) -> usize;
     /// Generate the next label, along with a valid unique identifier
-    fn next_label_with_string(&mut self) -> (usize, String) {
+    fn next_label_with_ident_string(&mut self) -> (usize, String) {
         let next = self.next_label();
         (next, format!("__label{}", next))
     }
     /// assign a fresh ID only if the current ID is equal to 0.
-    fn validify_sentinel_label(&mut self, current_id: &mut usize) {
+    fn update_label_if_sentinel(&mut self, current_id: &mut usize) {
         if *current_id == 0 {
             *current_id = self.next_label();
         }
     }
 }
+pub struct BareNodeLabeler {
+    label: usize,
+}
+
 impl BareNodeLabeler {
     pub fn new() -> Self {
         Self { label: 1 }
-    }
-    pub fn next_label(&mut self) -> usize {
-        let label = self.label;
-        self.label += 1;
-        label
     }
 }
 impl NodeLabeler for BareNodeLabeler {
@@ -46,91 +41,94 @@ impl NodeLabeler for BareNodeLabeler {
         }
     }
     fn next_label(&mut self) -> usize {
-        BareNodeLabeler::next_label(self)
+        let label = self.label;
+        self.label += 1;
+        label
     }
 }
 
-pub trait Relabel {
+/// This trait gives node with a sentinel ID a unique, fresh ID.
+pub trait LabelSentinelIDs {
     /// Give each id=0 in the Parse Tree a new, unique ID.
     ///
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler);
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler);
 }
 
-impl Relabel for Module {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
+impl LabelSentinelIDs for Module {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
         for glob_var in self.global_vars.iter_mut() {
-            glob_var.give_unique_ids(labeler);
+            glob_var.label_sentinel_id(labeler);
         }
 
         for func in self.functions.iter_mut() {
-            func.give_unique_ids(labeler);
+            func.label_sentinel_id(labeler);
         }
     }
 }
 
-impl Relabel for Initialisation {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
+impl LabelSentinelIDs for Initialisation {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
         match &mut self.kind {
-            InitialisationKind::PartiallyUnpacked(p) => p.give_unique_ids(labeler),
-            InitialisationKind::Packed(p) => p.give_unique_ids(labeler),
+            InitialisationKind::PartiallyUnpacked(p) => p.label_sentinel_id(labeler),
+            InitialisationKind::Packed(p) => p.label_sentinel_id(labeler),
         }
     }
 }
 
-impl Relabel for PartiallyUnpackedInitialisation {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        self.temporary.give_unique_ids(labeler);
+impl LabelSentinelIDs for PartiallyUnpackedInitialisation {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        self.temporary.label_sentinel_id(labeler);
         for unpack in self.unpacked_assignments.iter_mut() {
-            unpack.give_unique_ids(labeler);
+            unpack.label_sentinel_id(labeler);
         }
     }
 }
 
-impl Relabel for PackedInitialisation {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        self.value.give_unique_ids(labeler);
+impl LabelSentinelIDs for PackedInitialisation {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        self.value.label_sentinel_id(labeler);
     }
 }
-impl Relabel for UnpackedInitialisation {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        self.value.give_unique_ids(labeler);
+impl LabelSentinelIDs for UnpackedInitialisation {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        self.value.label_sentinel_id(labeler);
     }
 }
-impl Relabel for Function {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
-        self.body.give_unique_ids(labeler);
+impl LabelSentinelIDs for Function {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
+        self.body.label_sentinel_id(labeler);
     }
 }
-impl Relabel for StatementBlock {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
+impl LabelSentinelIDs for StatementBlock {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
         for stmt in self.statements.iter_mut() {
-            stmt.give_unique_ids(labeler);
+            stmt.label_sentinel_id(labeler);
         }
     }
 }
 
-impl Relabel for Statement {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
+impl LabelSentinelIDs for Statement {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
         match &mut self.kind {
-            StatementKind::Initialisation(i) => i.give_unique_ids(labeler),
-            StatementKind::Reassignment(r) => r.give_unique_ids(labeler),
-            StatementKind::FunctionCall(call) => call.give_unique_ids(labeler),
-            StatementKind::Return(e) => e.give_unique_ids(labeler),
-            StatementKind::BlockTail(e) => e.give_unique_ids(labeler),
-            StatementKind::Block(b) => b.give_unique_ids(labeler),
-            StatementKind::ExpandedBlock(eb) => eb.give_unique_ids(labeler),
-            StatementKind::CondBranch(b) => b.give_unique_ids(labeler),
+            StatementKind::Initialisation(i) => i.label_sentinel_id(labeler),
+            StatementKind::Reassignment(r) => r.label_sentinel_id(labeler),
+            StatementKind::FunctionCall(call) => call.label_sentinel_id(labeler),
+            StatementKind::Return(e) => e.label_sentinel_id(labeler),
+            StatementKind::BlockTail(e) => e.label_sentinel_id(labeler),
+            StatementKind::Block(b) => b.label_sentinel_id(labeler),
+            StatementKind::ExpandedBlock(eb) => eb.label_sentinel_id(labeler),
+            StatementKind::CondBranch(b) => b.label_sentinel_id(labeler),
         }
     }
 }
-impl Relabel for Expression {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
+impl LabelSentinelIDs for Expression {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
         match &mut self.kind {
             ExpressionKind::Unit => {}
             ExpressionKind::IntegerLiteral(_) => {}
@@ -138,54 +136,54 @@ impl Relabel for Expression {
             ExpressionKind::FloatLiteral(_) => {}
             ExpressionKind::StringLiteral(_) => {}
             ExpressionKind::Ident(_) => {}
-            ExpressionKind::FuncCall(call) => call.give_unique_ids(labeler),
+            ExpressionKind::FuncCall(call) => call.label_sentinel_id(labeler),
             ExpressionKind::BinOpExpr(_, lhs, rhs) => {
-                lhs.give_unique_ids(labeler);
-                rhs.give_unique_ids(labeler);
+                lhs.label_sentinel_id(labeler);
+                rhs.label_sentinel_id(labeler);
             }
-            ExpressionKind::UnOpExpr(_, arg) => arg.give_unique_ids(labeler),
-            ExpressionKind::MemberAccess(data, _) => data.give_unique_ids(labeler),
-            ExpressionKind::CondBranch(b) => b.give_unique_ids(labeler),
-            ExpressionKind::Block(b) => b.give_unique_ids(labeler),
-            ExpressionKind::ExpandedBlock(eb) => eb.give_unique_ids(labeler),
+            ExpressionKind::UnOpExpr(_, arg) => arg.label_sentinel_id(labeler),
+            ExpressionKind::MemberAccess(data, _) => data.label_sentinel_id(labeler),
+            ExpressionKind::CondBranch(b) => b.label_sentinel_id(labeler),
+            ExpressionKind::Block(b) => b.label_sentinel_id(labeler),
+            ExpressionKind::ExpandedBlock(eb) => eb.label_sentinel_id(labeler),
         }
     }
 }
 
-impl Relabel for IfThenElse {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
-        self.true_case.give_unique_ids(labeler);
-        self.condition.give_unique_ids(labeler);
+impl LabelSentinelIDs for IfThenElse {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
+        self.true_case.label_sentinel_id(labeler);
+        self.condition.label_sentinel_id(labeler);
         if let Some(false_case) = &mut self.false_case {
-            false_case.give_unique_ids(labeler);
+            false_case.label_sentinel_id(labeler);
         }
     }
 }
 
-impl Relabel for ExpandedBlockExpr {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
+impl LabelSentinelIDs for ExpandedBlockExpr {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
         for stmt in self.statements.iter_mut() {
-            stmt.give_unique_ids(labeler);
+            stmt.label_sentinel_id(labeler);
         }
-        self.last.give_unique_ids(labeler);
+        self.last.label_sentinel_id(labeler);
     }
 }
 
-impl Relabel for FunctionCall {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
+impl LabelSentinelIDs for FunctionCall {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
         for arg in self.args.iter_mut() {
-            arg.give_unique_ids(labeler);
+            arg.label_sentinel_id(labeler);
         }
     }
 }
 
-impl Relabel for Reassignment {
-    fn give_unique_ids(&mut self, labeler: &mut impl NodeLabeler) {
-        labeler.validify_sentinel_label(&mut self.id);
-        self.value.give_unique_ids(labeler);
+impl LabelSentinelIDs for Reassignment {
+    fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
+        labeler.update_label_if_sentinel(&mut self.id);
+        self.value.label_sentinel_id(labeler);
     }
 }
 
@@ -208,7 +206,7 @@ impl NodeLabeler for AssignmentSimplifier {
         self.label += 1;
         label
     }
-    fn next_label_with_string(&mut self) -> (usize, String) {
+    fn next_label_with_ident_string(&mut self) -> (usize, String) {
         let label = self.next_label();
         (label, format!("__unpack{}", label))
     }
@@ -280,7 +278,7 @@ impl AcceptsAssignmentSimplifier for Initialisation {
             InitialisationKind::Packed(p) => match &p.assignee {
                 AssignmentPattern::Identifier(_) => {}
                 AssignmentPattern::Tuple(tup) => {
-                    let (_id, label) = simplifier.next_label_with_string();
+                    let (_id, label) = simplifier.next_label_with_ident_string();
                     let temporary = UnpackedInitialisation {
                         typ: p.typ.clone(),
                         assignee: label.clone(),
@@ -325,7 +323,9 @@ impl AcceptsAssignmentSimplifier for StatementBlock {
         !self.has_assignments_unpacked()
     }
     fn has_assignments_unpacked(&self) -> bool {
-        self.statements.iter().all(|s| s.has_assignments_unpacked())
+        self.statements
+            .iter()
+            .all(Statement::has_assignments_unpacked)
     }
 }
 
@@ -337,7 +337,9 @@ impl AcceptsAssignmentSimplifier for ExpandedBlockExpr {
         !self.has_assignments_unpacked()
     }
     fn has_assignments_unpacked(&self) -> bool {
-        self.statements.iter().all(|s| s.has_assignments_unpacked())
+        self.statements
+            .iter()
+            .all(Statement::has_assignments_unpacked)
     }
 }
 
@@ -697,20 +699,20 @@ pub trait AcceptsTupleNamer {
 
 #[cfg(test)]
 mod block_expander_tests {
+    use crate::helper_impls::StructuralEq;
     use crate::visualisation::IndentPrint;
-use crate::helper_impls::StructuralEq;
     use crate::zea::test_ast_macros::*;
-    use crate::zea::visitors::altering::{AssignmentSimplifier, Relabel};
+    use crate::zea::visitors::altering::{AssignmentSimplifier, LabelSentinelIDs};
     use crate::zea::visitors::{AcceptsAssignmentSimplifier, AcceptsBlockExpander, BlockExpander};
     use crate::zea::{
         assert_structural_eq, AssignmentPattern, Expression, ExpressionKind, Function,
-        Initialisation, InitialisationKind, Module, PackedInitialisation, Statement, StatementBlock,
-        StatementKind, Type,
+        Initialisation, InitialisationKind, Module, NodeLabeler, PackedInitialisation, Statement,
+        StatementBlock, StatementKind, Type,
     };
 
     #[test]
     fn test_expand_block() {
-        let mut block_expander = BlockExpander::new();
+        let block_expander = BlockExpander::new();
         let (ast, generator) = label_ast!(using block_expander ; zea_module! {
             imports {}
             exports {}
@@ -723,15 +725,15 @@ use crate::helper_impls::StructuralEq;
             structs {}
         });
 
-        let (ast, mut generator) = ast.expand_blocks(generator);
+        let (ast, generator) = ast.expand_blocks(generator);
         // eprintln!("{:?}", ast.functions[0]);
         assert!(ast.has_blocks_expanded());
 
-        let (mut ast, mut generator) = label_ast!(using generator;  expr!(block block! {
+        let (mut ast, generator) = label_ast!(using generator;  expr!(block block! {
             stmt!(init pat!(a) ;= expr!(litint 3));
             stmt!(tail expr!(ident a))
         }));
-        ast.accept_block_expander(&mut generator);
+        ast.accept_block_expander(&mut BlockExpander::continue_from_last_id_of(generator));
         let after = ast;
         let ExpressionKind::ExpandedBlock(expanded) = after.kind else {
             unreachable!()
@@ -763,7 +765,7 @@ use crate::helper_impls::StructuralEq;
                     }],
                 },
             }],
-            struct_definitions: vec![]
+            struct_definitions: vec![],
         }
     }
 
@@ -828,7 +830,7 @@ use crate::helper_impls::StructuralEq;
 
         // ((a, b), c) := nested_tuple
         let mut stmt = stmt!(init pat!(((a, b), c)) ;= expr!(ident nested_tuple));
-        stmt.give_unique_ids(&mut simplifier);
+        stmt.label_sentinel_id(&mut simplifier);
         let StatementKind::Initialisation(ref mut init) = stmt.kind else {
             unreachable!()
         };
