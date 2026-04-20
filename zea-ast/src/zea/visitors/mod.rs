@@ -17,7 +17,7 @@ impl Module {
         mut self,
         last_used_generator: impl NodeLabeler,
     ) -> (Module, BlockExpander) {
-        let mut block_expander = BlockExpander::transplant_generator(last_used_generator);
+        let mut block_expander = BlockExpander::continue_from_last_id_of(last_used_generator);
         while self.accept_block_expander(&mut block_expander) {
             eprintln!("expanding blocks still...")
         }
@@ -29,7 +29,7 @@ impl Module {
         last_used_generator: impl NodeLabeler,
     ) -> (Module, AssignmentSimplifier) {
         let mut assignment_simplifier =
-            AssignmentSimplifier::transplant_generator(last_used_generator);
+            AssignmentSimplifier::continue_from_last_id_of(last_used_generator);
         while self.accept_assignment_simplifier(&mut assignment_simplifier) {
             eprintln!("simplifying assignments still...")
         }

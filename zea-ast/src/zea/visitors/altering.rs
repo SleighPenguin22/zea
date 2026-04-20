@@ -13,7 +13,7 @@ pub trait NodeLabeler {
     /// Start `Self`'s id-generator with the last id that `other_generator` used,
     /// such that [`Self::next_label`] calls will never produce an ID
     /// equal to any of `other_generator`'s ID's
-    fn transplant_generator(other_generator: impl NodeLabeler) -> Self;
+    fn continue_from_last_id_of(other_generator: impl NodeLabeler) -> Self;
     /// All implementors must ensure that any ID generated is not equal to 0,
     /// as this is a sentinel ID used to signify the need for a fresh ID
     fn next_label(&mut self) -> usize;
@@ -40,7 +40,7 @@ impl BareNodeLabeler {
     }
 }
 impl NodeLabeler for BareNodeLabeler {
-    fn transplant_generator(mut other_generator: impl NodeLabeler) -> Self {
+    fn continue_from_last_id_of(mut other_generator: impl NodeLabeler) -> Self {
         Self {
             label: other_generator.next_label(),
         }
@@ -196,7 +196,7 @@ impl AssignmentSimplifier {
     }
 }
 impl NodeLabeler for AssignmentSimplifier {
-    fn transplant_generator(mut other_generator: impl NodeLabeler) -> Self {
+    fn continue_from_last_id_of(mut other_generator: impl NodeLabeler) -> Self {
         Self {
             label: other_generator.next_label(),
         }
@@ -395,7 +395,7 @@ pub struct BlockExpander {
 /// Tranform some node into a given variant, and label it.
 
 impl NodeLabeler for BlockExpander {
-    fn transplant_generator(mut other_generator: impl NodeLabeler) -> Self {
+    fn continue_from_last_id_of(mut other_generator: impl NodeLabeler) -> Self {
         Self {
             label: other_generator.next_label(),
         }
@@ -718,6 +718,7 @@ use crate::helper_impls::StructuralEq;
                     stmt!(tail expr!(litint 3))
                 }})
             }
+            structs {}
         });
 
         let (ast, mut generator) = ast.expand_blocks(generator);
@@ -760,6 +761,7 @@ use crate::helper_impls::StructuralEq;
                     }],
                 },
             }],
+            struct_definitions: vec![]
         }
     }
 

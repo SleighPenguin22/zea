@@ -4,57 +4,58 @@ mod grammar;
 pub use grammar::ExprParser as ExpressionParser;
 pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
-use zea_ast::zea::{BinOp, Expression, ExpressionKind, Function, Initialisation, BlockExpander, StatementBlock, UnOp};
-
-#[derive(Default, Clone, Copy)]
-pub struct NodeIdGenerator {
-    cur: usize,
-}
+use zea_ast::zea::visitors::altering::NodeLabeler;
+use zea_ast::zea::{
+    BinOp, Expression, ExpressionKind, Function, Initialisation, StatementBlock,
+    StructDataTypeDefinition, TaggedUnionDataTypeDefinition, UnOp,
+};
 
 pub(crate) enum ModuleItem {
     Init(Initialisation),
     Func(Function),
+    StructDef(StructDataTypeDefinition),
+    EnumDef(TaggedUnionDataTypeDefinition),
 }
 
-pub(crate) fn separate(items: Vec<ModuleItem>) -> (Vec<Initialisation>, Vec<Function>) {
+pub(crate) fn separate_module_items(
+    items: Vec<ModuleItem>,
+) -> (
+    Vec<Initialisation>,
+    Vec<Function>,
+    Vec<StructDataTypeDefinition>,
+    Vec<TaggedUnionDataTypeDefinition>,
+) {
     let mut globs = vec![];
     let mut funcs = vec![];
+    let mut structs = vec![];
+    let mut tagged_unions = vec![];
     for item in items {
         match item {
             ModuleItem::Init(i) => globs.push(i),
             ModuleItem::Func(f) => funcs.push(f),
+            ModuleItem::StructDef(s) => structs.push(s),
+            ModuleItem::EnumDef(tu) => tagged_unions.push(tu),
         }
     }
-    (globs, funcs)
+    (globs, funcs, structs, tagged_unions)
 }
 
-impl NodeIdGenerator {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    pub fn get(&mut self) -> usize {
-        let cur = self.cur;
-        self.cur += 1;
-        cur
-    }
-}
-
-fn binop(g: &mut NodeIdGenerator, op: BinOp, l: Expression, r: Expression) -> Expression {
+fn binop(op: BinOp, l: Expression, r: Expression) -> Expression {
     Expression {
-        id: g.get(),
+        id: 0,
         kind: ExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),
     }
 }
-fn unop(g: &mut NodeIdGenerator, op: UnOp, e: Expression) -> Expression {
+fn unop(op: UnOp, e: Expression) -> Expression {
     Expression {
-        id: g.get(),
+        id: 0,
         kind: ExpressionKind::UnOpExpr(op, Box::new(e)),
     }
 }
 
-fn exprify_block(g: &mut NodeIdGenerator, b: StatementBlock) -> Box<Expression> {
+fn exprify_block(b: StatementBlock) -> Box<Expression> {
     Box::new(Expression {
-        id: g.get(),
+        id: 0,
         kind: ExpressionKind::Block(b),
     })
 }
@@ -64,48 +65,44 @@ mod tests {
     use crate::grammar::{
         AssignPatParser, ExprParser, FuncParser, InitParser, ModParser, StmtParser,
     };
-    use crate::NodeIdGenerator;
+
     use zea_ast::zea::*;
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    fn idgen() -> NodeIdGenerator {
-        NodeIdGenerator::new()
-    }
-
     fn parse_expr(src: &str) -> Expression {
         ExprParser::new()
-            .parse(&mut idgen(), src)
+            .parse(src)
             .unwrap_or_else(|e| panic!("expr parse failed for {src:?}:\n  {e}"))
     }
 
     fn parse_stmt(src: &str) -> Statement {
         StmtParser::new()
-            .parse(&mut idgen(), src)
+            .parse(src)
             .unwrap_or_else(|e| panic!("stmt parse failed for {src:?}:\n  {e}"))
     }
 
     fn parse_func(src: &str) -> Function {
         FuncParser::new()
-            .parse(&mut idgen(), src)
+            .parse(src)
             .unwrap_or_else(|e| panic!("func parse failed for {src:?}:\n  {e}"))
     }
 
     fn parse_init(src: &str) -> Initialisation {
         InitParser::new()
-            .parse(&mut idgen(), src)
+            .parse(src)
             .unwrap_or_else(|e| panic!("init parse failed for {src:?}:\n  {e}"))
     }
 
     fn parse_mod(src: &str) -> Module {
         ModParser::new()
-            .parse(&mut idgen(), src)
+            .parse(src)
             .unwrap_or_else(|e| panic!("module parse failed for {src:?}:\n  {e}"))
     }
 
     fn parse_pat(src: &str) -> AssignmentPattern {
         AssignPatParser::new()
-            .parse(&mut idgen(), src)
+            .parse(src)
             .unwrap_or_else(|e| panic!("pattern parse failed for {src:?}:\n  {e}"))
     }
 
@@ -822,7 +819,7 @@ mod tests {
             #[test]
             fn $name() {
                 assert!(
-                    $parser::new().parse(&mut idgen(), $src).is_err(),
+                    $parser::new().parse($src).is_err(),
                     "expected parse failure for {:?}",
                     $src
                 );

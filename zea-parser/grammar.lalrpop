@@ -1,8 +1,8 @@
 use std::str::FromStr;
 use zea_ast::zea::*;
-use crate::{NodeIdGenerator, ModuleItem, separate, binop, unop, exprify_block};
+use crate::{ModuleItem, separate_module_items, binop, unop, exprify_block};
 
-grammar<'ast>(generator: &'ast mut NodeIdGenerator);
+grammar<'ast>;
 
 Comma0<T>: Vec<T> = {
     <items:(<T> ",")*> <last:T?> => {
@@ -25,13 +25,14 @@ TTypedIdent: TypedIdentifier = {
 };
 
 pub Mod: Module = {
-    <name:ModName> <imports:ModImports?> <exports:ModExports?> <(globs, functions):ModSymbols> => {
+    <name:ModName> <imports:ModImports?> <exports:ModExports?> <(global_vars, functions, struct_definitions, tagged_unions):ModSymbols> => {
         Module {
-            id: generator.get(),
+            id: 0,
             imports: imports.unwrap_or(vec![]),
             exports:exports.unwrap_or(vec![]),
-            globs,
+            global_vars,
             functions,
+            struct_definitions
         }
  }
 };
@@ -39,18 +40,18 @@ pub Mod: Module = {
 CondBranch: IfThenElse = {
     "if" <condition:Expr> <true_case:Block> => {
         IfThenElse {
-            id: generator.get(),
+            id: 0,
             condition: Box::new(condition),
-            true_case: exprify_block(generator, true_case),
+            true_case: exprify_block( true_case),
             false_case: None
         }
     },
     "if" <condition:Expr> <true_case:Block> "else" <false_case:Block> => {
             IfThenElse {
-                id: generator.get(),
+                id: 0,
                 condition: Box::new(condition),
-                true_case: exprify_block(generator, true_case),
-                false_case: Some(exprify_block(generator, false_case))
+                true_case: exprify_block( true_case),
+                false_case: Some(exprify_block( false_case))
             }
         }
 };
@@ -67,8 +68,8 @@ ModExports: Vec<String> = {
     "exports"  "{" <imps:Comma0<ExprIdent>>  "}"=> imps
 };
 
-ModSymbols: (Vec<Initialisation>, Vec<Function>) = {
-    ModSymbolsHelper => separate(<>)
+ModSymbols: (Vec<Initialisation>, Vec<Function>, Vec<StructDataTypeDefinition>, Vec<TaggedUnionDataTypeDefinition>) = {
+    ModSymbolsHelper => separate_module_items(<>)
 };
 
 ModSymbolsHelper: Vec<ModuleItem> = {
@@ -83,12 +84,28 @@ ModSymbolsHelper: Vec<ModuleItem> = {
                     v.push(ModuleItem::Func(cur));
                     v
         },
+
+    <cur: StructDef> <rest:ModSymbolsHelper> => {
+                let mut v = rest;
+                        v.push(ModuleItem::StructDef(cur));
+                        v
+            },
+
+};
+
+pub StructDef: StructDataTypeDefinition = {
+    "struct" <name:TypeIdent> "{" <members:Comma0<TTypedIdent>> "}" => {
+        StructDataTypeDefinition {
+            id: 0,
+            name,
+            members: vec![],
+        }
+ },
 };
 
 pub Init: Initialisation = {
     <p:AssignPat> ":" "=" <val:Expr> ";" => {
     Initialisation::packed (
-        generator.get(),
         None,
         p,
         val
@@ -96,7 +113,6 @@ pub Init: Initialisation = {
  },
     <p:AssignPat> ":" <typ:TType> "=" <val:Expr> ";" => {
     Initialisation::packed (
-            generator.get(),
             Some(typ),
             p,
             val
@@ -112,7 +128,7 @@ pub AssignPat: AssignmentPattern = {
 pub Reassign: Reassignment = {
     <i:ExprIdent> "=" <v:Expr> ";" => {
         Reassignment {
-            id: generator.get(),
+            id: 0,
             assignee: i,
             value: v
         }
@@ -122,7 +138,7 @@ pub Reassign: Reassignment = {
 pub FuncCall: FunctionCall = {
     <name:ExprIdent> "(" <args:Comma0<Expr>> ")" => {
         FunctionCall {
-            id: generator.get(),
+            id: 0,
             name,
             args
         }
@@ -135,7 +151,7 @@ pub Func: Function = {
     "(" <args:Comma0<TTypedIdent>> ")"
     <funcbody:Block> => {
         Function {
-            id: generator.get(),
+            id: 0,
             name,
             args: args,
             returns: Type::Basic("Void".to_string()),
@@ -146,7 +162,7 @@ pub Func: Function = {
     "(" <args:Comma0<TTypedIdent>> ")"
     "->" <funcreturns:TType> <funcbody:Block> => {
         Function {
-            id: generator.get(),
+            id: 0,
             name,
             args: args,
             returns: funcreturns,
@@ -165,11 +181,14 @@ Block: StatementBlock = {
     "{" <stmts:(<Stmt>)*> <tail:Expr?> "}" => {
         let mut stmts = stmts;
         if let Some(tail) = tail {
-            let tail = Statement {id:generator.get(), kind:StatementKind::BlockTail(tail)};
+            let tail = Statement {
+                id:0,
+                kind:StatementKind::BlockTail(tail)
+            };
             stmts.push(tail);
         }
         StatementBlock {
-            id: generator.get(),
+            id: 0,
             statements: stmts
         }
     }
@@ -178,28 +197,28 @@ Block: StatementBlock = {
 pub Stmt: Statement = {
     "return" <e:Expr> ";" => {
         Statement {
-            id: generator.get(),
+            id: 0,
             kind: StatementKind::Return(e)
         }
     },
     <init:Init> => Statement {
-        id: generator.get(),
+        id: 0,
         kind: StatementKind::Initialisation(init)
     },
     <reinit:Reassign> => Statement {
-            id: generator.get(),
+            id: 0,
             kind: StatementKind::Reassignment(reinit)
     },
     <block:Block> => Statement {
-        id: generator.get(),
+        id: 0,
         kind: StatementKind::Block(block)
     },
     <call:FuncCall> ";" => Statement {
-        id: generator.get(),
+        id: 0,
         kind: StatementKind::FunctionCall(call)
     },
     <branch:CondBranch> ";" => Statement {
-        id: generator.get(),
+        id: 0,
         kind: StatementKind::CondBranch(branch),
     }
 };
@@ -207,80 +226,80 @@ pub Stmt: Statement = {
 pub Expr: Expression = ExprBranch;
 
 ExprBranch: Expression = {
-    <b:CondBranch> => Expression {id: generator.get(), kind: ExpressionKind::CondBranch(b)},
+    <b:CondBranch> => Expression {id: 0, kind: ExpressionKind::CondBranch(b)},
     ExprOr,
 };
 
 ExprOr: Expression = {
-    <l:ExprOr> "||" <r:ExprXor> => binop(generator, BinOp::LogOr, l, r),
+    <l:ExprOr> "||" <r:ExprXor> => binop(BinOp::LogOr, l, r),
     ExprXor,
 };
 ExprXor: Expression = {
-    <l:ExprXor> "^^" <r:ExprAnd> => binop(generator, BinOp::LogXor, l, r),
+    <l:ExprXor> "^^" <r:ExprAnd> => binop(BinOp::LogXor, l, r),
     ExprAnd,
 };
 ExprAnd: Expression = {
-    <l:ExprAnd> "&&" <r:ExprBitOr> => binop(generator, BinOp::LogAnd, l, r),
+    <l:ExprAnd> "&&" <r:ExprBitOr> => binop(BinOp::LogAnd, l, r),
     ExprBitOr,
 };
 ExprBitOr: Expression = {
-    <l:ExprBitOr> "|" <r:ExprBitXor> => binop(generator, BinOp::BitOr, l, r),
+    <l:ExprBitOr> "|" <r:ExprBitXor> => binop(BinOp::BitOr, l, r),
     ExprBitXor,
 };
 ExprBitXor: Expression = {
-    <l:ExprBitXor> "^" <r:ExprBitAnd> => binop(generator, BinOp::BitXor, l, r),
+    <l:ExprBitXor> "^" <r:ExprBitAnd> => binop(BinOp::BitXor, l, r),
     ExprBitAnd,
 };
 ExprBitAnd: Expression = {
-    <l:ExprBitAnd> "&" <r:ExprEq> => binop(generator, BinOp::BitAnd, l, r),
+    <l:ExprBitAnd> "&" <r:ExprEq> => binop(BinOp::BitAnd, l, r),
     ExprEq,
 };
 ExprEq: Expression = {
-    <l:ExprEq> "==" <r:ExprCmp> => binop(generator, BinOp::Eq, l, r),
-    <l:ExprEq> "!=" <r:ExprCmp> => binop(generator, BinOp::Neq, l, r),
+    <l:ExprEq> "==" <r:ExprCmp> => binop(BinOp::Eq, l, r),
+    <l:ExprEq> "!=" <r:ExprCmp> => binop(BinOp::Neq, l, r),
     ExprCmp,
 };
 ExprCmp: Expression = {
-    <l:ExprCmp> "<"  <r:ExprShift> => binop(generator, BinOp::LT, l, r),
-    <l:ExprCmp> ">"  <r:ExprShift> => binop(generator, BinOp::GT, l, r),
-    <l:ExprCmp> "<=" <r:ExprShift> => binop(generator, BinOp::Leq, l, r),
-    <l:ExprCmp> ">=" <r:ExprShift> => binop(generator, BinOp::Geq, l, r),
+    <l:ExprCmp> "<"  <r:ExprShift> => binop(BinOp::LT, l, r),
+    <l:ExprCmp> ">"  <r:ExprShift> => binop(BinOp::GT, l, r),
+    <l:ExprCmp> "<=" <r:ExprShift> => binop(BinOp::Leq, l, r),
+    <l:ExprCmp> ">=" <r:ExprShift> => binop(BinOp::Geq, l, r),
     ExprShift,
 };
 ExprShift: Expression = {
-    <l:ExprShift> "<<" <r:ExprAdd> => binop(generator, BinOp::Lsh, l, r),
-    <l:ExprShift> ">>" <r:ExprAdd> => binop(generator, BinOp::Rsh, l, r),
+    <l:ExprShift> "<<" <r:ExprAdd> => binop(BinOp::Lsh, l, r),
+    <l:ExprShift> ">>" <r:ExprAdd> => binop(BinOp::Rsh, l, r),
     ExprAdd,
 };
 ExprAdd: Expression = {
-    <l:ExprAdd> "+" <r:ExprMul> => binop(generator, BinOp::Add, l, r),
-    <l:ExprAdd> "-" <r:ExprMul> => binop(generator, BinOp::Sub, l, r),
+    <l:ExprAdd> "+" <r:ExprMul> => binop(BinOp::Add, l, r),
+    <l:ExprAdd> "-" <r:ExprMul> => binop(BinOp::Sub, l, r),
     ExprMul,
 };
 ExprMul: Expression = {
-    <l:ExprMul> "*" <r:ExprUnary> => binop(generator, BinOp::Mul, l, r),
-    <l:ExprMul> "/" <r:ExprUnary> => binop(generator, BinOp::Div, l, r),
-    <l:ExprMul> "%" <r:ExprUnary> => binop(generator, BinOp::Mod, l, r),
+    <l:ExprMul> "*" <r:ExprUnary> => binop(BinOp::Mul, l, r),
+    <l:ExprMul> "/" <r:ExprUnary> => binop(BinOp::Div, l, r),
+    <l:ExprMul> "%" <r:ExprUnary> => binop(BinOp::Mod, l, r),
     ExprUnary,
 };
 ExprUnary: Expression = {
-    "!" <e:ExprUnary> => unop(generator, UnOp::LogNot, e),
-    "~" <e:ExprUnary> => unop(generator, UnOp::BitNot, e),
-    "-" <e:ExprUnary> => unop(generator, UnOp::Neg, e),
+    "!" <e:ExprUnary> => unop(UnOp::LogNot, e),
+    "~" <e:ExprUnary> => unop(UnOp::BitNot, e),
+    "-" <e:ExprUnary> => unop(UnOp::Neg, e),
     ExprPostfix,
 };
 ExprPostfix: Expression = {
     <t:ExprPostfix> "." <m:ExprIdent> => Expression {
-        id: generator.get(),
+        id: 0,
         kind: ExpressionKind::MemberAccess(Box::new(t), m),
     },
-    <t:ExprPostfix> "[" <i:Expr> "]" => binop(generator, BinOp::Subscript, t, i),
-    <c:FuncCall> => Expression { id: generator.get(), kind: ExpressionKind::FuncCall(c) },
+    <t:ExprPostfix> "[" <i:Expr> "]" => binop(BinOp::Subscript, t, i),
+    <c:FuncCall> => Expression { id: 0, kind: ExpressionKind::FuncCall(c) },
     ExprAtom,
 };
 ExprAtom: Expression = {
-    <n:Num>       => Expression { id: generator.get(), kind: ExpressionKind::IntegerLiteral(n) },
-    <s:ExprIdent> => Expression { id: generator.get(), kind: ExpressionKind::Ident(s) },
+    <n:Num>       => Expression { id: 0, kind: ExpressionKind::IntegerLiteral(n) },
+    <s:ExprIdent> => Expression { id: 0, kind: ExpressionKind::Ident(s) },
 };
 
 Num: u64 = {

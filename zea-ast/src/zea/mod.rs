@@ -206,6 +206,7 @@ pub(crate) mod test_ast_macros {
          exports {$($exp:ident),* $(,)?}
          globs   {$($glob:expr);* $(;)?}
          funcs   {$($func:expr);* $(;)?}
+         structs {$($struct_def:expr);* $(;)?}
         ) => {
             {
                 use crate::zea::Module;
@@ -215,6 +216,7 @@ pub(crate) mod test_ast_macros {
                     exports: vec![$(String::from(stringify!($exp))),*],
                     global_vars: vec![$($glob),*],
                     functions: vec![$($func),*],
+                    struct_definitions: vec![$($struct_def),*]
                 }
             }
         };
@@ -273,6 +275,7 @@ pub struct Module {
     pub exports: Vec<String>,
     pub global_vars: Vec<Initialisation>,
     pub functions: Vec<Function>,
+    pub struct_definitions: Vec<StructDataTypeDefinition>,
 }
 
 impl Module {
@@ -325,7 +328,7 @@ pub struct Statement {
 #[derive(Debug, Clone, PartialEq, VariantToStr, ASTStructuralEq)]
 pub enum StatementKind {
     // initial pass
-    /// Variable initialisation
+    /// Variable initialization
     Initialisation(Initialisation),
     /// Variable Reassignment
     Reassignment(Reassignment),
@@ -351,13 +354,12 @@ pub struct Initialisation {
 
 impl Initialisation {
     pub fn packed(
-        id: usize,
         typ: Option<Type>,
         assignee: AssignmentPattern,
         value: Expression,
     ) -> Self {
         Self {
-            id,
+            id: 0,
             kind: InitialisationKind::Packed(PackedInitialisation {
                 typ,
                 assignee,
@@ -656,23 +658,26 @@ impl std::fmt::Display for AssignmentPattern {
 }
 
 /// The Zea named Struct type / product type
-pub struct StructDefinition {
-    name: String,
-    members: Vec<TypedIdentifier>,
+#[derive(HashEqById, ASTStructuralEq)]
+#[derive(Debug)]
+pub struct StructDataTypeDefinition {
+    pub id: usize,
+    pub name: String,
+    pub members: Vec<TypedIdentifier>,
 }
 
 pub struct TupleSignature {
     members: Vec<Type>,
 }
 
-pub struct Union {
+pub struct TaggedUnionDataTypeDefinition {
     pub name: String,
-    pub members: Vec<UnionVariant>,
+    pub members: Vec<TaggedUnionVariant>,
 }
 
-pub enum UnionVariant {
-    Tag(String),
-    Type(TypedIdentifier),
+pub enum TaggedUnionVariant {
+    TagVariant(String),
+    DataVariant(TypedIdentifier),
 }
 
 /// The Type that is bundled with a:
