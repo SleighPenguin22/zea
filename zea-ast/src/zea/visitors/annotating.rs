@@ -497,35 +497,6 @@ pub enum SemanticASTViolation<'ast> {
     StrayPackedAssignment(&'ast Initialisation),
 }
 
-pub trait AcceptsAstValidator<'ast> {
-    /// Returns true if this node is considered valid
-    fn global_vars_are_typed_explicitly(
-        &'ast self,
-        validator: &mut ASTValidator,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn blocks_are_expanded(
-        &'ast self,
-        astvalidator: &mut ASTValidator,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn assignments_are_simplified(
-        &'ast self,
-        astvalidator: &mut ASTValidator,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-
-    fn tuples_are_named(
-        &'ast self,
-        astvalidator: &mut ASTValidator,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-}
-
 macro_rules! visit_annotate {
     (block $ast_l:lifetime $f:expr) => {
         fn visit_block(&mut self, block: &'ast ExpandedBlockExpr) -> Result<(), SemanticASTViolation<$ast_l>> {
@@ -534,13 +505,13 @@ macro_rules! visit_annotate {
         }
     };
     (unexp_block $ast_l:lifetime $f:expr) => {
-        fn visit_block(&mut self, block: &'ast StatementBlock) -> Result<(), SemanticASTViolation<$ast_l>> {
+        fn visit_unexpanded_block(&mut self, block: &'ast StatementBlock) -> Result<(), SemanticASTViolation<$ast_l>> {
             let f: fn(&$ast_l StatementBlock) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
             f(block)
         }
     };
     (module_globs $ast_l:lifetime $f:expr) => {
-        fn visit_module_globs(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
+        fn visit_module_global_variable(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
             let f: fn(&$ast_l Initialisation) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
             for var in module.global_vars.iter() {
                 f(var)?;
@@ -549,7 +520,7 @@ macro_rules! visit_annotate {
         }
     };
     (module_funcs $ast_l:lifetime $f:expr) => {
-        fn visit_module_funcs(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
+        fn visit_module_function_definition(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
             let f: fn(&$ast_l Function) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
             for func in module.functions.iter() {
                 f(func)?;
@@ -569,7 +540,7 @@ macro_rules! annotating_visitor {
 
 annotating_visitor! {'ast ASTValidator with
     visit_annotate!(block 'ast
-        |block| Ok(())
+        |_block| Ok(())
     );
 }
 
@@ -577,14 +548,14 @@ pub trait AcceptAnnotatingVisitor<'ast> {
     /// Let the visitor traverse all children of this node
     fn visit_children(
         &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
+        _visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         Ok(())
     }
     /// Let the visitor perform its annotation in this node
     fn accept(
         &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
+        _visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         Ok(())
     }
@@ -679,7 +650,13 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for Module {
     ) -> Result<(), SemanticASTViolation<'ast>> {
         visitor.visit_module(self)?;
         for init in self.global_vars.iter() {
-            visitor.visit_module_global_var(init)?;
+            let InitialisationKind::Packed(ref p) = init.kind else {
+                unreachable!(
+                    "global initializations should be packed; got {:?}",
+                    init.kind
+                )
+            };
+            visitor.visit_module_global_var(init.id, p)?;
         }
         for func in self.functions.iter() {
             visitor.visit_module_function_definition(func)?;
@@ -848,7 +825,8 @@ pub trait AnnotatingVisitor<'ast>: Sized {
     }
     fn visit_module_global_var(
         &mut self,
-        _v: &'ast Initialisation,
+        _id: usize,
+        _v: &'ast PackedInitialisation,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         Ok(())
     }
@@ -925,10 +903,10 @@ pub trait AnnotatingVisitor<'ast>: Sized {
     ) -> Result<(), SemanticASTViolation<'ast>> {
         Ok(())
     }
-    fn visit_expr_unit(&mut self, id: usize) -> Result<(), SemanticASTViolation<'ast>> {
+    fn visit_expr_unit(&mut self, _id: usize) -> Result<(), SemanticASTViolation<'ast>> {
         Ok(())
     }
-    fn visit_expr_ifthenelse(
+    fn visit_expr_if_then_else(
         &mut self,
         _id: usize,
         _v: &'ast IfThenElse,
@@ -966,42 +944,6 @@ pub trait AnnotatingVisitor<'ast>: Sized {
     }
     fn traverse(&mut self, module: &'ast Module) -> Result<(), SemanticASTViolation<'ast>> {
         module.accept(self)
-    }
-}
-
-impl<'ast> AcceptsAstValidator<'ast> for Initialisation {
-    fn tuples_are_named(
-        &'ast self,
-        astvalidator: &mut ASTValidator,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        todo!()
-    }
-    fn global_vars_are_typed_explicitly(
-        &'ast self,
-        validator: &mut ASTValidator,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        match &self.kind {
-            InitialisationKind::Packed(p) => {
-                if p.typ.is_some() {
-                    Ok(())
-                } else {
-                    Err(SemanticASTViolation::UntypedGlobalVar(self))
-                }
-            }
-            _ => unreachable!("global scope should only have packed assignments"),
-        }
-    }
-    fn blocks_are_expanded(
-        &'ast self,
-        astvalidator: &mut ASTValidator,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        todo!()
-    }
-    fn assignments_are_simplified(
-        &'ast self,
-        astvalidator: &mut ASTValidator,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        todo!()
     }
 }
 
