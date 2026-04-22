@@ -122,7 +122,7 @@ impl LabelSentinelIDs for Statement {
             StatementKind::BlockTail(e) => e.label_sentinel_id(labeler),
             StatementKind::Block(b) => b.label_sentinel_id(labeler),
             StatementKind::ExpandedBlock(eb) => eb.label_sentinel_id(labeler),
-            StatementKind::CondBranch(b) => b.label_sentinel_id(labeler),
+            StatementKind::IfThenElse(b) => b.label_sentinel_id(labeler),
         }
     }
 }
@@ -136,14 +136,14 @@ impl LabelSentinelIDs for Expression {
             ExpressionKind::FloatLiteral(_) => {}
             ExpressionKind::StringLiteral(_) => {}
             ExpressionKind::Ident(_) => {}
-            ExpressionKind::FuncCall(call) => call.label_sentinel_id(labeler),
+            ExpressionKind::FunctionCall(call) => call.label_sentinel_id(labeler),
             ExpressionKind::BinOpExpr(_, lhs, rhs) => {
                 lhs.label_sentinel_id(labeler);
                 rhs.label_sentinel_id(labeler);
             }
             ExpressionKind::UnOpExpr(_, arg) => arg.label_sentinel_id(labeler),
             ExpressionKind::MemberAccess(data, _) => data.label_sentinel_id(labeler),
-            ExpressionKind::CondBranch(b) => b.label_sentinel_id(labeler),
+            ExpressionKind::IfThenElse(b) => b.label_sentinel_id(labeler),
             ExpressionKind::Block(b) => b.label_sentinel_id(labeler),
             ExpressionKind::ExpandedBlock(eb) => eb.label_sentinel_id(labeler),
         }
@@ -241,7 +241,7 @@ impl AssignmentSimplifier {
             let kind = PackedInitialisation {
                 typ: None,
                 assignee: assignee.clone(),
-                value: Expression::label_member_access(value.clone(), field),
+                value: Expression::tuple_member_access(value.clone(), field),
             };
             let init = Initialisation {
                 id,
@@ -480,7 +480,7 @@ impl AcceptsBlockExpander for Statement {
             StatementKind::Return(expr) => expr.accept_block_expander(block_expander),
             StatementKind::BlockTail(expr) => expr.accept_block_expander(block_expander),
             StatementKind::ExpandedBlock(b) => b.accept_block_expander(block_expander),
-            StatementKind::CondBranch(b) => b.accept_block_expander(block_expander),
+            StatementKind::IfThenElse(b) => b.accept_block_expander(block_expander),
         };
         !self.has_blocks_expanded()
     }
@@ -494,7 +494,7 @@ impl AcceptsBlockExpander for Statement {
             StatementKind::Return(expr) => expr.has_blocks_expanded(),
             StatementKind::BlockTail(expr) => expr.has_blocks_expanded(),
             StatementKind::ExpandedBlock(b) => b.has_blocks_expanded(),
-            StatementKind::CondBranch(b) => b.has_blocks_expanded(),
+            StatementKind::IfThenElse(b) => b.has_blocks_expanded(),
         }
     }
 }
@@ -565,7 +565,7 @@ impl AcceptsBlockExpander for Expression {
                 ));
                 true
             }
-            ExpressionKind::FuncCall(call) => call.accept_block_expander(block_expander),
+            ExpressionKind::FunctionCall(call) => call.accept_block_expander(block_expander),
             ExpressionKind::BinOpExpr(_, lhs, rhs) => {
                 lhs.accept_block_expander(block_expander)
                     || rhs.accept_block_expander(block_expander)
@@ -579,7 +579,7 @@ impl AcceptsBlockExpander for Expression {
             ExpressionKind::StringLiteral(_) => false,
             ExpressionKind::Ident(_) => false,
             ExpressionKind::MemberAccess(_, _) => false,
-            ExpressionKind::CondBranch(b) => b.accept_block_expander(block_expander),
+            ExpressionKind::IfThenElse(b) => b.accept_block_expander(block_expander),
         };
 
         !self.has_blocks_expanded()
@@ -587,13 +587,13 @@ impl AcceptsBlockExpander for Expression {
     fn has_blocks_expanded(&self) -> bool {
         match &self.kind {
             ExpressionKind::Block(_block) => false,
-            ExpressionKind::FuncCall(call) => call.has_blocks_expanded(),
+            ExpressionKind::FunctionCall(call) => call.has_blocks_expanded(),
             ExpressionKind::BinOpExpr(_, lhs, rhs) => {
                 lhs.has_blocks_expanded() && rhs.has_blocks_expanded()
             }
             ExpressionKind::UnOpExpr(_, arg) => arg.has_blocks_expanded(),
             ExpressionKind::ExpandedBlock(block) => block.has_blocks_expanded(),
-            ExpressionKind::CondBranch(b) => b.has_blocks_expanded(),
+            ExpressionKind::IfThenElse(b) => b.has_blocks_expanded(),
             _ => true,
         }
     }
@@ -705,9 +705,9 @@ mod block_expander_tests {
     use crate::zea::visitors::altering::{AssignmentSimplifier, LabelSentinelIDs};
     use crate::zea::visitors::{AcceptsAssignmentSimplifier, AcceptsBlockExpander, BlockExpander};
     use crate::zea::{
-        assert_structural_eq, AssignmentPattern, Expression, ExpressionKind, Function,
-        Initialisation, InitialisationKind, Module, NodeLabeler, PackedInitialisation, Statement,
-        StatementBlock, StatementKind, Type,
+        AssignmentPattern, Expression, ExpressionKind, Function, Initialisation,
+        InitialisationKind, Module, NodeLabeler, PackedInitialisation, Statement, StatementBlock,
+        StatementKind, TypeSpecifier, assert_structural_eq,
     };
 
     #[test]
@@ -756,7 +756,7 @@ mod block_expander_tests {
                 id: 0,
                 name: "test".to_string(),
                 args: vec![],
-                returns: Type::Basic("Unit".to_string()),
+                returns: TypeSpecifier::Basic("Unit".to_string()),
                 body: StatementBlock {
                     id: 0,
                     statements: vec![Statement {

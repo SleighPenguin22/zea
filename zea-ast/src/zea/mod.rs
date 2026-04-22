@@ -20,7 +20,7 @@
 ///
 /// The [`visitors::altering::BareNodeLabeler`] visitor
 /// grants a unique ID to node with a sentinel ID.
-use crate::helper_impls::{assert_structural_eq, StructuralEq};
+use crate::helper_impls::{StructuralEq, assert_structural_eq};
 
 pub mod typecheck;
 pub mod visitors;
@@ -29,8 +29,8 @@ pub mod visitors;
 pub(crate) mod test_ast_macros {
     macro_rules! label_ast {
         (fresh $ast:expr) => {{
-            use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
             use crate::zea::Module;
+            use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
 
             let mut node_labeler = BareNodeLabeler::new();
             let mut ast = $ast;
@@ -38,8 +38,8 @@ pub(crate) mod test_ast_macros {
             (ast, generator)
         }};
         (using $l:expr ; $ast:expr) => {{
-            use crate::zea::visitors::altering::NodeLabeler;
             use crate::zea::Module;
+            use crate::zea::visitors::altering::NodeLabeler;
             let mut generator = $l;
             let mut ast = $ast;
             ast.label_sentinel_id(&mut generator);
@@ -268,25 +268,24 @@ pub(crate) mod test_ast_macros {
     macro_rules! ztyp {
         ($t:ident) => {
             {
-            use crate::zea::Type;
-                Type::Basic(String::from(stringify!($t)))
+            use crate::zea::TypeSpecifier;
+                TypeSpecifier::Basic(String::from(stringify!($t)))
             }
         };
         (*$($t:tt)+) => {
             {
-            use crate::zea::Type;
-                Type::Pointer(Box::new(ztyp!($($t)+)))
+            use crate::zea::TypeSpecifier;
+                TypeSpecifier::Pointer(Box::new(ztyp!($($t)+)))
             }
         };
         ([ ]$($t:tt)+) => {
             {
-            use crate::zea::Type;
-                Type::ArrayOf(Box::new(ztyp!($($t)+)))
+            use crate::zea::TypeSpecifier;
+                TypeSpecifier::ArrayOf(Box::new(ztyp!($($t)+)))
             }
         };
     }
     pub(crate) use ztyp;
-    use crate::zea::{Module, NodeLabeler};
 }
 
 pub use crate::zea::visitors::altering::{BareNodeLabeler, BlockExpander, NodeLabeler};
@@ -329,7 +328,7 @@ pub struct Function {
     pub id: usize,
     pub name: String,
     pub args: Vec<TypedIdentifier>,
-    pub returns: Type,
+    pub returns: TypeSpecifier,
     pub body: StatementBlock,
 }
 
@@ -338,7 +337,7 @@ pub struct HoistedFunctionSignature {
     pub id: usize,
     pub name: String,
     pub args: Vec<TypedIdentifier>,
-    pub returns: Type,
+    pub returns: TypeSpecifier,
 }
 
 impl From<Function> for HoistedFunctionSignature {
@@ -376,7 +375,7 @@ pub enum StatementKind {
 
     // after expansion
     ExpandedBlock(ExpandedBlockExpr),
-    CondBranch(IfThenElse),
+    IfThenElse(IfThenElse),
 }
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct Initialisation {
@@ -385,7 +384,11 @@ pub struct Initialisation {
 }
 
 impl Initialisation {
-    pub fn packed(typ: Option<Type>, assignee: AssignmentPattern, value: Expression) -> Self {
+    pub fn packed(
+        typ: Option<TypeSpecifier>,
+        assignee: AssignmentPattern,
+        value: Expression,
+    ) -> Self {
         Self {
             id: 0,
             kind: InitialisationKind::Packed(PackedInitialisation {
@@ -399,7 +402,7 @@ impl Initialisation {
 
 #[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
 pub struct PackedInitialisation {
-    pub typ: Option<Type>,
+    pub typ: Option<TypeSpecifier>,
     pub assignee: AssignmentPattern,
     pub value: Expression,
 }
@@ -407,7 +410,7 @@ pub struct PackedInitialisation {
 /// An assignment to a simple, totally unpacked variable.
 #[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
 pub struct UnpackedInitialisation {
-    pub typ: Option<Type>,
+    pub typ: Option<TypeSpecifier>,
     pub assignee: String,
     pub value: Expression,
 }
@@ -429,11 +432,19 @@ pub struct Reassignment {
     pub assignee: String,
     pub value: Expression,
 }
+impl Reassignment {
+    pub fn wrap_in_statement(self) -> Statement {
+        Statement {
+            id: 0,
+            kind: StatementKind::Reassignment(self),
+        }
+    }
+}
 
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct HoistedDeclaration {
     pub id: usize,
-    pub typ: Type,
+    pub typ: TypeSpecifier,
     pub assignee: String,
     pub value: Expression,
 }
@@ -444,10 +455,40 @@ pub struct FunctionCall {
     pub name: String,
     pub args: Vec<Expression>,
 }
+
+impl FunctionCall {
+    pub fn wrap_in_statement(self) -> Statement {
+        Statement {
+            id: 0,
+            kind: StatementKind::FunctionCall(self),
+        }
+    }
+
+    pub fn wrap_in_expression(self) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::FunctionCall(self),
+        }
+    }
+}
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct StatementBlock {
     pub id: usize,
     pub statements: Vec<Statement>,
+}
+impl StatementBlock {
+    pub fn wrap_in_expression(self) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::Block(self),
+        }
+    }
+    pub fn wrap_in_statement(self) -> Statement {
+        Statement {
+            id: 0,
+            kind: StatementKind::Block(self),
+        }
+    }
 }
 
 impl IntoIterator for StatementBlock {
@@ -473,23 +514,6 @@ pub struct ExpandedBlockExpr {
     pub last: Expression,
 }
 
-// macro_rules! extended {
-//     ($($first:expr),+) => {{
-//         vec![$($first),+]
-//     }};
-//     ($($first:expr),+ ; $($rest:expr),+) => {{
-//         let mut v = vec![$($first),+];
-//         $(v.extend($rest);)+
-//         v
-//     }};
-//
-//     (; $($rest:expr),+) => {{
-//         let mut v = Vec::new();
-//         $(v.extend($rest);)+
-//         v
-//     }};
-// }
-
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct Expression {
     pub id: usize,
@@ -497,7 +521,7 @@ pub struct Expression {
 }
 
 impl Expression {
-    pub fn label_member_access(e: Expression, field: usize) -> Expression {
+    pub fn tuple_member_access(e: Expression, field: usize) -> Expression {
         Expression {
             id: 0,
             kind: ExpressionKind::MemberAccess(Box::new(e), format!("_{field}")),
@@ -505,6 +529,47 @@ impl Expression {
     }
 
     pub fn ident(ident: String) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::Ident(ident),
+        }
+    }
+
+    pub fn wrap_in_return_statement(self) -> Statement {
+        Statement {
+            id: 0,
+            kind: StatementKind::Return(self),
+        }
+    }
+
+    pub fn wrap_in_block_tail_statement(self) -> Statement {
+        Statement {
+            id: 0,
+            kind: StatementKind::BlockTail(self),
+        }
+    }
+
+    pub fn wrap_lit_int(i: u64) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::IntegerLiteral(i),
+        }
+    }
+    pub fn wrap_lit_float(f: f64) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::FloatLiteral(f),
+        }
+    }
+
+    pub fn wrap_lit_bool(b: bool) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::BoolLiteral(b),
+        }
+    }
+
+    pub fn wrap_ident(ident: String) -> Expression {
         Expression {
             id: 0,
             kind: ExpressionKind::Ident(ident),
@@ -521,11 +586,11 @@ pub enum ExpressionKind {
     FloatLiteral(f64),
     StringLiteral(String),
     Ident(String),
-    FuncCall(FunctionCall),
+    FunctionCall(FunctionCall),
     BinOpExpr(BinOp, Box<Expression>, Box<Expression>),
     UnOpExpr(UnOp, Box<Expression>),
     MemberAccess(Box<Expression>, String),
-    CondBranch(IfThenElse),
+    IfThenElse(IfThenElse),
 
     Block(StatementBlock),
     // PatternMatch(PatternMatch),
@@ -541,6 +606,32 @@ impl Expression {
         Expression {
             id,
             kind: ExpressionKind::Unit,
+        }
+    }
+
+    pub fn binop(op: BinOp, l: Expression, r: Expression) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),
+        }
+    }
+    pub fn unop(op: UnOp, e: Expression) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::UnOpExpr(op, Box::new(e)),
+        }
+    }
+    pub fn block(b: StatementBlock) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::Block(b),
+        }
+    }
+
+    pub fn member_access(data: Expression, member: String) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::MemberAccess(Box::new(data), member),
         }
     }
 }
@@ -595,6 +686,36 @@ pub struct IfThenElse {
     pub condition: Box<Expression>,
     pub true_case: Box<Expression>,
     pub false_case: Option<Box<Expression>>,
+}
+impl IfThenElse {
+    pub fn if_block(condition: Expression, then: Expression) -> Self {
+        IfThenElse {
+            id: 0,
+            condition: Box::new(condition),
+            true_case: Box::new(then),
+            false_case: None,
+        }
+    }
+    pub fn if_else_block(condition: Expression, then: Expression, otherwise: Expression) -> Self {
+        IfThenElse {
+            id: 0,
+            condition: Box::new(condition),
+            true_case: Box::new(then),
+            false_case: Some(Box::new(otherwise)),
+        }
+    }
+    pub fn wrap_in_expression(self) -> Expression {
+        Expression {
+            id: 0,
+            kind: ExpressionKind::IfThenElse(self),
+        }
+    }
+    pub fn wrap_in_statement(self) -> Statement {
+        Statement {
+            id: 0,
+            kind: StatementKind::IfThenElse(self),
+        }
+    }
 }
 #[derive(Clone, Debug, HashEqById, ASTStructuralEq)]
 pub struct PatternMatchArm {
@@ -694,7 +815,7 @@ pub struct StructDataTypeDefinition {
 }
 
 pub struct TupleSignature {
-    members: Vec<Type>,
+    members: Vec<TypeSpecifier>,
 }
 
 pub struct TaggedUnionDataTypeDefinition {
@@ -711,27 +832,27 @@ pub enum TaggedUnionVariant {
 /// - function parameter
 /// - identifier in declaration(-assignments)
 #[derive(PartialEq, Eq, Clone, Hash, ASTStructuralEq)]
-pub enum Type {
+pub enum TypeSpecifier {
     /// Int, Bool, etc.
     Basic(String),
 
     /// `<type>&`
-    Pointer(Box<Type>),
+    Pointer(Box<TypeSpecifier>),
     /// `[<type>]`
-    ArrayOf(Box<Type>),
+    ArrayOf(Box<TypeSpecifier>),
     // /// `&[<type>]`
     // Slice(Box<Type>),
     // /// `?<type>`
     // Option(Box<Type>),
 }
 
-impl Debug for Type {
+impl Debug for TypeSpecifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            Type::Basic(typ) => typ,
-            Type::ArrayOf(arr) => &format!("[{arr:?}]"),
+            TypeSpecifier::Basic(typ) => typ,
+            TypeSpecifier::ArrayOf(arr) => &format!("[{arr:?}]"),
             // Type::Option(opt) => &format!("?{opt:?}"),
-            Type::Pointer(ptr) => &format!("&{ptr:?}"),
+            TypeSpecifier::Pointer(ptr) => &format!("&{ptr:?}"),
             // Type::Slice(slice) => &format!("&[{slice:?}]"),
         };
 
@@ -739,19 +860,19 @@ impl Debug for Type {
     }
 }
 
-impl From<&str> for Type {
+impl From<&str> for TypeSpecifier {
     fn from(val: &str) -> Self {
-        Type::Basic(val.into())
+        TypeSpecifier::Basic(val.into())
     }
 }
 
-impl From<String> for Type {
+impl From<String> for TypeSpecifier {
     fn from(val: String) -> Self {
-        Type::Basic(val)
+        TypeSpecifier::Basic(val)
     }
 }
 #[allow(non_snake_case)]
-impl Type {
+impl TypeSpecifier {
     pub fn I64() -> Self {
         Self::from("I64")
     }
@@ -773,11 +894,11 @@ impl Type {
 #[derive(Debug, Eq, PartialEq, Hash, Clone, ASTStructuralEq)]
 pub struct TypedIdentifier {
     pub name: String,
-    pub typ: Type,
+    pub typ: TypeSpecifier,
 }
 
 impl TypedIdentifier {
-    pub fn new(typ: Type, name: impl Into<String>) -> Self {
+    pub fn new(typ: TypeSpecifier, name: impl Into<String>) -> Self {
         Self {
             typ,
             name: name.into(),

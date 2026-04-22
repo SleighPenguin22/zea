@@ -2,7 +2,7 @@ use indexmap::IndexSet;
 
 pub mod altering;
 use crate::zea::visitors::altering::{
-    AcceptsAssignmentSimplifier, AssignmentSimplifier, BlockExpander, NodeLabeler, LabelSentinelIDs,
+    AcceptsAssignmentSimplifier, AssignmentSimplifier, BlockExpander, LabelSentinelIDs, NodeLabeler,
 };
 use crate::zea::visitors::annotating::{
     AcceptScopeBuilder, IntroducesFreshIdentifiers, ScopeAnnotations,

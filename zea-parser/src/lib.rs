@@ -6,10 +6,8 @@ pub use grammar::ExprParser as ExpressionParser;
 pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
 use lalrpop_util::ParseError;
-use zea_ast::zea::visitors::altering::{
-    BareNodeLabeler, NodeLabeler, LabelSentinelIDs,
-};
-use zea_ast::zea::visitors::annotating::ASTSemanticViolation;
+use zea_ast::zea::visitors::altering::{BareNodeLabeler, LabelSentinelIDs, NodeLabeler};
+use zea_ast::zea::visitors::annotating::SemanticASTViolation;
 use zea_ast::zea::{
     BinOp, Expression, ExpressionKind, Function, Initialisation, Module, StatementBlock,
     StructDataTypeDefinition, TaggedUnionDataTypeDefinition, UnOp,
@@ -17,7 +15,8 @@ use zea_ast::zea::{
 
 pub fn parse_module(
     src: &'_ str,
-) -> Result<(Module, impl NodeLabeler), ParseError<usize, lalrpop_util::lexer::Token<'_>, &'_ str>> {
+) -> Result<(Module, impl NodeLabeler), ParseError<usize, lalrpop_util::lexer::Token<'_>, &'_ str>>
+{
     let p = ModuleParser::new();
     let mut module = p.parse(src)?;
     let mut labeler = BareNodeLabeler::new();
@@ -31,7 +30,7 @@ pub fn desugar(ast: Module, last_used_generator: impl NodeLabeler) -> (Module, i
     (ast, generator)
 }
 
-pub fn semantic_annotations(ast: &'_ Module) -> Result<Module, ASTSemanticViolation<'_>> {
+pub fn semantic_annotations(ast: &'_ Module) -> Result<Module, SemanticASTViolation<'_>> {
     todo!()
 }
 
@@ -63,26 +62,6 @@ pub(crate) fn separate_module_items(
         }
     }
     (globs, funcs, structs, tagged_unions)
-}
-
-fn binop(op: BinOp, l: Expression, r: Expression) -> Expression {
-    Expression {
-        id: 0,
-        kind: ExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),
-    }
-}
-fn unop(op: UnOp, e: Expression) -> Expression {
-    Expression {
-        id: 0,
-        kind: ExpressionKind::UnOpExpr(op, Box::new(e)),
-    }
-}
-
-fn exprify_block(b: StatementBlock) -> Box<Expression> {
-    Box::new(Expression {
-        id: 0,
-        kind: ExpressionKind::Block(b),
-    })
 }
 
 #[cfg(test)]
@@ -525,7 +504,7 @@ mod tests {
     #[test]
     fn call_no_args() {
         assert!(matches!(kind(&parse_expr("foo()")),
-            ExpressionKind::FuncCall(FunctionCall { args, .. }) if args.is_empty()));
+            ExpressionKind::FunctionCall(FunctionCall { args, .. }) if args.is_empty()));
     }
 
     // Comma0 — all four trailing-comma variants
@@ -533,7 +512,7 @@ mod tests {
     #[test]
     fn call_one_arg_no_trailing() {
         match kind(&parse_expr("foo(1)")) {
-            ExpressionKind::FuncCall(fc) => assert_eq!(fc.args.len(), 1),
+            ExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 1),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -541,7 +520,7 @@ mod tests {
     #[test]
     fn call_one_arg_trailing_comma() {
         match kind(&parse_expr("foo(1,)")) {
-            ExpressionKind::FuncCall(fc) => assert_eq!(fc.args.len(), 1),
+            ExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 1),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -549,7 +528,7 @@ mod tests {
     #[test]
     fn call_many_args_no_trailing() {
         match kind(&parse_expr("add(a, b, c)")) {
-            ExpressionKind::FuncCall(fc) => assert_eq!(fc.args.len(), 3),
+            ExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 3),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -557,7 +536,7 @@ mod tests {
     #[test]
     fn call_many_args_trailing_comma() {
         match kind(&parse_expr("add(a, b, c,)")) {
-            ExpressionKind::FuncCall(fc) => assert_eq!(fc.args.len(), 3),
+            ExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 3),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -565,7 +544,7 @@ mod tests {
     #[test]
     fn call_expr_arg() {
         match kind(&parse_expr("f(a + b)")) {
-            ExpressionKind::FuncCall(fc) => assert!(matches!(
+            ExpressionKind::FunctionCall(fc) => assert!(matches!(
                 kind(&fc.args[0]),
                 ExpressionKind::BinOpExpr(BinOp::Add, _, _)
             )),
@@ -576,7 +555,7 @@ mod tests {
     #[test]
     fn call_name_recorded() {
         match kind(&parse_expr("my-func(x)")) {
-            ExpressionKind::FuncCall(fc) => assert_eq!(fc.name, "my-func"),
+            ExpressionKind::FunctionCall(fc) => assert_eq!(fc.name, "my-func"),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -628,7 +607,7 @@ mod tests {
         let (InitialisationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.typ, Some(Type::Basic(t)) if t == "U64"));
+        assert!(matches!(&i.typ, Some(TypeSpecifier::Basic(t)) if t == "U64"));
     }
 
     #[test]
@@ -638,8 +617,8 @@ mod tests {
         let (InitialisationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.typ, Some(Type::Pointer(inner))
-            if matches!(inner.as_ref(), Type::Basic(t) if t == "U8")));
+        assert!(matches!(&i.typ, Some(TypeSpecifier::Pointer(inner))
+            if matches!(inner.as_ref(), TypeSpecifier::Basic(t) if t == "U8")));
     }
 
     #[test]
@@ -649,7 +628,7 @@ mod tests {
         let (InitialisationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.typ, Some(Type::ArrayOf(_))));
+        assert!(matches!(&i.typ, Some(TypeSpecifier::ArrayOf(_))));
     }
 
     #[test]
@@ -714,7 +693,7 @@ mod tests {
         let f = parse_func("fn greet() {}");
         assert_eq!(f.name, "greet");
         assert!(f.args.is_empty());
-        assert!(matches!(&f.returns, Type::Basic(s) if s == "Void"));
+        assert!(matches!(&f.returns, TypeSpecifier::Basic(s) if s == "Void"));
     }
 
     #[test]
@@ -734,14 +713,14 @@ mod tests {
     #[test]
     fn func_return_pointer() {
         let f = parse_func("fn foo() -> U64* {}");
-        assert!(matches!(&f.returns, Type::Pointer(inner)
-            if matches!(inner.as_ref(), Type::Basic(s) if s == "U64")));
+        assert!(matches!(&f.returns, TypeSpecifier::Pointer(inner)
+            if matches!(inner.as_ref(), TypeSpecifier::Basic(s) if s == "U64")));
     }
 
     #[test]
     fn func_return_array() {
         let f = parse_func("fn foo() -> [U8] {}");
-        assert!(matches!(&f.returns, Type::ArrayOf(_)));
+        assert!(matches!(&f.returns, TypeSpecifier::ArrayOf(_)));
     }
 
     #[test]

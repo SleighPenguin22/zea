@@ -4,13 +4,13 @@ use crate::zea::{BinOp, ExpressionKind, Module, UnOp};
 use indexmap::{IndexMap, IndexSet};
 
 #[allow(non_snake_case)]
-pub fn BUILTIN_TYPES() -> [zea::Type; 5] {
+pub fn BUILTIN_TYPES() -> [zea::TypeSpecifier; 5] {
     [
-        zea::Type::I64(),
-        zea::Type::Bool(),
-        zea::Type::F64(),
-        zea::Type::Unit(),
-        zea::Type::Never(),
+        zea::TypeSpecifier::I64(),
+        zea::TypeSpecifier::Bool(),
+        zea::TypeSpecifier::F64(),
+        zea::TypeSpecifier::Unit(),
+        zea::TypeSpecifier::Never(),
     ]
 }
 
@@ -33,7 +33,7 @@ pub struct TypeVarId {
 
 /// A table holding all unique types within a module.
 pub struct TypeInterningTable {
-    type_ids: IndexSet<zea::Type>,
+    type_ids: IndexSet<zea::TypeSpecifier>,
 }
 
 impl TypeInterningTable {
@@ -42,33 +42,45 @@ impl TypeInterningTable {
             type_ids: IndexSet::from_iter(BUILTIN_TYPES()),
         }
     }
-    pub fn introduce(&mut self, typ: &zea::Type) -> TypeConcreteId {
+    pub fn introduce(&mut self, typ: &zea::TypeSpecifier) -> TypeConcreteId {
         let (index, _existed) = self.type_ids.insert_full(typ.clone());
         TypeConcreteId { id: index }
     }
-    pub fn get_interned_type(&self, id: TypeConcreteId) -> Option<&zea::Type> {
+    pub fn get_interned_type(&self, id: TypeConcreteId) -> Option<&zea::TypeSpecifier> {
         self.type_ids.get_index(id.id)
     }
 
     pub fn interned_unit(&self) -> TypeConcreteId {
         TypeConcreteId {
-            id: self.type_ids.get_index_of(&zea::Type::Unit()).unwrap(),
+            id: self
+                .type_ids
+                .get_index_of(&zea::TypeSpecifier::Unit())
+                .unwrap(),
         }
     }
     pub fn interned_i64(&self) -> TypeConcreteId {
         TypeConcreteId {
-            id: self.type_ids.get_index_of(&zea::Type::I64()).unwrap(),
+            id: self
+                .type_ids
+                .get_index_of(&zea::TypeSpecifier::I64())
+                .unwrap(),
         }
     }
 
     pub fn interned_f64(&self) -> TypeConcreteId {
         TypeConcreteId {
-            id: self.type_ids.get_index_of(&zea::Type::F64()).unwrap(),
+            id: self
+                .type_ids
+                .get_index_of(&zea::TypeSpecifier::F64())
+                .unwrap(),
         }
     }
     pub fn interned_bool(&self) -> TypeConcreteId {
         TypeConcreteId {
-            id: self.type_ids.get_index_of(&zea::Type::Bool()).unwrap(),
+            id: self
+                .type_ids
+                .get_index_of(&zea::TypeSpecifier::Bool())
+                .unwrap(),
         }
     }
 
@@ -76,7 +88,7 @@ impl TypeInterningTable {
         self.type_ids.get_index(id.id).is_some()
     }
 
-    pub fn contains_type(&self, typ: &zea::Type) -> bool {
+    pub fn contains_type(&self, typ: &zea::TypeSpecifier) -> bool {
         self.type_ids.get(typ).is_some()
     }
 }
@@ -193,11 +205,11 @@ impl<'ast> ModuleInferenceContext<'ast> {
             | ExpressionKind::IntegerLiteral(_)
             | ExpressionKind::BoolLiteral(_)
             | ExpressionKind::FloatLiteral(_) => self.introduce_trivial_type(expr),
-            ExpressionKind::FuncCall(_)
+            ExpressionKind::FunctionCall(_)
             | ExpressionKind::BinOpExpr(_, _, _)
             | ExpressionKind::UnOpExpr(_, _)
             | ExpressionKind::MemberAccess(_, _)
-            | ExpressionKind::CondBranch(_)
+            | ExpressionKind::IfThenElse(_)
             | ExpressionKind::ExpandedBlock(_)
             | ExpressionKind::Ident(_) => self.introduce_non_trivial_type(expr),
             ExpressionKind::StringLiteral(_) => todo!("string types for Zea"),
@@ -224,7 +236,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
                 let var = self.subst_table.fresh();
                 self.node_types.insert(expr.id, var.into());
             }
-            ExpressionKind::FuncCall(_) => {
+            ExpressionKind::FunctionCall(_) => {
                 let var = self.subst_table.fresh();
                 self.node_types.insert(expr.id, var.into());
             }
@@ -244,7 +256,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
                 self.node_types.insert(expr.id, var.into());
                 self.introduce(datatype.as_ref());
             }
-            ExpressionKind::CondBranch(branch) => {
+            ExpressionKind::IfThenElse(branch) => {
                 let var = self.subst_table.fresh();
                 self.node_types.insert(expr.id, var.into());
 
@@ -332,19 +344,29 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
-    pub fn equal_type(&self, t1: &zea::Type, t2: &zea::Type) -> bool {
+    pub fn equal_type(&self, t1: &zea::TypeSpecifier, t2: &zea::TypeSpecifier) -> bool {
         match (t1, t2) {
-            (zea::Type::Basic(s1), zea::Type::Basic(s2)) => s1 == s2,
-            (zea::Type::ArrayOf(t1), zea::Type::ArrayOf(t2)) => self.equal_type(t1, t2),
-            (zea::Type::Pointer(t1), zea::Type::Pointer(t2)) => self.equal_type(t1, t2),
+            (zea::TypeSpecifier::Basic(s1), zea::TypeSpecifier::Basic(s2)) => s1 == s2,
+            (zea::TypeSpecifier::ArrayOf(t1), zea::TypeSpecifier::ArrayOf(t2)) => {
+                self.equal_type(t1, t2)
+            }
+            (zea::TypeSpecifier::Pointer(t1), zea::TypeSpecifier::Pointer(t2)) => {
+                self.equal_type(t1, t2)
+            }
             _ => false,
         }
     }
-    pub fn valid_subtype(&self, t1: &zea::Type, t2: &zea::Type) -> bool {
+    pub fn valid_subtype(&self, t1: &zea::TypeSpecifier, t2: &zea::TypeSpecifier) -> bool {
         match (t1, t2) {
-            (zea::Type::Basic(s1), zea::Type::Basic(s2)) => self.valid_basic_subtype(s1, s2),
-            (zea::Type::ArrayOf(t1), zea::Type::ArrayOf(t2)) => self.equal_type(t1, t2),
-            (zea::Type::Pointer(t1), zea::Type::Pointer(t2)) => self.equal_type(t1, t2),
+            (zea::TypeSpecifier::Basic(s1), zea::TypeSpecifier::Basic(s2)) => {
+                self.valid_basic_subtype(s1, s2)
+            }
+            (zea::TypeSpecifier::ArrayOf(t1), zea::TypeSpecifier::ArrayOf(t2)) => {
+                self.equal_type(t1, t2)
+            }
+            (zea::TypeSpecifier::Pointer(t1), zea::TypeSpecifier::Pointer(t2)) => {
+                self.equal_type(t1, t2)
+            }
             _ => false,
         }
     }
@@ -375,7 +397,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
     }
 
     pub fn infer_branch(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
-        let ExpressionKind::CondBranch(branch) = &expr.kind else {
+        let ExpressionKind::IfThenElse(branch) = &expr.kind else {
             panic!("infer_branch expects branch, got {:?}", expr.kind)
         };
 
@@ -428,7 +450,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
         &mut self,
         expr: &zea::Expression,
     ) -> Result<InferenceId, TypeCheckError> {
-        let ExpressionKind::FuncCall(call) = &expr.kind else {
+        let ExpressionKind::FunctionCall(call) = &expr.kind else {
             panic!("infer_branch expects branch, got {:?}", expr.kind)
         };
 
@@ -441,7 +463,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
         let expr_inference_id = self.get_inference_id(expr)?;
         self.unify_ids(returns_id, expr_inference_id)?;
 
-        let param_types: Vec<&zea::Type> = func.args.iter().map(|ti| &ti.typ).collect();
+        let param_types: Vec<&zea::TypeSpecifier> = func.args.iter().map(|ti| &ti.typ).collect();
 
         for (arg, typ) in call.args.iter().zip(param_types) {
             let param_con_id: InferenceId = self.intering_table.introduce(typ).into();
@@ -482,10 +504,10 @@ impl<'ast> ModuleInferenceContext<'ast> {
             Ok(con_id)
         } else {
             match &expr.kind {
-                ExpressionKind::CondBranch(_) => self.infer_branch(expr),
+                ExpressionKind::IfThenElse(_) => self.infer_branch(expr),
                 ExpressionKind::ExpandedBlock(_) => self.infer_block(expr),
                 ExpressionKind::Ident(_) => self.infer_ident(expr),
-                ExpressionKind::FuncCall(_) => self.infer_func_call(expr),
+                ExpressionKind::FunctionCall(_) => self.infer_func_call(expr),
                 ExpressionKind::BinOpExpr(_, _, _) => self.infer_binop(expr),
                 ExpressionKind::UnOpExpr(_, _) => self.infer_unop(expr),
                 ExpressionKind::MemberAccess(_, _) => self.infer_member_access(expr),

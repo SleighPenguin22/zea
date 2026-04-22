@@ -116,7 +116,7 @@ impl IndentPrint for zea::Statement {
             StatementKind::Return(e) => "RETURN".indent_print(depth) + &e.indent_print(depth + 1),
             StatementKind::Initialisation(i) => i.indent_print(depth),
             StatementKind::BlockTail(e) => "TAIL".indent_print(depth) + &e.indent_print(depth + 1),
-            StatementKind::CondBranch(b) => b.indent_print(depth),
+            StatementKind::IfThenElse(b) => b.indent_print(depth),
             StatementKind::ExpandedBlock(eb) => eb.indent_print(depth),
             StatementKind::FunctionCall(c) => c.indent_print(depth),
             _ => todo!("pretty print statement with kind {:?}", self.kind),
@@ -159,13 +159,13 @@ impl<'a> IndentPrint for &'a str {
     }
 }
 
-impl IndentPrint for zea::Type {
+impl IndentPrint for zea::TypeSpecifier {
     fn indent_print(&self, depth: usize) -> String {
         format!("{:?}", self).indent_print(depth)
     }
 }
 
-impl IndentPrint for Option<zea::Type> {
+impl IndentPrint for Option<zea::TypeSpecifier> {
     fn indent_print(&self, depth: usize) -> String {
         match self {
             None => String::from("TO BE INFERRED").indent_print(depth),
@@ -260,10 +260,10 @@ impl IndentPrint for zea::Expression {
                 buffer += &format!("/MEMBER").indent_print(depth);
                 buffer
             }
-            ExpressionKind::CondBranch(b) => b.indent_print(depth),
+            ExpressionKind::IfThenElse(b) => b.indent_print(depth),
             ExpressionKind::Block(b) => b.indent_print(depth),
             ExpressionKind::ExpandedBlock(eb) => eb.indent_print(depth),
-            ExpressionKind::FuncCall(c) => c.indent_print(depth),
+            ExpressionKind::FunctionCall(c) => c.indent_print(depth),
             ExpressionKind::Unit => "UNITVALUE".indent_print(depth),
             _ => todo!("pretty print expression of kind {:?}", self.kind),
         }

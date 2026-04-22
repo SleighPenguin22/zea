@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use zea_ast::zea::*;
-use crate::{ModuleItem, separate_module_items, binop, unop, exprify_block};
+use crate::{ModuleItem, separate_module_items};
 
 grammar<'ast>;
 
@@ -20,8 +20,8 @@ Comma1<T>: Vec<T> = {
     }
 };
 
-TTypedIdent: TypedIdentifier = {
-    <i:ExprIdent> ":" <t:TType> => TypedIdentifier::new(t, i)
+TTypedIdent:TypedIdentifier = {
+    <i:ExprIdent> ":" <t:TType> =>TypedIdentifier::new(t, i)
 };
 
 pub Mod: Module = {
@@ -29,7 +29,7 @@ pub Mod: Module = {
         Module {
             id: 0,
             imports: imports.unwrap_or(vec![]),
-            exports:exports.unwrap_or(vec![]),
+            exports: exports.unwrap_or(vec![]),
             global_vars,
             functions,
             struct_definitions
@@ -39,21 +39,10 @@ pub Mod: Module = {
 
 CondBranch: IfThenElse = {
     "if" <condition:Expr> <true_case:Block> => {
-        IfThenElse {
-            id: 0,
-            condition: Box::new(condition),
-            true_case: exprify_block( true_case),
-            false_case: None
-        }
+        IfThenElse::if_block(condition, true_case.wrap_in_expression())
     },
-    "if" <condition:Expr> <true_case:Block> "else" <false_case:Block> => {
-            IfThenElse {
-                id: 0,
-                condition: Box::new(condition),
-                true_case: exprify_block( true_case),
-                false_case: Some(exprify_block( false_case))
-            }
-        }
+    "if" <condition:Expr> <true_case:Block> "else" <false_case:Block> =>
+        IfThenElse::if_else_block(condition, true_case.wrap_in_expression(), false_case.wrap_in_expression())
 };
 
 ModName: String = {
@@ -154,7 +143,7 @@ pub Func: Function = {
             id: 0,
             name,
             args: args,
-            returns: Type::Basic("Void".to_string()),
+            returns: TypeSpecifier::Basic("Void".to_string()),
             body: funcbody
         }
     },
@@ -171,10 +160,10 @@ pub Func: Function = {
     }
 
 };
-TType: Type = {
-    TypeIdent => {Type::Basic(<>)},
-    <t:TType> "*" => {Type::Pointer(Box::new(t))},
-    "[" <t:TType> "]" => {Type::ArrayOf(Box::new(t))},
+TType:TypeSpecifier = {
+   TypeIdent => {TypeSpecifier::Basic(<>)},
+    <t:TType> "*" => {TypeSpecifier::Pointer(Box::new(t))},
+    "[" <t:TType> "]" => {TypeSpecifier::ArrayOf(Box::new(t))},
 };
 
 Block: StatementBlock = {
@@ -191,7 +180,7 @@ Block: StatementBlock = {
             id: 0,
             statements: stmts
         }
-    }
+    },
 };
 
 pub Stmt: Statement = {
@@ -205,101 +194,86 @@ pub Stmt: Statement = {
         id: 0,
         kind: StatementKind::Initialisation(init)
     },
-    <reinit:Reassign> => Statement {
-            id: 0,
-            kind: StatementKind::Reassignment(reinit)
-    },
-    <block:Block> => Statement {
-        id: 0,
-        kind: StatementKind::Block(block)
-    },
-    <call:FuncCall> ";" => Statement {
-        id: 0,
-        kind: StatementKind::FunctionCall(call)
-    },
-    <branch:CondBranch> ";" => Statement {
-        id: 0,
-        kind: StatementKind::CondBranch(branch),
-    }
+    <reinit:Reassign> => reinit.wrap_in_statement(),
+    <block:Block> => block.wrap_in_statement(),
+    <call:FuncCall> ";" => call.wrap_in_statement(),
+    <branch:CondBranch> ";" => branch.wrap_in_statement()
 };
 
 pub Expr: Expression = ExprBranch;
 
 ExprBranch: Expression = {
-    <b:CondBranch> => Expression {id: 0, kind: ExpressionKind::CondBranch(b)},
-    ExprOr,
+    <b:CondBranch> => b.wrap_in_expression(),
+    ExprOr
 };
 
 ExprOr: Expression = {
-    <l:ExprOr> "||" <r:ExprXor> => binop(BinOp::LogOr, l, r),
+    <l:ExprOr> "||" <r:ExprXor> => Expression::binop(BinOp::LogOr, l, r),
     ExprXor,
 };
 ExprXor: Expression = {
-    <l:ExprXor> "^^" <r:ExprAnd> => binop(BinOp::LogXor, l, r),
+    <l:ExprXor> "^^" <r:ExprAnd> => Expression::binop(BinOp::LogXor, l, r),
     ExprAnd,
 };
 ExprAnd: Expression = {
-    <l:ExprAnd> "&&" <r:ExprBitOr> => binop(BinOp::LogAnd, l, r),
+    <l:ExprAnd> "&&" <r:ExprBitOr> => Expression::binop(BinOp::LogAnd, l, r),
     ExprBitOr,
 };
 ExprBitOr: Expression = {
-    <l:ExprBitOr> "|" <r:ExprBitXor> => binop(BinOp::BitOr, l, r),
+    <l:ExprBitOr> "|" <r:ExprBitXor> => Expression::binop(BinOp::BitOr, l, r),
     ExprBitXor,
 };
 ExprBitXor: Expression = {
-    <l:ExprBitXor> "^" <r:ExprBitAnd> => binop(BinOp::BitXor, l, r),
+    <l:ExprBitXor> "^" <r:ExprBitAnd> => Expression::binop(BinOp::BitXor, l, r),
     ExprBitAnd,
 };
 ExprBitAnd: Expression = {
-    <l:ExprBitAnd> "&" <r:ExprEq> => binop(BinOp::BitAnd, l, r),
+    <l:ExprBitAnd> "&" <r:ExprEq> => Expression::binop(BinOp::BitAnd, l, r),
     ExprEq,
 };
 ExprEq: Expression = {
-    <l:ExprEq> "==" <r:ExprCmp> => binop(BinOp::Eq, l, r),
-    <l:ExprEq> "!=" <r:ExprCmp> => binop(BinOp::Neq, l, r),
+    <l:ExprEq> "==" <r:ExprCmp> => Expression::binop(BinOp::Eq, l, r),
+    <l:ExprEq> "!=" <r:ExprCmp> => Expression::binop(BinOp::Neq, l, r),
     ExprCmp,
 };
 ExprCmp: Expression = {
-    <l:ExprCmp> "<"  <r:ExprShift> => binop(BinOp::LT, l, r),
-    <l:ExprCmp> ">"  <r:ExprShift> => binop(BinOp::GT, l, r),
-    <l:ExprCmp> "<=" <r:ExprShift> => binop(BinOp::Leq, l, r),
-    <l:ExprCmp> ">=" <r:ExprShift> => binop(BinOp::Geq, l, r),
+    <l:ExprCmp> "<"  <r:ExprShift> => Expression::binop(BinOp::LT, l, r),
+    <l:ExprCmp> ">"  <r:ExprShift> => Expression::binop(BinOp::GT, l, r),
+    <l:ExprCmp> "<=" <r:ExprShift> => Expression::binop(BinOp::Leq, l, r),
+    <l:ExprCmp> ">=" <r:ExprShift> => Expression::binop(BinOp::Geq, l, r),
     ExprShift,
 };
 ExprShift: Expression = {
-    <l:ExprShift> "<<" <r:ExprAdd> => binop(BinOp::Lsh, l, r),
-    <l:ExprShift> ">>" <r:ExprAdd> => binop(BinOp::Rsh, l, r),
+    <l:ExprShift> "<<" <r:ExprAdd> => Expression::binop(BinOp::Lsh, l, r),
+    <l:ExprShift> ">>" <r:ExprAdd> => Expression::binop(BinOp::Rsh, l, r),
     ExprAdd,
 };
 ExprAdd: Expression = {
-    <l:ExprAdd> "+" <r:ExprMul> => binop(BinOp::Add, l, r),
-    <l:ExprAdd> "-" <r:ExprMul> => binop(BinOp::Sub, l, r),
+    <l:ExprAdd> "+" <r:ExprMul> => Expression::binop(BinOp::Add, l, r),
+    <l:ExprAdd> "-" <r:ExprMul> => Expression::binop(BinOp::Sub, l, r),
     ExprMul,
 };
 ExprMul: Expression = {
-    <l:ExprMul> "*" <r:ExprUnary> => binop(BinOp::Mul, l, r),
-    <l:ExprMul> "/" <r:ExprUnary> => binop(BinOp::Div, l, r),
-    <l:ExprMul> "%" <r:ExprUnary> => binop(BinOp::Mod, l, r),
+    <l:ExprMul> "*" <r:ExprUnary> => Expression::binop(BinOp::Mul, l, r),
+    <l:ExprMul> "/" <r:ExprUnary> => Expression::binop(BinOp::Div, l, r),
+    <l:ExprMul> "%" <r:ExprUnary> => Expression::binop(BinOp::Mod, l, r),
     ExprUnary,
 };
 ExprUnary: Expression = {
-    "!" <e:ExprUnary> => unop(UnOp::LogNot, e),
-    "~" <e:ExprUnary> => unop(UnOp::BitNot, e),
-    "-" <e:ExprUnary> => unop(UnOp::Neg, e),
+    "!" <e:ExprUnary> => Expression::unop(UnOp::LogNot, e),
+    "~" <e:ExprUnary> => Expression::unop(UnOp::BitNot, e),
+    "-" <e:ExprUnary> => Expression::unop(UnOp::Neg, e),
     ExprPostfix,
 };
 ExprPostfix: Expression = {
-    <t:ExprPostfix> "." <m:ExprIdent> => Expression {
-        id: 0,
-        kind: ExpressionKind::MemberAccess(Box::new(t), m),
-    },
-    <t:ExprPostfix> "[" <i:Expr> "]" => binop(BinOp::Subscript, t, i),
-    <c:FuncCall> => Expression { id: 0, kind: ExpressionKind::FuncCall(c) },
+    <t:ExprPostfix> "." <m:ExprIdent> => Expression::member_access(t,m),
+    <t:ExprPostfix> "[" <i:Expr> "]" => Expression::binop(BinOp::Subscript, t, i),
+    <c:FuncCall> => c.wrap_in_expression(),
     ExprAtom,
 };
 ExprAtom: Expression = {
-    <n:Num>       => Expression { id: 0, kind: ExpressionKind::IntegerLiteral(n) },
-    <s:ExprIdent> => Expression { id: 0, kind: ExpressionKind::Ident(s) },
+    <n:Num>       => Expression::wrap_lit_int(n),
+    <s:ExprIdent> => Expression::wrap_ident(s),
 };
 
 Num: u64 = {

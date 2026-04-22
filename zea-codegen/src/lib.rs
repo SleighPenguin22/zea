@@ -168,7 +168,7 @@ macro_rules! set {
 
 #[cfg(test)]
 mod tests {
-    use crate::{fold_str, EmitC};
+    use crate::{EmitC, fold_str};
     use zea_ast::c;
     use zea_ast::c::{TypeQualifier, TypeSpecifier};
 
