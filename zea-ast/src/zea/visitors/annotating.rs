@@ -1,7 +1,7 @@
 use crate::zea::visitors::altering::AcceptsBlockExpander;
 use crate::zea::{
     AssignmentPattern, BinOp, ExpandedBlockExpr, Expression, ExpressionKind, Function,
-    FunctionCall, IfThenElse, Initialisation, InitialisationKind, Module, PackedInitialisation,
+    FunctionCall, IfThenElse, InitialisationKind, Initialization, Module, PackedInitialisation,
     PartiallyUnpackedInitialisation, Reassignment, Statement, StatementBlock, StatementKind,
     StructDataTypeDefinition, TaggedUnionDataTypeDefinition, UnOp, UnpackedInitialisation,
 };
@@ -18,7 +18,7 @@ pub trait IntroducesFreshIdentifiers {
     /// and a function definition.
     fn get_introduced_identifiers(&self) -> IndexSet<String>;
 }
-impl IntroducesFreshIdentifiers for Initialisation {
+impl IntroducesFreshIdentifiers for Initialization {
     fn get_introduced_identifiers(&self) -> IndexSet<String> {
         match &self.kind {
             InitialisationKind::Packed(p) => p.get_introduced_identifiers(),
@@ -306,7 +306,7 @@ impl AcceptScopeBuilder for PackedInitialisation {
     }
 }
 
-impl AcceptScopeBuilder for Initialisation {
+impl AcceptScopeBuilder for Initialization {
     fn build_scope_with_parent(
         &self,
         nearest_scope_id: usize,
@@ -492,9 +492,9 @@ pub struct ASTValidator {
     ids: HashSet<usize>,
 }
 pub enum SemanticASTViolation<'ast> {
-    UntypedGlobalVar(&'ast Initialisation),
+    UntypedGlobalVar(&'ast Initialization),
     UnexpandedBlock(&'ast Statement),
-    StrayPackedAssignment(&'ast Initialisation),
+    StrayPackedAssignment(&'ast Initialization),
 }
 
 macro_rules! visit_annotate {
@@ -510,16 +510,16 @@ macro_rules! visit_annotate {
             f(block)
         }
     };
-    (module_globs $ast_l:lifetime $f:expr) => {
+    (module_global_variable $ast_l:lifetime $f:expr) => {
         fn visit_module_global_variable(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
-            let f: fn(&$ast_l Initialisation) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
+            let f: fn(&$ast_l Initialization) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
             for var in module.global_vars.iter() {
                 f(var)?;
             }
             Ok(())
         }
     };
-    (module_funcs $ast_l:lifetime $f:expr) => {
+    (module_function_definition $ast_l:lifetime $f:expr) => {
         fn visit_module_function_definition(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
             let f: fn(&$ast_l Function) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
             for func in module.functions.iter() {
@@ -528,7 +528,17 @@ macro_rules! visit_annotate {
             Ok(())
         }
     };
+    (initialization $ast_l:lifetime $f:expr) => {
+        fn visit_initialization(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
+            let f: fn(&$ast_l Function) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
+            for func in module.functions.iter() {
+                f(func)?;
+            }
+            Ok(())
+        }
+    };
 }
+pub(crate) use visit_annotate;
 
 macro_rules! annotating_visitor {
     ($ast_l:lifetime $name:ident with $($impl_item:item)*) => {
@@ -543,6 +553,7 @@ annotating_visitor! {'ast ASTValidator with
         |_block| Ok(())
     );
 }
+pub(crate) use annotating_visitor;
 
 pub trait AcceptAnnotatingVisitor<'ast> {
     /// Let the visitor traverse all children of this node
@@ -558,6 +569,202 @@ pub trait AcceptAnnotatingVisitor<'ast> {
         _visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         Ok(())
+    }
+}
+
+/// This trait defines what behavior an implementing visitor shows for each type of AST node.
+///
+/// This is inspired by the Python [Lark](https://lark-parser.readthedocs.io/en/stable/visitors.html)
+/// package.
+///
+/// This is done by using the [`annotating_visitor`] macro
+/// and providing a lambda for each AST node that the visitor should do something with:
+/// 
+/// # Examples
+/// ```
+/// pub struct SomeVisitor;
+/// 
+/// annotating_visitor!{'ast SomeVisitor
+///     visit_annotate!{block 'ast
+///         |block| {println!(block.id); Ok(())}
+///     }
+/// }
+/// 
+/// fn do<'ast>(ast: &'ast Module) -> Result<(), SemanticASTViolation<'ast>>{
+///     let v = SomeVisitor::new();
+///     v.traverse(ast)
+/// }
+/// ```
+pub trait AnnotatingVisitor<'ast>: Sized {
+    fn visit_block(
+        &mut self,
+        _v: &'ast ExpandedBlockExpr,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_unexpanded_block(
+        &mut self,
+        _v: &'ast StatementBlock,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_stmt(&mut self, _v: &'ast Statement) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_initialization(
+        &mut self,
+        _v: &'ast Initialization,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_reassignment(
+        &mut self,
+        _v: &'ast Reassignment,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_if_then_else(
+        &mut self,
+        _v: &'ast IfThenElse,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_func_call(
+        &mut self,
+        _v: &'ast FunctionCall,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_return(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_block_tail(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_module(&mut self, _v: &'ast Module) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_module_global_var(
+        &mut self,
+        _id: usize,
+        _v: &'ast PackedInitialisation,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_module_struct_definition(
+        &mut self,
+        _v: &'ast StructDataTypeDefinition,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_module_enum_definition(
+        &mut self,
+        _v: &'ast TaggedUnionDataTypeDefinition,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_module_function_definition(
+        &mut self,
+        _v: &'ast Function,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_binop(
+        &mut self,
+        _id: usize,
+        _op: &'ast BinOp,
+        _lhs: &'ast Expression,
+        _rhs: &'ast Expression,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_unop(
+        &mut self,
+        _id: usize,
+        _op: &'ast UnOp,
+        _arg: &'ast Expression,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_ident(
+        &mut self,
+        _id: usize,
+        _v: &'ast String,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_literal_int(
+        &mut self,
+        _id: usize,
+        _v: &'ast u64,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_literal_float(
+        &mut self,
+        _id: usize,
+        _v: &'ast f64,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_literal_bool(
+        &mut self,
+        _id: usize,
+        _v: &'ast bool,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_literal_string(
+        &mut self,
+        _id: usize,
+        _v: &'ast String,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_unit(&mut self, _id: usize) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_if_then_else(
+        &mut self,
+        _id: usize,
+        _v: &'ast IfThenElse,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_function_call(
+        &mut self,
+        _id: usize,
+        _v: &'ast FunctionCall,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_block(
+        &mut self,
+        _id: usize,
+        _v: &'ast ExpandedBlockExpr,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_unexpanded_block(
+        &mut self,
+        _id: usize,
+        _v: &'ast StatementBlock,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn visit_expr_member_access(
+        &mut self,
+        _id: usize,
+        _data: &'ast Expression,
+        _member: &'ast String,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
+        Ok(())
+    }
+    fn traverse(&mut self, module: &'ast Module) -> Result<(), SemanticASTViolation<'ast>> {
+        module.accept(self)
     }
 }
 
@@ -725,7 +932,7 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for IfThenElse {
         &'ast self,
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_ifthenelse(self)?;
+        visitor.visit_if_then_else(self)?;
         self.visit_children(visitor)
     }
 }
@@ -749,7 +956,7 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for FunctionCall {
     }
 }
 
-impl<'ast> AcceptAnnotatingVisitor<'ast> for Initialisation {
+impl<'ast> AcceptAnnotatingVisitor<'ast> for Initialization {
     fn visit_children(
         &'ast self,
         visitor: &mut impl AnnotatingVisitor<'ast>,
@@ -768,182 +975,8 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for Initialisation {
         &'ast self,
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_initialisation(self)?;
+        visitor.visit_initialization(self)?;
         self.visit_children(visitor)
-    }
-}
-
-/// All methods that a visitor overrides should define
-/// what the visitor does with the data of the given node.
-/// The AcceptAnnotatingVisitor trait is responsible for ensuring each node gets visited.
-/// An implementee of this trait defines what to do with a given node, not how to traverse it.
-pub trait AnnotatingVisitor<'ast>: Sized {
-    fn visit_block(
-        &mut self,
-        _v: &'ast ExpandedBlockExpr,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_unexpanded_block(
-        &mut self,
-        _v: &'ast StatementBlock,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_stmt(&mut self, _v: &'ast Statement) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_initialisation(
-        &mut self,
-        _v: &'ast Initialisation,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_reassignment(
-        &mut self,
-        _v: &'ast Reassignment,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_ifthenelse(&mut self, _v: &'ast IfThenElse) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_func_call(
-        &mut self,
-        _v: &'ast FunctionCall,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_return(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_block_tail(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module(&mut self, _v: &'ast Module) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module_global_var(
-        &mut self,
-        _id: usize,
-        _v: &'ast PackedInitialisation,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module_struct_definition(
-        &mut self,
-        _v: &'ast StructDataTypeDefinition,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module_enum_definition(
-        &mut self,
-        _v: &'ast TaggedUnionDataTypeDefinition,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module_function_definition(
-        &mut self,
-        _v: &'ast Function,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_binop(
-        &mut self,
-        _id: usize,
-        _op: &'ast BinOp,
-        _lhs: &'ast Expression,
-        _rhs: &'ast Expression,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_unop(
-        &mut self,
-        _id: usize,
-        _op: &'ast UnOp,
-        _arg: &'ast Expression,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_ident(
-        &mut self,
-        _id: usize,
-        _v: &'ast String,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_literal_int(
-        &mut self,
-        _id: usize,
-        _v: &'ast u64,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_literal_float(
-        &mut self,
-        _id: usize,
-        _v: &'ast f64,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_literal_bool(
-        &mut self,
-        _id: usize,
-        _v: &'ast bool,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_literal_string(
-        &mut self,
-        _id: usize,
-        _v: &'ast String,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_unit(&mut self, _id: usize) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_if_then_else(
-        &mut self,
-        _id: usize,
-        _v: &'ast IfThenElse,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_function_call(
-        &mut self,
-        _id: usize,
-        _v: &'ast FunctionCall,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_block(
-        &mut self,
-        _id: usize,
-        _v: &'ast ExpandedBlockExpr,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_unexpanded_block(
-        &mut self,
-        _id: usize,
-        _v: &'ast StatementBlock,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_member_access(
-        &mut self,
-        _id: usize,
-        _data: &'ast Expression,
-        _member: &'ast String,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn traverse(&mut self, module: &'ast Module) -> Result<(), SemanticASTViolation<'ast>> {
-        module.accept(self)
     }
 }
 

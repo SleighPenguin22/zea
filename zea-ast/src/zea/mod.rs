@@ -119,10 +119,10 @@ pub(crate) mod test_ast_macros {
 
         (init $p:expr ;= $val:expr) => {
             {
-                use crate::zea::{AssignmentPattern,Initialisation,Statement,StatementKind};
+                use crate::zea::{AssignmentPattern,Initialization,Statement,StatementKind};
             Statement {
                 id: 0,
-                kind: StatementKind::Initialisation(Initialisation {
+                kind: StatementKind::Initialisation(Initialization {
                     id: 0,
                     kind: InitialisationKind::Packed(
                         PackedInitialisation {
@@ -298,7 +298,7 @@ pub struct Module {
     pub id: usize,
     pub imports: Vec<String>,
     pub exports: Vec<String>,
-    pub global_vars: Vec<Initialisation>,
+    pub global_vars: Vec<Initialization>,
     pub functions: Vec<Function>,
     pub struct_definitions: Vec<StructDataTypeDefinition>,
 }
@@ -311,7 +311,7 @@ impl Module {
     pub fn iter_functions(&self) -> impl Iterator<Item = &Function> {
         self.functions.iter()
     }
-    pub fn iter_global_vars(&self) -> impl Iterator<Item = &Initialisation> {
+    pub fn iter_global_vars(&self) -> impl Iterator<Item = &Initialization> {
         self.global_vars.iter()
     }
     pub fn iter_structs(&self) -> impl Iterator<Item = &StructDataTypeDefinition> {
@@ -360,7 +360,7 @@ pub struct Statement {
 pub enum StatementKind {
     // initial pass
     /// Variable initialization
-    Initialisation(Initialisation),
+    Initialisation(Initialization),
     /// Variable Reassignment
     Reassignment(Reassignment),
     FunctionCall(FunctionCall),
@@ -378,12 +378,12 @@ pub enum StatementKind {
     IfThenElse(IfThenElse),
 }
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
-pub struct Initialisation {
+pub struct Initialization {
     pub id: usize,
     pub kind: InitialisationKind,
 }
 
-impl Initialisation {
+impl Initialization {
     pub fn packed(
         typ: Option<TypeSpecifier>,
         assignee: AssignmentPattern,
@@ -418,7 +418,7 @@ pub struct UnpackedInitialisation {
 #[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
 pub struct PartiallyUnpackedInitialisation {
     pub temporary: UnpackedInitialisation,
-    pub unpacked_assignments: Vec<Initialisation>,
+    pub unpacked_assignments: Vec<Initialization>,
 }
 #[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
 pub enum InitialisationKind {

@@ -1,6 +1,6 @@
 use crate::zea::{
     AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
-    IfThenElse, Initialisation, InitialisationKind, Module, PackedInitialisation,
+    IfThenElse, Initialization, InitialisationKind, Module, PackedInitialisation,
     PartiallyUnpackedInitialisation, Reassignment, Statement, StatementBlock, StatementKind,
     UnpackedInitialisation,
 };
@@ -67,7 +67,7 @@ impl LabelSentinelIDs for Module {
     }
 }
 
-impl LabelSentinelIDs for Initialisation {
+impl LabelSentinelIDs for Initialization {
     fn label_sentinel_id(&mut self, labeler: &mut impl NodeLabeler) {
         labeler.update_label_if_sentinel(&mut self.id);
         match &mut self.kind {
@@ -234,7 +234,7 @@ impl AssignmentSimplifier {
     ///
     /// That is, for each member of the assignment-pattern, generate a new initialization,
     /// That gets assigned one field of the value
-    fn simplify_tuple(tuple: &Vec<AssignmentPattern>, value: Expression) -> Vec<Initialisation> {
+    fn simplify_tuple(tuple: &Vec<AssignmentPattern>, value: Expression) -> Vec<Initialization> {
         let mut assignees = vec![];
         for (field, assignee) in tuple.iter().enumerate() {
             let id = 0;
@@ -243,7 +243,7 @@ impl AssignmentSimplifier {
                 assignee: assignee.clone(),
                 value: Expression::tuple_member_access(value.clone(), field),
             };
-            let init = Initialisation {
+            let init = Initialization {
                 id,
                 kind: InitialisationKind::Packed(kind),
             };
@@ -272,7 +272,7 @@ pub trait AcceptsAssignmentSimplifier {
     fn has_assignments_unpacked(&self) -> bool;
 }
 
-impl AcceptsAssignmentSimplifier for Initialisation {
+impl AcceptsAssignmentSimplifier for Initialization {
     fn accept_assignment_simplifier(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
         match &mut self.kind {
             InitialisationKind::Packed(p) => match &p.assignee {
@@ -519,7 +519,7 @@ impl AcceptsBlockExpander for IfThenElse {
     }
 }
 
-impl AcceptsBlockExpander for Initialisation {
+impl AcceptsBlockExpander for Initialization {
     fn accept_block_expander(&mut self, block_expander: &mut BlockExpander) -> bool {
         if self.has_blocks_expanded() {
             return false;
@@ -705,7 +705,7 @@ mod block_expander_tests {
     use crate::zea::visitors::altering::{AssignmentSimplifier, LabelSentinelIDs};
     use crate::zea::visitors::{AcceptsAssignmentSimplifier, AcceptsBlockExpander, BlockExpander};
     use crate::zea::{
-        AssignmentPattern, Expression, ExpressionKind, Function, Initialisation,
+        AssignmentPattern, Expression, ExpressionKind, Function, Initialization,
         InitialisationKind, Module, NodeLabeler, PackedInitialisation, Statement, StatementBlock,
         StatementKind, TypeSpecifier, assert_structural_eq,
     };
@@ -746,7 +746,7 @@ mod block_expander_tests {
         assert_structural_eq!(expanded.last, expr!(ident a));
     }
 
-    fn wrap_in_module(init: Initialisation) -> Module {
+    fn wrap_in_module(init: Initialization) -> Module {
         Module {
             id: 0,
             imports: vec![],

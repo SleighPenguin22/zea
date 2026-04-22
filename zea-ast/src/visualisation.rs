@@ -123,7 +123,7 @@ impl IndentPrint for zea::Statement {
         }
     }
 }
-impl IndentPrint for zea::Initialisation {
+impl IndentPrint for zea::Initialization {
     fn indent_print(&self, depth: usize) -> String {
         use zea::InitialisationKind;
         match &self.kind {

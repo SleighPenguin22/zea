@@ -9,7 +9,7 @@ use lalrpop_util::ParseError;
 use zea_ast::zea::visitors::altering::{BareNodeLabeler, LabelSentinelIDs, NodeLabeler};
 use zea_ast::zea::visitors::annotating::SemanticASTViolation;
 use zea_ast::zea::{
-    BinOp, Expression, ExpressionKind, Function, Initialisation, Module, StatementBlock,
+    BinOp, Expression, ExpressionKind, Function, Initialization, Module, StatementBlock,
     StructDataTypeDefinition, TaggedUnionDataTypeDefinition, UnOp,
 };
 
@@ -35,7 +35,7 @@ pub fn semantic_annotations(ast: &'_ Module) -> Result<Module, SemanticASTViolat
 }
 
 pub(crate) enum ModuleItem {
-    Init(Initialisation),
+    Init(Initialization),
     Func(Function),
     StructDef(StructDataTypeDefinition),
     EnumDef(TaggedUnionDataTypeDefinition),
@@ -44,7 +44,7 @@ pub(crate) enum ModuleItem {
 pub(crate) fn separate_module_items(
     items: Vec<ModuleItem>,
 ) -> (
-    Vec<Initialisation>,
+    Vec<Initialization>,
     Vec<Function>,
     Vec<StructDataTypeDefinition>,
     Vec<TaggedUnionDataTypeDefinition>,
@@ -92,7 +92,7 @@ mod tests {
             .unwrap_or_else(|e| panic!("func parse failed for {src:?}:\n  {e}"))
     }
 
-    fn parse_init(src: &str) -> Initialisation {
+    fn parse_init(src: &str) -> Initialization {
         InitParser::new()
             .parse(src)
             .unwrap_or_else(|e| panic!("init parse failed for {src:?}:\n  {e}"))
