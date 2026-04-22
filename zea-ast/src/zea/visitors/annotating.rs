@@ -602,17 +602,27 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for Expression {
             ExpressionKind::FloatLiteral(v) => visitor.visit_expr_literal_float(self.id, v),
             ExpressionKind::StringLiteral(v) => visitor.visit_expr_literal_string(self.id, v),
             ExpressionKind::Ident(v) => visitor.visit_expr_ident(self.id, v),
-            ExpressionKind::FunctionCall(v) => visitor.visit_expr_function_call(self.id, v),
+
+            ExpressionKind::FunctionCall(v) => {
+                visitor.visit_expr_function_call(self.id, v)?;
+                v.accept(visitor)
+            }
             ExpressionKind::BinOpExpr(op, lhs, rhs) => {
+                lhs.accept(visitor)?;
+                rhs.accept(visitor)?;
                 visitor.visit_expr_binop(self.id, op, lhs, rhs)
             }
-            ExpressionKind::UnOpExpr(op, arg) => visitor.visit_expr_unop(self.id, op, arg),
+            ExpressionKind::UnOpExpr(op, arg) => {
+                arg.accept(visitor)?;
+                visitor.visit_expr_unop(self.id, op, arg)
+            }
             ExpressionKind::MemberAccess(data, member) => {
+                data.accept(visitor)?;
                 visitor.visit_expr_member_access(self.id, data, member)
             }
-            ExpressionKind::IfThenElse(ite) => visitor.visit_expr_ifthenelse(self.id, ite),
-            ExpressionKind::Block(unexp) => visitor.visit_expr_unexpanded_block(self.id, unexp),
-            ExpressionKind::ExpandedBlock(b) => visitor.visit_expr_block(self.id, b),
+            ExpressionKind::IfThenElse(ite) => ite.accept(visitor),
+            ExpressionKind::Block(unexp) => unexp.accept(visitor),
+            ExpressionKind::ExpandedBlock(b) => b.accept(visitor),
         }
     }
     fn accept(
@@ -630,14 +640,14 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for Statement {
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         match &self.kind {
-            StatementKind::Initialisation(v) => visitor.visit_initialisation(v),
-            StatementKind::Reassignment(v) => visitor.visit_reassignment(v),
-            StatementKind::FunctionCall(v) => visitor.visit_func_call(v),
-            StatementKind::Return(v) => visitor.visit_return(v),
-            StatementKind::BlockTail(v) => visitor.visit_block_tail(v),
-            StatementKind::Block(v) => visitor.visit_unexpanded_block(v),
-            StatementKind::ExpandedBlock(v) => visitor.visit_block(v),
-            StatementKind::IfThenElse(v) => visitor.visit_ifthenelse(v),
+            StatementKind::Initialisation(v) => v.accept(visitor),
+            StatementKind::Reassignment(v) => v.value.accept(visitor),
+            StatementKind::FunctionCall(v) => v.accept(visitor),
+            StatementKind::Return(v) => v.accept(visitor),
+            StatementKind::BlockTail(v) => v.accept(visitor),
+            StatementKind::Block(v) => v.accept(visitor),
+            StatementKind::ExpandedBlock(v) => v.accept(visitor),
+            StatementKind::IfThenElse(v) => v.accept(visitor),
         }
     }
     fn accept(
@@ -654,11 +664,11 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for Module {
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         for init in self.global_vars.iter() {
-            visitor.visit_initialisation(init)?;
+            init.accept(visitor)?;
         }
         for func in self.functions.iter() {
             for stmt in func.body.statements.iter() {
-                visitor.visit_stmt(stmt)?;
+                stmt.accept(visitor)?;
             }
         }
         Ok(())
@@ -691,7 +701,7 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for StatementBlock {
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         for stmt in self.statements.iter() {
-            visitor.visit_stmt(stmt)?;
+            stmt.accept(visitor)?;
         }
         Ok(())
     }
@@ -710,9 +720,9 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for ExpandedBlockExpr {
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         for stmt in self.statements.iter() {
-            visitor.visit_stmt(stmt)?;
+            stmt.accept(visitor)?;
         }
-        visitor.visit_expr(&self.last)
+        self.last.accept(visitor)
     }
     fn accept(
         &'ast self,
@@ -727,10 +737,10 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for IfThenElse {
         &'ast self,
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_expr(&self.condition)?;
-        visitor.visit_expr(&self.true_case)?;
+        self.condition.accept(visitor)?;
+        self.true_case.accept(visitor)?;
         if let Some(ref false_case) = self.false_case {
-            visitor.visit_expr(false_case.as_ref())?;
+            false_case.accept(visitor)?;
         }
         Ok(())
     }
@@ -749,7 +759,7 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for FunctionCall {
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         for arg in self.args.iter() {
-            visitor.visit_expr(arg)?;
+            arg.accept(visitor)?;
         }
         Ok(())
     }
@@ -768,15 +778,12 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for Initialisation {
         visitor: &mut impl AnnotatingVisitor<'ast>,
     ) -> Result<(), SemanticASTViolation<'ast>> {
         match &self.kind {
-            InitialisationKind::Packed(p) => {
-                visitor.visit_expr(&p.value)?;
-                Ok(())
-            }
+            InitialisationKind::Packed(p) => p.value.accept(visitor),
             InitialisationKind::PartiallyUnpacked(u) => {
                 for unpack in u.unpacked_assignments.iter() {
-                    visitor.visit_initialisation(unpack)?;
+                    unpack.accept(visitor)?;
                 }
-                visitor.visit_expr(&u.temporary.value)
+                u.temporary.value.accept(visitor)
             }
         }
     }
@@ -789,6 +796,10 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for Initialisation {
     }
 }
 
+/// All methods that a visitor overrides should define
+/// what the visitor does with the data of the given node.
+/// The AcceptAnnotatingVisitor trait is responsible for ensuring each node gets visited.
+/// An implementee of this trait defines what to do with a given node, not how to traverse it.
 pub trait AnnotatingVisitor<'ast>: Sized {
     fn visit_block(
         &mut self,
@@ -820,7 +831,10 @@ pub trait AnnotatingVisitor<'ast>: Sized {
     fn visit_ifthenelse(&mut self, _v: &'ast IfThenElse) -> Result<(), SemanticASTViolation<'ast>> {
         Ok(())
     }
-    fn visit_func_call(&mut self, _v: &'ast FunctionCall) -> Result<(), SemanticASTViolation<'ast>> {
+    fn visit_func_call(
+        &mut self,
+        _v: &'ast FunctionCall,
+    ) -> Result<(), SemanticASTViolation<'ast>> {
         Ok(())
     }
     fn visit_return(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
