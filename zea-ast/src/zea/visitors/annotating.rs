@@ -1097,7 +1097,7 @@ mod scope_builder_tests {
         let mut scopes = module.annotate_scopes();
 
         let func = &module.functions[0];
-        let body_scope = scopes.get_all_identifiers_of(func.body.id);
+        let body_scope = dbg!(scopes.get_all_identifiers_of(func.body.id));
         assert!(
             body_scope.contains("local_var"),
             "local var should be in function body scope"
@@ -1105,6 +1105,14 @@ mod scope_builder_tests {
         assert!(
             body_scope.contains("global_var"),
             "global var should be in function body scope"
+        );
+        let expected = IndexSet::from(["global_var".to_string(), "local_var".to_string(), "foo".to_string()]);
+        assert!(
+            body_scope
+                .difference(&expected)
+                .collect::<IndexSet<&String>>()
+                .is_empty(),
+            "scope should contain global_var, local_var and foo"
         );
     }
 
