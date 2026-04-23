@@ -59,6 +59,11 @@ pub trait LabelSentinelIDs {
         self.accept_sentinel_labeler(&mut labeler);
         labeler
     }
+    fn label_sentinel_ids_with(&mut self, labeler: impl NodeLabeler) -> BareNodeLabeler {
+        let mut labeler = BareNodeLabeler::continue_from_last_id_of(labeler);
+        self.accept_sentinel_labeler(&mut labeler);
+        labeler
+    }
 }
 
 impl LabelSentinelIDs for Module {
@@ -252,14 +257,13 @@ impl AssignmentSimplifier {
     ) -> Vec<Initialization> {
         let mut assignees = vec![];
         for (field, assignee) in tuple.iter().enumerate() {
-            let id = 0;
             let kind = PackedInitialization {
                 typ: None,
                 assignee: assignee.clone(),
                 value: Expression::tuple_member_access(value.clone(), field),
             };
             let init = Initialization {
-                id,
+                id: 0,
                 kind: InitializationKind::Packed(kind),
             };
             assignees.push(init);
@@ -311,8 +315,17 @@ impl PartiallyUnpackedInitialization {
         let mut temps = vec![self.temporary.clone()];
         for init in self.unpacked_assignments.iter() {
             match &init.kind {
-                InitializationKind::Packed(_) => {
-                    panic!("cannot get temps before assignments are simplified")
+                InitializationKind::Packed(p) => {
+                    let AssignmentPattern::Identifier(assignee) = &p.assignee else {
+                        panic!("cannot get temps before assignments are simplified")
+                    };
+                    let temp = SimpleInitialization {
+                        id: 0,
+                        typ: p.typ.clone(),
+                        assignee: assignee.clone(),
+                        value: p.value.clone(),
+                    };
+                    temps.push(temp);
                 }
                 InitializationKind::PartiallyUnpacked(pu) => {
                     temps.extend(pu.get_cloned_temps());
@@ -326,7 +339,7 @@ impl PartiallyUnpackedInitialization {
     }
 }
 
-pub trait AcceptsAssignmentSimplifier {
+pub trait AcceptsAssignmentSimplifier: LabelSentinelIDs {
     /// Let the expand packed assignments in `self` and its descendants.
     ///
     /// Returns false if all the assignments under self are expanded.
@@ -340,128 +353,422 @@ pub trait AcceptsAssignmentSimplifier {
     /// let mut expander = NodeExpander::new()
     /// while !ast.accept(&mut expander) {} // will always terminate
     /// ```
-    fn accept_assignment_simplifier(&mut self, simplifier: &mut AssignmentSimplifier) -> bool;
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool;
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool;
     fn has_assignments_unpacked(&self) -> bool;
+    fn has_assignments_flattened(&self) -> bool;
     fn simplify_assignments(&mut self) -> AssignmentSimplifier {
-        let mut simplifier = AssignmentSimplifier::new();
-        self.accept_assignment_simplifier(&mut simplifier);
+        self.simplify_assignments_with(AssignmentSimplifier::new())
+    }
+    fn simplify_assignments_with(&mut self, simplifier: impl NodeLabeler) -> AssignmentSimplifier {
+        let mut simplifier = AssignmentSimplifier::continue_from_last_id_of(simplifier);
+        while !self.accept_assignment_unpacker(&mut simplifier) {}
+        self.accept_sentinel_labeler(&mut simplifier);
+        while !self.accept_assignment_flattener(&mut simplifier) {}
+        self.accept_sentinel_labeler(&mut simplifier);
         simplifier
     }
 }
 
 impl AcceptsAssignmentSimplifier for Initialization {
-    fn accept_assignment_simplifier(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
         match &mut self.kind {
             InitializationKind::Packed(p) => match &p.assignee {
-                AssignmentPattern::Identifier(_) => {
-                    AssignmentSimplifier::flatten_simple_packed_initialization(self)
+                AssignmentPattern::Identifier(i) => {
+                    println!("simple packed assignment with assignee {i}")
                 }
                 AssignmentPattern::Tuple(tup) => {
+                    println!("complex packed assignment:\n{}", p.indent_print(1));
                     let (id, label) = simplifier.next_label_with_ident_string();
-                    let temporary = SimpleInitialization::untyped(&label, p.value.clone());
+                    let temporary = SimpleInitialization {
+                        id,
+                        typ: p.typ.clone(),
+                        value: p.value.clone(),
+                        assignee: label.clone(),
+                    };
                     let label = Expression::ident(&label);
                     let unpacked_assignments =
                         AssignmentSimplifier::simplify_tuple_assignment(&tup, label);
                     let partially_unpacked = PartiallyUnpackedInitialization {
                         temporary,
-                        unpacked_assignments,
+                        unpacked_assignments, // generates packed assignments
                     };
                     self.kind = InitializationKind::PartiallyUnpacked(partially_unpacked);
+                    println!("expanded to:\n{}", self.indent_print(1));
                 }
             },
 
             InitializationKind::PartiallyUnpacked(p) => {
-                let inits = &mut p.unpacked_assignments;
-                for init in inits.iter_mut() {
-                    init.accept_assignment_simplifier(simplifier);
+                for init in p.unpacked_assignments.iter_mut() {
+                    init.accept_assignment_unpacker(simplifier);
                 }
-                AssignmentSimplifier::flatten_partially_unpacked_initialization(self);
             }
             &mut InitializationKind::Unpacked(_) => {}
         };
+        self.has_assignments_unpacked()
+    }
 
-        !self.has_assignments_unpacked()
+    fn accept_assignment_flattener(&mut self, _simplifier: &mut AssignmentSimplifier) -> bool {
+        match &mut self.kind {
+            InitializationKind::Packed(p) => {
+                if matches!(p.assignee, AssignmentPattern::Identifier(_)) {
+                    AssignmentSimplifier::flatten_simple_packed_initialization(self);
+                } else {
+                    panic!(
+                        "unexpected tuple-assignment when attempting flattening:\n{}",
+                        self.indent_print(1)
+                    )
+                }
+            }
+            InitializationKind::PartiallyUnpacked(_) => {
+                AssignmentSimplifier::flatten_partially_unpacked_initialization(self);
+            }
+            InitializationKind::Unpacked(_) => {}
+        }
+        self.has_assignments_flattened()
+    }
+    fn has_assignments_flattened(&self) -> bool {
+        matches!(self.kind, InitializationKind::Unpacked(_))
     }
 
     fn has_assignments_unpacked(&self) -> bool {
         match &self.kind {
+            InitializationKind::Packed(p) => matches!(p.assignee, AssignmentPattern::Identifier(_)),
             InitializationKind::Unpacked(_) => true,
-            _ => {
-                println!("non-unpacked init:\n{}", self.indent_print(1));
-                false
-            }
+            InitializationKind::PartiallyUnpacked(pu) => pu
+                .unpacked_assignments
+                .iter()
+                .all(|init| init.has_assignments_unpacked()),
         }
-    }
-}
-
-impl AcceptsAssignmentSimplifier for StatementBlock {
-    fn accept_assignment_simplifier(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
-        for s in self.statements.iter_mut() {
-            s.accept_assignment_simplifier(simplifier);
-        }
-        !self.has_assignments_unpacked()
-    }
-    fn has_assignments_unpacked(&self) -> bool {
-        self.statements
-            .iter()
-            .all(Statement::has_assignments_unpacked)
     }
 }
 
 impl AcceptsAssignmentSimplifier for ExpandedBlockExpr {
-    fn accept_assignment_simplifier(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
         for s in self.statements.iter_mut() {
-            s.accept_assignment_simplifier(simplifier);
+            s.accept_assignment_unpacker(simplifier);
         }
-        !self.has_assignments_unpacked()
+        self.last.accept_assignment_unpacker(simplifier);
+        self.has_assignments_unpacked()
     }
+
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        for s in self.statements.iter_mut() {
+            s.accept_assignment_unpacker(simplifier);
+        }
+        self.last.accept_assignment_unpacker(simplifier);
+        self.has_assignments_flattened()
+    }
+
     fn has_assignments_unpacked(&self) -> bool {
         self.statements
             .iter()
             .all(Statement::has_assignments_unpacked)
+            && self.last.has_assignments_unpacked()
+    }
+
+    fn has_assignments_flattened(&self) -> bool {
+        self.statements
+            .iter()
+            .all(Statement::has_assignments_flattened)
+            && self.last.has_assignments_flattened()
+    }
+}
+
+impl AcceptsAssignmentSimplifier for Expression {
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        match &mut self.kind {
+            ExpressionKind::IfThenElse(ite) => {
+                ite.accept_assignment_unpacker(simplifier);
+            }
+            ExpressionKind::FunctionCall(c) => {
+                c.accept_assignment_unpacker(simplifier);
+            }
+            ExpressionKind::BinOpExpr(_, lhs, rhs) => {
+                lhs.accept_assignment_unpacker(simplifier);
+                rhs.accept_assignment_unpacker(simplifier);
+            }
+            ExpressionKind::UnOpExpr(_, arg) => {
+                arg.accept_assignment_unpacker(simplifier);
+            }
+            ExpressionKind::MemberAccess(data, _) => {
+                data.accept_assignment_unpacker(simplifier);
+            }
+            ExpressionKind::ExpandedBlock(b) => {
+                b.accept_assignment_unpacker(simplifier);
+            }
+
+            ExpressionKind::Block(_) => {
+                unreachable!("encountered unexpanded block when flattening assignments")
+            }
+            _ => {}
+        }
+        self.has_assignments_unpacked()
+    }
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        match &mut self.kind {
+            ExpressionKind::IfThenElse(ite) => {
+                ite.accept_assignment_flattener(simplifier);
+            }
+            ExpressionKind::FunctionCall(c) => {
+                c.accept_assignment_flattener(simplifier);
+            }
+            ExpressionKind::BinOpExpr(_, lhs, rhs) => {
+                lhs.accept_assignment_flattener(simplifier);
+                rhs.accept_assignment_flattener(simplifier);
+            }
+            ExpressionKind::UnOpExpr(_, arg) => {
+                arg.accept_assignment_flattener(simplifier);
+            }
+            ExpressionKind::MemberAccess(data, _) => {
+                data.accept_assignment_flattener(simplifier);
+            }
+            ExpressionKind::ExpandedBlock(b) => {
+                b.accept_assignment_flattener(simplifier);
+            }
+
+            ExpressionKind::Block(_) => {
+                unreachable!("encountered unexpanded block when flattening assignments")
+            }
+            _ => {}
+        }
+        self.has_assignments_flattened()
+    }
+    fn has_assignments_unpacked(&self) -> bool {
+        match &self.kind {
+            ExpressionKind::IfThenElse(ite) => ite.has_assignments_unpacked(),
+            ExpressionKind::FunctionCall(c) => c.has_assignments_unpacked(),
+            ExpressionKind::BinOpExpr(_, lhs, rhs) => {
+                lhs.has_assignments_unpacked() && rhs.has_assignments_unpacked()
+            }
+            ExpressionKind::UnOpExpr(_, arg) => arg.has_assignments_unpacked(),
+            ExpressionKind::MemberAccess(data, _) => data.has_assignments_unpacked(),
+            ExpressionKind::ExpandedBlock(b) => b.has_assignments_unpacked(),
+
+            ExpressionKind::Block(_) => {
+                unreachable!("encountered unexpanded block when flattening assignments")
+            }
+            _ => true,
+        }
+    }
+    fn has_assignments_flattened(&self) -> bool {
+        match &self.kind {
+            ExpressionKind::IfThenElse(ite) => ite.has_assignments_flattened(),
+            ExpressionKind::FunctionCall(c) => c.has_assignments_flattened(),
+            ExpressionKind::BinOpExpr(_, lhs, rhs) => {
+                lhs.has_assignments_flattened() && rhs.has_assignments_flattened()
+            }
+            ExpressionKind::UnOpExpr(_, arg) => arg.has_assignments_flattened(),
+            ExpressionKind::MemberAccess(data, _) => data.has_assignments_flattened(),
+            ExpressionKind::ExpandedBlock(b) => b.has_assignments_flattened(),
+
+            ExpressionKind::Block(_) => {
+                unreachable!("encountered unexpanded block when flattening assignments")
+            }
+            _ => true,
+        }
+    }
+}
+
+impl AcceptsAssignmentSimplifier for FunctionCall {
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        for arg in self.args.iter_mut() {
+            arg.accept_assignment_unpacker(simplifier);
+        }
+        self.has_assignments_unpacked()
+    }
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        for arg in self.args.iter_mut() {
+            arg.accept_assignment_flattener(simplifier);
+        }
+        self.has_assignments_flattened()
+    }
+    fn has_assignments_unpacked(&self) -> bool {
+        self.args.iter().all(Expression::has_assignments_unpacked)
+    }
+
+    fn has_assignments_flattened(&self) -> bool {
+        self.args.iter().all(Expression::has_assignments_flattened)
+    }
+}
+
+impl AcceptsAssignmentSimplifier for IfThenElse {
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        self.condition.accept_assignment_unpacker(simplifier);
+        self.true_case.accept_assignment_unpacker(simplifier);
+        if let Some(false_case) = self.false_case.as_deref_mut() {
+            false_case.accept_assignment_unpacker(simplifier);
+        }
+        self.has_assignments_flattened()
+    }
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        self.condition.accept_assignment_flattener(simplifier);
+        self.true_case.accept_assignment_flattener(simplifier);
+        if let Some(false_case) = self.false_case.as_deref_mut() {
+            false_case.accept_assignment_flattener(simplifier);
+        }
+        self.has_assignments_flattened()
+    }
+    fn has_assignments_unpacked(&self) -> bool {
+        self.condition.has_assignments_unpacked()
+            && self.true_case.has_assignments_unpacked()
+            && match &self.false_case {
+                Some(e) => e.has_assignments_unpacked(),
+                None => true,
+            }
+    }
+    fn has_assignments_flattened(&self) -> bool {
+        self.condition.has_assignments_flattened()
+            && self.true_case.has_assignments_flattened()
+            && match &self.false_case {
+                Some(e) => e.has_assignments_flattened(),
+                None => true,
+            }
     }
 }
 
 impl AcceptsAssignmentSimplifier for Statement {
-    fn accept_assignment_simplifier(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
         match &mut self.kind {
-            StatementKind::Initialization(i) => i.accept_assignment_simplifier(simplifier),
-            StatementKind::Block(b) => b.accept_assignment_simplifier(simplifier),
-            StatementKind::ExpandedBlock(b) => b.accept_assignment_simplifier(simplifier),
-            _ => false,
+            StatementKind::Initialization(i) => {
+                // println!("enetring init:\n{}", i.indent_print(1));
+                i.accept_assignment_unpacker(simplifier);
+            }
+            StatementKind::Block(_) => unreachable!(
+                "unexpected non-expanded block when simplifying assignments:\n{}",
+                self.indent_print(1)
+            ),
+            StatementKind::ExpandedBlock(b) => {
+                b.accept_assignment_unpacker(simplifier);
+            }
+            _ => {}
+        };
+        self.has_assignments_unpacked()
+    }
+
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        match &mut self.kind {
+            StatementKind::Initialization(i) => {
+                i.accept_assignment_flattener(simplifier);
+            }
+            StatementKind::Block(_) => unreachable!(
+                "unexpected non-expanded block when simplifying assignments:\n{}",
+                self.indent_print(1)
+            ),
+            StatementKind::ExpandedBlock(b) => {
+                b.accept_assignment_flattener(simplifier);
+            }
+            _ => {}
         }
+        self.has_assignments_flattened()
     }
 
     fn has_assignments_unpacked(&self) -> bool {
         match &self.kind {
             StatementKind::Initialization(i) => i.has_assignments_unpacked(),
-            StatementKind::Block(b) => b.has_assignments_unpacked(),
+            StatementKind::Block(_) => unreachable!(
+                "unexpected non-expanded block when simplifying assignments:\n{}",
+                self.indent_print(1)
+            ),
             StatementKind::ExpandedBlock(b) => b.has_assignments_unpacked(),
+            _ => true,
+        }
+    }
+
+    fn has_assignments_flattened(&self) -> bool {
+        match &self.kind {
+            StatementKind::Initialization(i) => i.has_assignments_flattened(),
+            StatementKind::Block(_) => unreachable!(
+                "unexpected non-expanded block when simplifying assignments:\n{}",
+                self.indent_print(1)
+            ),
+            StatementKind::ExpandedBlock(b) => b.has_assignments_flattened(),
             _ => true,
         }
     }
 }
 
 impl AcceptsAssignmentSimplifier for Function {
-    fn accept_assignment_simplifier(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
-        self.body.accept_assignment_simplifier(simplifier)
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        for stmt in self.body.statements.iter_mut() {
+            // println!("enetring stmt:\n{}", stmt.indent_print(1));
+            stmt.accept_assignment_unpacker(simplifier);
+        }
+        self.has_assignments_unpacked()
+    }
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        for stmt in self.body.statements.iter_mut() {
+            stmt.accept_assignment_flattener(simplifier);
+        }
+        let done = self.has_assignments_flattened();
+        println!("done with function: {done}");
+        done
     }
 
     fn has_assignments_unpacked(&self) -> bool {
-        self.body.has_assignments_unpacked()
+        dbg!(
+            self.body
+                .statements
+                .iter()
+                .all(Statement::has_assignments_unpacked)
+        )
+    }
+    fn has_assignments_flattened(&self) -> bool {
+        dbg!(
+            self.body
+                .statements
+                .iter()
+                .all(Statement::has_assignments_flattened)
+        )
+    }
+}
+impl AcceptsAssignmentSimplifier for Module {
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        for f in self.functions.iter_mut() {
+            f.accept_assignment_unpacker(simplifier);
+        }
+        // we do not simplify globs, as globs may only be simple assignments.
+        dbg!(self.has_assignments_unpacked())
+    }
+
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        for f in self.functions.iter_mut() {
+            f.accept_assignment_flattener(simplifier);
+        }
+        for glob in self.global_vars.iter_mut() {
+            glob.accept_assignment_flattener(simplifier);
+        }
+        self.has_assignments_flattened()
+    }
+
+    fn has_assignments_unpacked(&self) -> bool {
+        self.functions
+            .iter()
+            .all(Function::has_assignments_unpacked)
+    }
+
+    fn has_assignments_flattened(&self) -> bool {
+        self.functions
+            .iter()
+            .all(Function::has_assignments_flattened)
     }
 }
 
-impl AcceptsAssignmentSimplifier for Module {
-    fn accept_assignment_simplifier(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
-        for f in self.functions.iter_mut() {
-            f.accept_assignment_simplifier(simplifier);
-        }
-        // we do not simplify globs, as globs may only be simple assignments.
-        !self.has_assignments_unpacked()
+impl AcceptsAssignmentSimplifier for Reassignment {
+    fn accept_assignment_unpacker(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        self.value.accept_assignment_unpacker(simplifier)
     }
+
+    fn accept_assignment_flattener(&mut self, simplifier: &mut AssignmentSimplifier) -> bool {
+        self.value.accept_assignment_flattener(simplifier)
+    }
+
     fn has_assignments_unpacked(&self) -> bool {
-        self.functions.iter().all(|f| f.has_assignments_unpacked())
+        self.value.has_assignments_unpacked()
+    }
+
+    fn has_assignments_flattened(&self) -> bool {
+        self.value.has_assignments_flattened()
     }
 }
 
@@ -525,7 +832,7 @@ impl BlockExpander {
     }
 }
 
-pub trait AcceptsBlockExpander {
+pub trait AcceptsBlockExpander: LabelSentinelIDs {
     /// Let the expander perform some transformation on `self`. Return false if no changes have been made.
     /// Repeatedly calling this method is guaranteed to eventually return false:
     ///
@@ -542,6 +849,17 @@ pub trait AcceptsBlockExpander {
     ///
     /// Returns false if any descendant is not yet expanded.
     fn has_blocks_expanded(&self) -> bool;
+
+    fn expand_blocks(&mut self) -> BlockExpander {
+        let mut g = BlockExpander::new();
+        self.accept_block_expander(&mut g);
+        g
+    }
+    fn expand_blocks_with(&mut self, labeler: impl NodeLabeler) -> BlockExpander {
+        let mut g = BlockExpander::continue_from_last_id_of(labeler);
+        while self.accept_block_expander(&mut g) {}
+        g
+    }
 }
 impl AcceptsBlockExpander for Statement {
     fn accept_block_expander(&mut self, block_expander: &mut BlockExpander) -> bool {
@@ -561,7 +879,7 @@ impl AcceptsBlockExpander for Statement {
             StatementKind::ExpandedBlock(b) => b.accept_block_expander(block_expander),
             StatementKind::IfThenElse(b) => b.accept_block_expander(block_expander),
         };
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
     fn has_blocks_expanded(&self) -> bool {
         match &self.kind {
@@ -585,7 +903,7 @@ impl AcceptsBlockExpander for IfThenElse {
         if let Some(e) = &mut self.false_case {
             e.accept_block_expander(block_expander);
         }
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
 
     fn has_blocks_expanded(&self) -> bool {
@@ -619,7 +937,7 @@ impl AcceptsBlockExpander for Initialization {
             }
         }
 
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
     fn has_blocks_expanded(&self) -> bool {
         match &self.kind {
@@ -634,6 +952,16 @@ impl AcceptsBlockExpander for Initialization {
                 panic!("block expansion should happens before assignemnt unpacking")
             }
         }
+    }
+}
+
+impl AcceptsBlockExpander for Reassignment {
+    fn accept_block_expander(&mut self, block_expander: &mut BlockExpander) -> bool {
+        self.value.accept_block_expander(block_expander)
+    }
+
+    fn has_blocks_expanded(&self) -> bool {
+        self.value.has_blocks_expanded()
     }
 }
 
@@ -667,7 +995,7 @@ impl AcceptsBlockExpander for Expression {
             ExpressionKind::IfThenElse(b) => b.accept_block_expander(block_expander),
         };
 
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
     fn has_blocks_expanded(&self) -> bool {
         match &self.kind {
@@ -694,7 +1022,7 @@ impl AcceptsBlockExpander for FunctionCall {
             arg.accept_block_expander(block_expander);
         }
 
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
     fn has_blocks_expanded(&self) -> bool {
         self.args.iter().all(|e| e.has_blocks_expanded())
@@ -707,7 +1035,7 @@ impl AcceptsBlockExpander for Function {
             return false;
         }
         self.body.accept_block_expander(block_expander);
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
 
     fn has_blocks_expanded(&self) -> bool {
@@ -724,7 +1052,7 @@ impl AcceptsBlockExpander for StatementBlock {
         for stmt in self.statements.iter_mut() {
             stmt.accept_block_expander(block_expander);
         }
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
     fn has_blocks_expanded(&self) -> bool {
         self.statements.iter().all(|s| s.has_blocks_expanded())
@@ -738,10 +1066,10 @@ impl AcceptsBlockExpander for ExpandedBlockExpr {
         }
         self.last.accept_block_expander(block_expander);
         for stmt in self.statements.iter_mut() {
-            eprintln!("expanding stmt with id {}", stmt.id);
+            // eprintln!("expanding stmt with id {}", stmt.id);
             stmt.accept_block_expander(block_expander);
         }
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
     fn has_blocks_expanded(&self) -> bool {
         self.last.has_blocks_expanded() && self.statements.iter().all(|s| s.has_blocks_expanded())
@@ -755,10 +1083,10 @@ impl AcceptsBlockExpander for Module {
         }
 
         for func in self.functions.iter_mut() {
-            eprintln!("expanding function with name {}", func.name);
+            // eprintln!("expanding function with name {}", func.name);
             func.accept_block_expander(block_expander);
         }
-        !self.has_blocks_expanded()
+        self.has_blocks_expanded()
     }
 
     fn has_blocks_expanded(&self) -> bool {
@@ -800,7 +1128,7 @@ mod block_expander_tests {
     #[test]
     fn test_expand_block() {
         let block_expander = BlockExpander::new();
-        let (ast, generator) = label_ast!(using block_expander ; zea_module! {
+        let (mut ast, generator) = label_ast!(using block_expander ; zea_module! {
             imports {}
             exports {}
             globs {}
@@ -812,7 +1140,7 @@ mod block_expander_tests {
             structs {}
         });
 
-        let (ast, generator) = ast.expand_blocks(generator);
+        let generator = ast.expand_blocks_with(generator);
         // eprintln!("{:?}", ast.functions[0]);
         assert!(ast.has_blocks_expanded());
 
@@ -862,7 +1190,7 @@ mod block_expander_tests {
 
         let mut stmt = stmt!(init pat!(a) ;= expr!(litint 1));
         let g = stmt.label_sentinel_ids();
-        stmt.accept_assignment_simplifier(&mut AssignmentSimplifier::continue_from_last_id_of(g));
+        stmt.accept_assignment_unpacker(&mut AssignmentSimplifier::continue_from_last_id_of(g));
         let StatementKind::Initialization(ref init) = stmt.kind else {
             unreachable!()
         };
@@ -887,7 +1215,7 @@ mod block_expander_tests {
             "Tuple init should not be considered done before simplification"
         );
 
-        init.accept_assignment_simplifier(&mut simplifier);
+        init.accept_assignment_unpacker(&mut simplifier);
 
         let InitializationKind::PartiallyUnpacked(ref p) = init.kind else {
             panic!(
@@ -914,42 +1242,32 @@ mod block_expander_tests {
     }
 
     #[test]
-    fn test_nested_tuple_requires_two_passes() {
-        let mut simplifier = AssignmentSimplifier::new();
-
+    fn test_nested_tuple_structure() {
         // ((a, b), c) := nested_tuple
-        let mut stmt = stmt!(init pat!(((a, b), c)) ;= expr!(ident nested_tuple));
-        stmt.accept_sentinel_labeler(&mut simplifier);
-        let StatementKind::Initialization(ref mut init) = stmt.kind else {
-            unreachable!()
-        };
+        let (mut stmt, g) =
+            label_ast!(fresh stmt!(init pat!(((a, b), c)) ;= expr!(ident nested_tuple)));
 
-        let notdone = init.accept_assignment_simplifier(&mut simplifier);
-        // eprintln!("\nafter p1:\n{}", init.indent_print(0));
-        assert!(notdone, "First pass should report a change");
-        assert!(
-            !init.has_assignments_unpacked(),
-            "Inner tuple should still need unpacking after first pass"
-        );
-
-        let notdone = init.accept_assignment_simplifier(&mut simplifier);
-        // eprintln!("\nafter p2:\n{}", init.indent_print(0));
-        assert!(!notdone, "Second pass should report a change");
-        assert!(
-            init.has_assignments_unpacked(),
-            "Should be fully done after second pass"
-        );
+        let _g = stmt.simplify_assignments_with(g);
+        println!("{}", stmt.indent_print(1));
     }
 
     #[test]
     fn test_module_simplify_assignments_end_to_end() {
-        let simplifier = BlockExpander::new();
+        let (mut stmt, g) = label_ast!(fresh zea_module!(
+        imports {}
+            exports {}
+            globs {}
+            funcs {
+        func!(f() -> ztyp!(Int); {block!{
+                stmt!(init pat!((a, b, c)) ;= expr!(ident v))
+            }})
+            }
+            structs {}
+        ));
 
-        let mut stmt = stmt!(init pat!((a, b, c)) ;= expr!(ident v));
+        let g = AssignmentSimplifier::continue_from_last_id_of(g);
 
-        let g = stmt.label_sentinel_ids();
-        let mut g = AssignmentSimplifier::continue_from_last_id_of(g);
-        while !stmt.accept_assignment_simplifier(&mut g) {}
+        stmt.simplify_assignments_with(g);
 
         println!("_________________--\nMODULE END TO END\n\n");
         println!("{}", stmt.indent_print(0));

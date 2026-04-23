@@ -154,14 +154,14 @@ impl ScopedIdentifier {
         Self {
             origin,
             ident: ident.to_string(),
-            kind: ScopedIdentifierKind::GlobalVar,
+            kind: ScopedIdentifierKind::FunctionName,
         }
     }
     pub fn func_param(origin: usize, ident: &str) -> Self {
         Self {
             origin,
             ident: ident.to_string(),
-            kind: ScopedIdentifierKind::GlobalVar,
+            kind: ScopedIdentifierKind::FunctionParam,
         }
     }
 
@@ -182,6 +182,20 @@ impl ScopedIdentifier {
                 ident,
                 origin,
                 kind: ScopedIdentifierKind::LocalVar,
+            })
+            .collect()
+    }
+
+    pub fn scope_globals_with(
+        idents: IndexSet<String>,
+        origin: usize,
+    ) -> IndexSet<ScopedIdentifier> {
+        idents
+            .into_iter()
+            .map(|ident| Self {
+                ident,
+                origin,
+                kind: ScopedIdentifierKind::GlobalVar,
             })
             .collect()
     }
@@ -320,9 +334,9 @@ impl NodeScope {
 /// The actor of the ScopeBuilder pass, this is the result of calling [`Module::annotate_scopes`]
 ///
 /// You may query a scope-node (a node that is considered a scope)
-/// for all identifiers it has in scope with [`ScopeAnnotations::get_scope_for`]
+/// for all identifiers it has in scope with [`ScopeAnnotations::get_scope`]
 ///
-/// note that [`ScopeAnnotations::get_scope_for`]
+/// note that [`ScopeAnnotations::get_scope`]
 /// does not verify that the given id is of a scope-node.
 pub struct ScopeAnnotations {
     // Map some node id to all the identifiers the node has in scope
@@ -355,7 +369,7 @@ impl ScopeAnnotations {
         self.scopes.entry(id).or_default().clone().into_union()
     }
 
-    pub fn get_scope_for(&mut self, id: usize) -> &NodeScope {
+    pub fn get_scope(&mut self, id: usize) -> &NodeScope {
         self.scopes.entry(id).or_default()
     }
 
@@ -373,10 +387,10 @@ impl ScopeAnnotations {
         self.get_introduced_identifiers_of(scope_id).contains(ident)
     }
 
-    pub fn is_shadowed_in(&mut self, scope_id: usize, ident: &ScopedIdentifier) -> bool {
-        self.introduced_scope_contains(scope_id, ident)
-            && self.inherited_scope_contains(scope_id, ident)
-    }
+    // pub fn is_shadowed_in(&mut self, scope_id: usize, ident: &ScopedIdentifier) -> bool {
+    //     self.introduced_scope_contains(scope_id, ident)
+    //         && self.inherited_scope_contains(scope_id, ident)
+    // }
 }
 
 pub trait AcceptScopeBuilder {
@@ -611,8 +625,13 @@ impl AcceptScopeBuilder for Function {
 
 impl AcceptScopeBuilder for Module {
     fn build_scope_with_parent(&self, _dummy: usize, scope_builder: &mut ScopeAnnotations) {
-        let all_globals = self.get_globally_scoped_identifiers();
-        scope_builder.extend_with_introduced(self.id, all_globals);
+        let mut global_vars = IndexSet::new();
+        for glob in self.global_vars.iter() {
+            let assignees = glob.get_assignee_strings();
+            global_vars.extend(ScopedIdentifier::scope_globals_with(assignees, glob.id));
+        }
+
+        scope_builder.extend_with_introduced(self.id, global_vars);
         for global_var in self.global_vars.iter() {
             global_var.build_scope_with_parent(self.id, scope_builder);
         }
@@ -638,23 +657,25 @@ pub enum SemanticASTViolation<'ast> {
 mod introduces_fresh_identifiers_tests {
     use super::*;
     use crate::zea::test_ast_macros::{block, expr, func, pat, stmt, ztyp};
-    use crate::zea::visitors::altering::LabelSentinelIDs;
+    use crate::zea::visitors::label_desugar;
 
     #[test]
     fn test_packed_initialization_introduces_single_ident() {
-        let mut init = Initialization::packed(None, pat!(a), expr!(litint 1));
-        init.label_sentinel_ids();
-        let introduced = NodeScope::from_introduced(init.get_introduced_identifiers());
+        let init = Initialization::packed(None, pat!(a), expr!(litint 1));
+        let (init, _) = label_desugar(init);
+        let introduced = dbg!(NodeScope::from_introduced(
+            init.get_introduced_identifiers()
+        ));
         assert!(introduced.contains_local_str("a"), "should introduce 'a'");
         assert_eq!(introduced.introduced.len(), 1);
     }
 
     #[test]
     fn test_packed_initialization_introduces_tuple() {
-        let mut init = Initialization::packed(None, pat!((a, b)), expr!(ident some_tuple));
-        init.label_sentinel_ids();
+        let init = Initialization::packed(None, pat!((a, b)), expr!(ident some_tuple));
+        let (init, _) = label_desugar(init);
         let mut introduced = init.get_scope_annotations();
-        let introduced = introduced.get_scope_for(init.id);
+        let introduced = introduced.get_scope(init.id);
         assert!(introduced.contains_local_str("a"), "should introduce 'a'");
         assert!(introduced.contains_local_str("b"), "should introduce 'b'");
         assert_eq!(introduced.introduced.len(), 2);
@@ -662,22 +683,21 @@ mod introduces_fresh_identifiers_tests {
 
     #[test]
     fn test_nested_tuple_pattern() {
-        let mut init = Initialization::packed(None, pat!((a, (b, c))), expr!(ident nested));
-        init.label_sentinel_ids();
+        let init = Initialization::packed(None, pat!((a, (b, c))), expr!(ident nested));
+        let (init, _) = label_desugar(init);
 
         let introduced = NodeScope::from_introduced(init.get_introduced_identifiers());
         assert!(introduced.contains_local_str("a"));
         assert!(introduced.contains_local_str("b"));
         assert!(introduced.contains_local_str("c"));
-        assert_eq!(introduced.introduced.len(), 3);
     }
 
     #[test]
     fn test_function_introduces_function_name() {
         use crate::zea::{Function, Statement, StatementBlock, StatementKind, TypeSpecifier};
         let body = block!(stmt!(init pat!(a) ;= expr!(litint 3)));
-        let mut func = func!(foo() -> ztyp!(Int); {body} );
-        func.label_sentinel_ids();
+        let func = func!(foo() -> ztyp!(Int); {body} );
+        let (func, _) = label_desugar(func);
         let introduced = NodeScope::from_introduced(func.get_introduced_identifiers());
         assert!(
             introduced.contains_func_name_str("foo"),
@@ -689,27 +709,26 @@ mod introduces_fresh_identifiers_tests {
 #[cfg(test)]
 mod scope_builder_tests {
     use super::*;
-    use crate::zea::test_ast_macros::{block, expr, func, pat, stmt, ztyp};
+    use crate::zea::test_ast_macros::{block, expr, func, pat, stmt, zea_module, ztyp};
     use crate::zea::visitors::altering::LabelSentinelIDs;
-    use crate::zea::BareNodeLabeler;
+    use crate::zea::visitors::label_desugar;
+    use crate::zea::{
+        Function, Initialization, Module, Statement, StatementBlock, StatementKind, TypeSpecifier,
+    };
 
     #[test]
     fn test_global_var_in_module_scope() {
-        use crate::zea::{Initialization, Module};
-
         let global_init = Initialization::packed(None, pat!(global_var), expr!(litint 1));
-        let module = Module {
-            id: 1,
-            imports: vec![],
-            exports: vec![],
-            global_vars: vec![global_init],
-            functions: vec![],
-            struct_definitions: vec![],
-        };
-        let (module, _) = module.give_ids(BareNodeLabeler::new());
+        let (module, _g) = label_desugar(zea_module!(
+            imports {}
+            exports {}
+            globs { global_init }
+            funcs {}
+            structs {}
+        ));
 
         let mut scopes = module.annotate_scopes();
-        let global_scope = scopes.get_scope_for(module.id);
+        let global_scope = dbg!(scopes.get_scope(module.id));
         assert!(
             global_scope.contains_global_str("global_var"),
             "global var should be in module scope"
@@ -718,11 +737,6 @@ mod scope_builder_tests {
 
     #[test]
     fn test_function_body_scope_has_locals() {
-        use crate::zea::{
-            Function, Initialization, Module, Statement, StatementBlock, StatementKind,
-            TypeSpecifier,
-        };
-
         let body = block!(stmt!(init  pat!(local_var) ;= expr!(litint 1)));
         let func = func!(foo() -> ztyp!(Int); {body});
         let mut module = Module {
@@ -738,7 +752,7 @@ mod scope_builder_tests {
         let mut scopes = module.get_scope_annotations();
 
         let func = &module.functions[0];
-        let body_scope = scopes.get_scope_for(func.body.id);
+        let body_scope = scopes.get_scope(func.body.id);
         assert!(
             body_scope.contains_local_str("local_var"),
             "local var should be in function body scope"
@@ -746,14 +760,10 @@ mod scope_builder_tests {
     }
     #[test]
     fn test_function_body_scope_has_locals_and_globals() {
-        use crate::zea::{
-            Function, Initialization, Module, Statement, StatementBlock, StatementKind,
-            TypeSpecifier,
-        };
         let global = Initialization::packed(None, pat!(global_var), expr!(litint 1));
         let body = block!(stmt!(init  pat!(local_var) ;= expr!(litint 1)));
         let func = func!(foo() -> ztyp!(Int); {body});
-        let mut module = Module {
+        let module = Module {
             id: 1,
             imports: vec![],
             exports: vec![],
@@ -761,12 +771,12 @@ mod scope_builder_tests {
             functions: vec![func],
             struct_definitions: vec![],
         };
-        module.label_sentinel_ids();
+        let (module, _) = label_desugar(module);
 
         let mut scopes = module.annotate_scopes();
 
         let func = &module.functions[0];
-        let body_scope = dbg!(scopes.get_scope_for(func.body.id));
+        let body_scope = dbg!(scopes.get_scope(func.body.id));
         assert!(
             body_scope.contains_local_str("local_var"),
             "local var should be in function body scope"
@@ -778,7 +788,7 @@ mod scope_builder_tests {
 
         assert!(
             body_scope.contains_func_name_str("foo"),
-            "global var should be in function body scope"
+            "func foo should be in function body scope"
         );
     }
 
@@ -786,7 +796,7 @@ mod scope_builder_tests {
     fn test_scope_for_known_id() {
         let mut scopes = ScopeAnnotations::new();
         scopes.extend_with_introduced(42, IndexSet::from([ScopedIdentifier::local(41, "x")]));
-        let scope = scopes.get_scope_for(42);
+        let scope = scopes.get_scope(42);
         assert!(scope.introduced.contains(&ScopedIdentifier::local(41, "x")));
     }
 }

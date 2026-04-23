@@ -71,6 +71,6 @@ macro_rules! assert_structural_eq {
         }
     }};
 }
-
+#[allow(unused_imports)]
 pub(crate) use assert_structural_eq;
 use indexmap::IndexSet;

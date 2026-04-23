@@ -1,25 +1,5 @@
 module main
 
-fn lnint(x: Int) -> Int {
-    if x < 0 {
-        panic(aaaaaaaaa);
-    } else {
-        lnint-unsafe(x)
-    }
-}
-
-fn lnint(x: Int) -> Int {
-    if x < 0 {
-        panic(aaaaaaaaa);
-    } else {
-        lnint-unsafe(x)
-    }
-}
-
-fn lnint(x: Int) -> Int {
-    if x < 0 {
-        panic(aaaaaaaaa);
-    } else {
-        lnint-unsafe(x)
-    }
+fn f() -> Int {
+    (a,b,c) := v;
 }

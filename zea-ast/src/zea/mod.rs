@@ -35,8 +35,8 @@ pub(crate) mod test_ast_macros {
 
             let mut node_labeler = BareNodeLabeler::new();
             let mut ast = $ast;
-            ast.label_sentinel_id(node_labeler);
-            (ast, generator)
+            ast.accept_sentinel_labeler(&mut node_labeler);
+            (ast, node_labeler)
         }};
         (using $l:expr ; $ast:expr) => {{
             let mut ast = $ast;

@@ -141,11 +141,11 @@ impl IndentPrint for zea::Initialization {
             InitializationKind::Packed(p) => p.indent_print(depth),
             InitializationKind::PartiallyUnpacked(p) => p.indent_print(depth),
             InitializationKind::Unpacked(p) => {
-                let mut buffer = "U_INIT_BLOCK".indent_print(depth);
+                let mut buffer = "UNPACKED_INIT_BLOCK".indent_print(depth);
                 for init in p.iter() {
                     buffer += &init.indent_print(depth + 1);
                 }
-                buffer += &"/U_INIT_BLOCK".indent_print(depth);
+                buffer += &"/UNPACKED_INIT_BLOCK".indent_print(depth);
                 buffer
             }
         }
@@ -154,14 +154,14 @@ impl IndentPrint for zea::Initialization {
 
 impl IndentPrint for zea::PackedInitialization {
     fn indent_print(&self, depth: usize) -> String {
-        let mut buffer = "P_INIT".indent_print(depth);
+        let mut buffer = "PACKED_INIT".indent_print(depth);
         buffer += &"#PATTERN".indent_print(depth + 1);
         buffer += &self.assignee.indent_print(depth + 2);
         buffer += &"#TYPE".indent_print(depth + 1);
         buffer += &self.typ.indent_print(depth + 2);
         buffer += &"#VALUE".indent_print(depth + 1);
         buffer += &self.value.indent_print(depth + 1);
-        buffer += &"/P_INIT".indent_print(depth);
+        buffer += &"/PACKED_INIT".indent_print(depth);
         buffer
     }
 }
@@ -195,14 +195,14 @@ impl IndentPrint for Option<zea::TypeSpecifier> {
 
 impl IndentPrint for zea::SimpleInitialization {
     fn indent_print(&self, depth: usize) -> String {
-        let mut buffer = "UNP_INIT".indent_print(depth);
+        let mut buffer = "SIMPLE_INIT".indent_print(depth);
         buffer += &"#ASSIGNEE".indent_print(depth + 1);
         buffer += &self.assignee.indent_print(depth + 2);
         buffer += &"#TYPE".indent_print(depth + 1);
         buffer += &self.typ.indent_print(depth + 2);
         buffer += &"#VALUE".indent_print(depth + 1);
         buffer += &self.value.indent_print(depth + 2);
-        buffer += &"/UNP_INIT".indent_print(depth);
+        buffer += &"/SIMPLE_INIT".indent_print(depth);
         buffer
     }
 }
@@ -220,14 +220,14 @@ impl IndentPrint for zea::PartiallyUnpackedInitialization {
 impl IndentPrint for zea::AssignmentPattern {
     fn indent_print(&self, depth: usize) -> String {
         match self {
-            zea::AssignmentPattern::Identifier(i) => indent!(depth) + i,
+            zea::AssignmentPattern::Identifier(i) => i.indent_print(depth),
             zea::AssignmentPattern::Tuple(tup) => {
                 indent!(depth)
                     + &tup
                         .iter()
                         .map(|t| t.to_string())
                         .collect::<Vec<_>>()
-                        .join(", ")
+                        .join(", ") + "\n"
             }
         }
     }

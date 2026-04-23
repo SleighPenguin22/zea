@@ -2,44 +2,20 @@ use indexmap::IndexSet;
 
 pub mod altering;
 use crate::zea::visitors::altering::{
-    AcceptsAssignmentSimplifier, AssignmentSimplifier, BlockExpander, LabelSentinelIDs, NodeLabeler,
+    AcceptsAssignmentSimplifier, BlockExpander, LabelSentinelIDs, NodeLabeler,
 };
 use crate::zea::visitors::annotating::{
     AcceptScopeBuilder, IntroducesFreshIdentifiers, ScopeAnnotations, ScopedIdentifier,
 };
-use crate::zea::{BareNodeLabeler, Module};
+use crate::zea::{
+    ExpandedBlockExpr, Expression, Function, FunctionCall, IfThenElse, Initialization, Module,
+    Reassignment, Statement,
+};
 use altering::AcceptsBlockExpander;
 
 pub mod annotating;
 
 impl Module {
-    pub fn give_ids(mut self, last_used_generator: impl NodeLabeler) -> (Module, impl NodeLabeler) {
-        let mut labeler = BareNodeLabeler::continue_from_last_id_of(last_used_generator);
-        self.accept_sentinel_labeler(&mut labeler);
-        (self, labeler)
-    }
-    pub fn expand_blocks(
-        mut self,
-        last_used_generator: impl NodeLabeler,
-    ) -> (Module, impl NodeLabeler) {
-        let mut block_expander = BlockExpander::continue_from_last_id_of(last_used_generator);
-        while self.accept_block_expander(&mut block_expander) {
-            eprintln!("expanding blocks still...")
-        }
-        (self, block_expander)
-    }
-
-    pub fn simplify_assignments(
-        mut self,
-        last_used_generator: impl NodeLabeler,
-    ) -> (Module, impl NodeLabeler) {
-        let mut assignment_simplifier =
-            AssignmentSimplifier::continue_from_last_id_of(last_used_generator);
-        while self.accept_assignment_simplifier(&mut assignment_simplifier) {
-            eprintln!("simplifying assignments still...")
-        }
-        (self, assignment_simplifier)
-    }
     pub fn get_globally_scoped_identifiers(&self) -> IndexSet<ScopedIdentifier> {
         let mut global_idents: IndexSet<ScopedIdentifier> = self
             .global_vars
@@ -62,7 +38,58 @@ impl Module {
     }
     pub fn annotate_scopes(&self) -> ScopeAnnotations {
         let mut scope_builder = ScopeAnnotations::new();
-        self.build_scope_with_parent(0, &mut scope_builder);
+        self.build_scope_with_parent(self.id, &mut scope_builder);
         scope_builder
     }
+}
+
+pub trait AstNode:
+    AcceptsAssignmentSimplifier + AcceptsBlockExpander + AcceptScopeBuilder + LabelSentinelIDs
+{
+}
+impl AstNode for Module {}
+impl AstNode for Expression {}
+impl AstNode for Statement {}
+impl AstNode for IfThenElse {}
+impl AstNode for ExpandedBlockExpr {}
+impl AstNode for FunctionCall {}
+impl AstNode for Function {}
+
+impl AstNode for Initialization {}
+impl AstNode for Reassignment {}
+
+pub fn desugar<Node: AstNode>(ast: Node) -> (Node, impl NodeLabeler) {
+    let mut ast = ast;
+    let generator = ast.expand_blocks();
+
+    let generator = ast.simplify_assignments_with(generator);
+    (ast, generator)
+}
+pub fn desugar_with<Node: AstNode>(
+    ast: Node,
+    last_used_generator: impl NodeLabeler,
+) -> (Node, impl NodeLabeler) {
+    let mut ast = ast;
+    let generator = ast.expand_blocks_with(last_used_generator);
+
+    let generator = ast.simplify_assignments_with(generator);
+    (ast, generator)
+}
+
+pub fn label_desugar<Node: AstNode>(ast: Node) -> (Node, impl NodeLabeler) {
+    let mut ast = ast;
+    let generator = ast.label_sentinel_ids();
+    let generator = ast.expand_blocks_with(generator);
+    let generator = ast.simplify_assignments_with(generator);
+    (ast, generator)
+}
+pub fn label_desugar_with<Node: AstNode>(
+    ast: Node,
+    last_used_generator: impl NodeLabeler,
+) -> (Node, impl NodeLabeler) {
+    let mut ast = ast;
+    let generator = ast.label_sentinel_ids_with(last_used_generator);
+    let generator = ast.expand_blocks_with(generator);
+    let generator = ast.simplify_assignments_with(generator);
+    (ast, generator)
 }

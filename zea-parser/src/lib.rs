@@ -6,11 +6,14 @@ pub use grammar::ExprParser as ExpressionParser;
 pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
 use lalrpop_util::ParseError;
-use zea_ast::zea::visitors::altering::{BareNodeLabeler, LabelSentinelIDs, NodeLabeler};
+use zea_ast::zea::visitors::altering::{
+    AcceptsAssignmentSimplifier, AcceptsBlockExpander, BareNodeLabeler, LabelSentinelIDs,
+    NodeLabeler,
+};
 use zea_ast::zea::visitors::annotating::SemanticASTViolation;
+use zea_ast::zea::visitors::label_desugar;
 use zea_ast::zea::{
-    BinOp, Expression, ExpressionKind, Function, Initialization, Module, StatementBlock,
-    StructDataTypeDefinition, TaggedUnionDataTypeDefinition, UnOp,
+    Function, Initialization, Module, StructDataTypeDefinition, TaggedUnionDataTypeDefinition,
 };
 
 pub fn parse_module(
@@ -19,15 +22,8 @@ pub fn parse_module(
 {
     let p = ModuleParser::new();
     let mut module = p.parse(src)?;
-    let mut labeler = BareNodeLabeler::new();
-    let (module, mut generator) = module.give_ids(labeler);
-    Ok((module, generator))
-}
-
-pub fn desugar(ast: Module, last_used_generator: impl NodeLabeler) -> (Module, impl NodeLabeler) {
-    let (ast, mut generator) = ast.expand_blocks(last_used_generator);
-    let (ast, mut generator) = ast.simplify_assignments(generator);
-    (ast, generator)
+    let (module, g) = label_desugar(module);
+    Ok((module, g))
 }
 
 pub fn semantic_annotations(ast: &'_ Module) -> Result<Module, SemanticASTViolation<'_>> {
