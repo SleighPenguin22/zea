@@ -193,7 +193,7 @@ impl ScopeAnnotations {
     }
 
     pub fn child_inherits_from(&mut self, parent_id: usize, child_id: usize) {
-        let parent_idents = self.get_inherited_identifiers_of(parent_id).clone();
+        let parent_idents = self.get_all_identifiers_of(parent_id).clone();
         self.scopes
             .insert(child_id, NodeScope::from_inherited(parent_idents));
     }
@@ -454,11 +454,8 @@ impl AcceptScopeBuilder for Expression {
 }
 
 impl AcceptScopeBuilder for Function {
-    fn build_scope_with_parent(
-        &self,
-        _nearest_scope_id: usize,
-        scope_builder: &mut ScopeAnnotations,
-    ) {
+    fn build_scope_with_parent(&self, module_id: usize, scope_builder: &mut ScopeAnnotations) {
+        scope_builder.child_inherits_from(module_id, self.body.id);
         let locals = self.body.get_introduced_identifiers();
         scope_builder.extend_with_introduced(self.body.id, locals);
 
@@ -469,11 +466,7 @@ impl AcceptScopeBuilder for Function {
 }
 
 impl AcceptScopeBuilder for Module {
-    fn build_scope_with_parent(
-        &self,
-        _nearest_scope_id: usize,
-        scope_builder: &mut ScopeAnnotations,
-    ) {
+    fn build_scope_with_parent(&self, _dummy: usize, scope_builder: &mut ScopeAnnotations) {
         let all_globals = self.get_globally_scoped_identifiers();
         scope_builder.extend_with_introduced(self.id, all_globals);
         for global_var in self.global_vars.iter() {
@@ -579,17 +572,17 @@ pub trait AcceptAnnotatingVisitor<'ast> {
 ///
 /// This is done by using the [`annotating_visitor`] macro
 /// and providing a lambda for each AST node that the visitor should do something with:
-/// 
+///
 /// # Examples
 /// ```
 /// pub struct SomeVisitor;
-/// 
+///
 /// annotating_visitor!{'ast SomeVisitor
 ///     visit_annotate!{block 'ast
 ///         |block| {println!(block.id); Ok(())}
 ///     }
 /// }
-/// 
+///
 /// fn do<'ast>(ast: &'ast Module) -> Result<(), SemanticASTViolation<'ast>>{
 ///     let v = SomeVisitor::new();
 ///     v.traverse(ast)
@@ -981,11 +974,145 @@ impl<'ast> AcceptAnnotatingVisitor<'ast> for Initialization {
 }
 
 #[cfg(test)]
-mod scope_builder_tests {
-    use crate::zea::visitors::annotating::ScopeAnnotations;
+mod introduces_fresh_identifiers_tests {
+    use super::*;
+    use crate::zea::test_ast_macros::{block, expr, func, pat, stmt, ztyp};
 
     #[test]
-    fn block_scopes() {
-        let _scope_builder = ScopeAnnotations::new();
+    fn test_packed_initialization_introduces_single_ident() {
+        let init = Initialization::packed(None, pat!(a), expr!(litint 1));
+        let introduced = init.get_introduced_identifiers();
+        assert!(introduced.contains("a"), "should introduce 'a'");
+        assert_eq!(introduced.len(), 1);
+    }
+
+    #[test]
+    fn test_packed_initialization_introduces_tuple() {
+        let init = Initialization::packed(None, pat!((a, b)), expr!(ident some_tuple));
+        let introduced = init.get_introduced_identifiers();
+        assert!(introduced.contains("a"), "should introduce 'a'");
+        assert!(introduced.contains("b"), "should introduce 'b'");
+        assert_eq!(introduced.len(), 2);
+    }
+
+    #[test]
+    fn test_nested_tuple_pattern() {
+        let init = Initialization::packed(None, pat!((a, (b, c))), expr!(ident nested));
+        let introduced = init.get_introduced_identifiers();
+        assert!(introduced.contains("a"));
+        assert!(introduced.contains("b"));
+        assert!(introduced.contains("c"));
+        assert_eq!(introduced.len(), 3);
+    }
+
+    #[test]
+    fn test_function_introduces_function_name() {
+        use crate::zea::{Function, Statement, StatementBlock, StatementKind, TypeSpecifier};
+        let body = block!(stmt!(init pat!(a) ;= expr!(litint 3)));
+        let func = func!(foo() -> ztyp!(Int); {body} );
+        let introduced = func.get_introduced_identifiers();
+        assert!(
+            introduced.contains("foo"),
+            "function should introduce its own name"
+        );
+    }
+}
+
+#[cfg(test)]
+mod scope_builder_tests {
+    use super::*;
+    use crate::zea::test_ast_macros::{block, expr, func, pat, stmt, ztyp};
+    use crate::zea::BareNodeLabeler;
+
+    #[test]
+    fn test_global_var_in_module_scope() {
+        use crate::zea::{Initialization, Module};
+
+        let global_init = Initialization::packed(None, pat!(global_var), expr!(litint 1));
+        let mut module = Module {
+            id: 1,
+            imports: vec![],
+            exports: vec![],
+            global_vars: vec![global_init],
+            functions: vec![],
+            struct_definitions: vec![],
+        };
+        let (module, _) = module.give_ids(BareNodeLabeler::new());
+
+        let mut scopes = module.annotate_scopes();
+        let global_scope = scopes.get_introduced_identifiers_of(module.id);
+        assert!(
+            global_scope.contains("global_var"),
+            "global var should be in module scope"
+        );
+    }
+
+    #[test]
+    fn test_function_body_scope_has_locals() {
+        use crate::zea::{
+            Function, Initialization, Module, Statement, StatementBlock, StatementKind,
+            TypeSpecifier,
+        };
+
+        let body = block!(stmt!(init  pat!(local_var) ;= expr!(litint 1)));
+        let func = func!(foo() -> ztyp!(Int); {body});
+        let mut module = Module {
+            id: 1,
+            imports: vec![],
+            exports: vec![],
+            global_vars: vec![],
+            functions: vec![func],
+            struct_definitions: vec![],
+        };
+        let (module, _) = module.give_ids(BareNodeLabeler::new());
+
+        let mut scopes = module.annotate_scopes();
+
+        let func = &module.functions[0];
+        let body_scope = scopes.get_all_identifiers_of(func.body.id);
+        assert!(
+            body_scope.contains("local_var"),
+            "local var should be in function body scope"
+        );
+    }
+    #[test]
+    fn test_function_body_scope_has_locals_and_globals() {
+        use crate::zea::{
+            Function, Initialization, Module, Statement, StatementBlock, StatementKind,
+            TypeSpecifier,
+        };
+        let global = Initialization::packed(None, pat!(global_var), expr!(litint 1));
+        let body = block!(stmt!(init  pat!(local_var) ;= expr!(litint 1)));
+        let func = func!(foo() -> ztyp!(Int); {body});
+        let mut module = Module {
+            id: 1,
+            imports: vec![],
+            exports: vec![],
+            global_vars: vec![global],
+            functions: vec![func],
+            struct_definitions: vec![],
+        };
+        let (module, _) = module.give_ids(BareNodeLabeler::new());
+
+        let mut scopes = module.annotate_scopes();
+
+        let func = &module.functions[0];
+        let body_scope = scopes.get_all_identifiers_of(func.body.id);
+        assert!(
+            body_scope.contains("local_var"),
+            "local var should be in function body scope"
+        );
+        assert!(
+            body_scope.contains("global_var"),
+            "global var should be in function body scope"
+        );
+    }
+
+    #[test]
+    fn test_scope_for_known_id() {
+        let mut scopes = ScopeAnnotations::new();
+        scopes.extend_with_introduced(42, IndexSet::from(["x".to_string()]));
+        let scope = scopes.get_scope_for(42);
+        assert!(scope.introduced.contains("x"));
     }
 }

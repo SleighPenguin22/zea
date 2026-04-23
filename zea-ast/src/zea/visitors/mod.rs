@@ -58,7 +58,7 @@ impl Module {
     }
     pub fn annotate_scopes(&self) -> ScopeAnnotations {
         let mut scope_builder = ScopeAnnotations::new();
-        self.build_scope_with_parent(69420, &mut scope_builder);
+        self.build_scope_with_parent(0, &mut scope_builder);
         scope_builder
     }
 }
