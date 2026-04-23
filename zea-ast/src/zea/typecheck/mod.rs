@@ -463,7 +463,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
         let expr_inference_id = self.get_inference_id(expr)?;
         self.unify_ids(returns_id, expr_inference_id)?;
 
-        let param_types: Vec<&zea::TypeSpecifier> = func.args.iter().map(|ti| &ti.typ).collect();
+        let param_types: Vec<&zea::TypeSpecifier> = func.params.iter().map(|ti| &ti.typ).collect();
 
         for (arg, typ) in call.args.iter().zip(param_types) {
             let param_con_id: InferenceId = self.intering_table.introduce(typ).into();

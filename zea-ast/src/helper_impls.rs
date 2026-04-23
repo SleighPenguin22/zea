@@ -25,6 +25,15 @@ where
     }
 }
 
+impl<T> StructuralEq for IndexSet<T>
+where
+    T: StructuralEq,
+{
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        (self.len() == other.len()) && self.iter().zip(other).all(|(a, b)| a.eq_ignore_id(b))
+    }
+}
+
 impl<T> StructuralEq for Box<T>
 where
     T: StructuralEq,
@@ -62,4 +71,6 @@ macro_rules! assert_structural_eq {
         }
     }};
 }
+
 pub(crate) use assert_structural_eq;
+use indexmap::IndexSet;

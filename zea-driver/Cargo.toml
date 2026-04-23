@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 zea-parser = {path = "../zea-parser"}
-zea-ast = {path = "../zea-ast"}
+zea-ast = {path = "../zea-ast", features = ["visualisation"]}

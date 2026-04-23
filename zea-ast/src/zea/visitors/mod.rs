@@ -5,7 +5,7 @@ use crate::zea::visitors::altering::{
     AcceptsAssignmentSimplifier, AssignmentSimplifier, BlockExpander, LabelSentinelIDs, NodeLabeler,
 };
 use crate::zea::visitors::annotating::{
-    AcceptScopeBuilder, IntroducesFreshIdentifiers, ScopeAnnotations,
+    AcceptScopeBuilder, IntroducesFreshIdentifiers, ScopeAnnotations, ScopedIdentifier,
 };
 use crate::zea::{BareNodeLabeler, Module};
 use altering::AcceptsBlockExpander;
@@ -15,7 +15,7 @@ pub mod annotating;
 impl Module {
     pub fn give_ids(mut self, last_used_generator: impl NodeLabeler) -> (Module, impl NodeLabeler) {
         let mut labeler = BareNodeLabeler::continue_from_last_id_of(last_used_generator);
-        self.label_sentinel_id(&mut labeler);
+        self.accept_sentinel_labeler(&mut labeler);
         (self, labeler)
     }
     pub fn expand_blocks(
@@ -40,18 +40,22 @@ impl Module {
         }
         (self, assignment_simplifier)
     }
-    pub fn get_globally_scoped_identifiers(&self) -> IndexSet<String> {
-        let mut global_idents: IndexSet<String> = self
+    pub fn get_globally_scoped_identifiers(&self) -> IndexSet<ScopedIdentifier> {
+        let mut global_idents: IndexSet<ScopedIdentifier> = self
             .global_vars
             .iter()
             .flat_map(IntroducesFreshIdentifiers::get_introduced_identifiers)
             .collect();
-        let func_idents: IndexSet<String> = self
+        let func_idents: IndexSet<ScopedIdentifier> = self
             .functions
             .iter()
             .flat_map(IntroducesFreshIdentifiers::get_introduced_identifiers)
             .collect();
-        let import_idents: IndexSet<String> = self.imports.iter().cloned().collect();
+        let import_idents: IndexSet<ScopedIdentifier> = self
+            .imports
+            .iter()
+            .map(|imp| ScopedIdentifier::import_item(self.id, imp))
+            .collect();
         global_idents.extend(func_idents);
         global_idents.extend(import_idents);
         global_idents

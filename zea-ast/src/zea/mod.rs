@@ -20,7 +20,8 @@
 ///
 /// The [`visitors::altering::BareNodeLabeler`] visitor
 /// grants a unique ID to node with a sentinel ID.
-use crate::helper_impls::{StructuralEq, assert_structural_eq};
+use crate::helper_impls::StructuralEq;
+
 
 pub mod typecheck;
 pub mod visitors;
@@ -38,12 +39,10 @@ pub(crate) mod test_ast_macros {
             (ast, generator)
         }};
         (using $l:expr ; $ast:expr) => {{
-            use crate::zea::Module;
-            use crate::zea::visitors::altering::NodeLabeler;
-            let mut generator = $l;
             let mut ast = $ast;
-            ast.label_sentinel_id(&mut generator);
-            (ast, generator)
+            let mut l = $l;
+            ast.accept_sentinel_labeler(&mut l);
+            (ast, l)
         }};
     }
     pub(crate) use label_ast;
@@ -122,10 +121,10 @@ pub(crate) mod test_ast_macros {
                 use crate::zea::{AssignmentPattern,Initialization,Statement,StatementKind};
             Statement {
                 id: 0,
-                kind: StatementKind::Initialisation(Initialization {
+                kind: StatementKind::Initialization(Initialization {
                     id: 0,
-                    kind: InitialisationKind::Packed(
-                        PackedInitialisation {
+                    kind: InitializationKind::Packed(
+                        PackedInitialization {
                     assignee: $p,
                     typ: None,
                     value: $val,
@@ -257,7 +256,7 @@ pub(crate) mod test_ast_macros {
                 Function {
                     id: 0,
                     name: String::from(stringify!($name)),
-                    args,
+                    params:args,
                     returns: $ret,
                     body: $body,
                 }
@@ -319,15 +318,31 @@ impl Module {
     }
 }
 
+#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+pub struct FuncParam {
+    id: usize,
+    pub typ: TypeSpecifier,
+    pub name: String,
+}
+impl From<TypedIdentifier> for FuncParam {
+    fn from(value: TypedIdentifier) -> Self {
+        Self {
+            id: 0,
+            typ: value.typ,
+            name: value.name,
+        }
+    }
+}
+
 /// A top-level function definition
 ///
-/// Function may be defined only once within a module, They are compared and [`Hash`]'ed against their signature.
+/// Function may be defined only once within a module.
 /// Functions may be imported as many times as needed.
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct Function {
     pub id: usize,
     pub name: String,
-    pub args: Vec<TypedIdentifier>,
+    pub params: Vec<FuncParam>,
     pub returns: TypeSpecifier,
     pub body: StatementBlock,
 }
@@ -336,7 +351,7 @@ pub struct Function {
 pub struct HoistedFunctionSignature {
     pub id: usize,
     pub name: String,
-    pub args: Vec<TypedIdentifier>,
+    pub args: Vec<FuncParam>,
     pub returns: TypeSpecifier,
 }
 
@@ -345,7 +360,7 @@ impl From<Function> for HoistedFunctionSignature {
         HoistedFunctionSignature {
             id: value.id,
             name: value.name,
-            args: value.args,
+            args: value.params,
             returns: value.returns,
         }
     }
@@ -360,7 +375,7 @@ pub struct Statement {
 pub enum StatementKind {
     // initial pass
     /// Variable initialization
-    Initialisation(Initialization),
+    Initialization(Initialization),
     /// Variable Reassignment
     Reassignment(Reassignment),
     FunctionCall(FunctionCall),
@@ -380,7 +395,7 @@ pub enum StatementKind {
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct Initialization {
     pub id: usize,
-    pub kind: InitialisationKind,
+    pub kind: InitializationKind,
 }
 
 impl Initialization {
@@ -391,7 +406,7 @@ impl Initialization {
     ) -> Self {
         Self {
             id: 0,
-            kind: InitialisationKind::Packed(PackedInitialisation {
+            kind: InitializationKind::Packed(PackedInitialization {
                 typ,
                 assignee,
                 value,
@@ -401,7 +416,7 @@ impl Initialization {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
-pub struct PackedInitialisation {
+pub struct PackedInitialization {
     pub typ: Option<TypeSpecifier>,
     pub assignee: AssignmentPattern,
     pub value: Expression,
@@ -409,21 +424,33 @@ pub struct PackedInitialisation {
 
 /// An assignment to a simple, totally unpacked variable.
 #[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
-pub struct UnpackedInitialisation {
+pub struct SimpleInitialization {
+    id: usize,
     pub typ: Option<TypeSpecifier>,
     pub assignee: String,
     pub value: Expression,
 }
+impl SimpleInitialization {
+    pub fn untyped(assignee: &str, value: Expression) -> Self {
+        Self {
+            id: 0,
+            assignee: assignee.to_string(),
+            value,
+            typ: None,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
-pub struct PartiallyUnpackedInitialisation {
-    pub temporary: UnpackedInitialisation,
+pub struct PartiallyUnpackedInitialization {
+    pub temporary: SimpleInitialization,
     pub unpacked_assignments: Vec<Initialization>,
 }
 #[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
-pub enum InitialisationKind {
-    Packed(PackedInitialisation),
-    PartiallyUnpacked(PartiallyUnpackedInitialisation),
+pub enum InitializationKind {
+    Packed(PackedInitialization),
+    PartiallyUnpacked(PartiallyUnpackedInitialization),
+    Unpacked(Vec<SimpleInitialization>),
 }
 
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
@@ -528,10 +555,10 @@ impl Expression {
         }
     }
 
-    pub fn ident(ident: String) -> Expression {
+    pub fn ident(ident: &str) -> Expression {
         Expression {
             id: 0,
-            kind: ExpressionKind::Ident(ident),
+            kind: ExpressionKind::Ident(ident.to_string()),
         }
     }
 

@@ -1,12 +1,14 @@
+use crate::helper_impls::StructuralEq;
 use crate::zea::visitors::altering::AcceptsBlockExpander;
 use crate::zea::{
-    AssignmentPattern, BinOp, ExpandedBlockExpr, Expression, ExpressionKind, Function,
-    FunctionCall, IfThenElse, InitialisationKind, Initialization, Module, PackedInitialisation,
-    PartiallyUnpackedInitialisation, Reassignment, Statement, StatementBlock, StatementKind,
-    StructDataTypeDefinition, TaggedUnionDataTypeDefinition, UnOp, UnpackedInitialisation,
+    AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
+    IfThenElse, Initialization, InitializationKind, Module, PackedInitialization,
+    PartiallyUnpackedInitialization, Reassignment, SimpleInitialization, Statement, StatementBlock,
+    StatementKind,
 };
 use indexmap::{IndexMap, IndexSet};
 use std::collections::HashSet;
+use zea_macros::ASTStructuralEq;
 
 pub trait IntroducesFreshIdentifiers {
     /// Get all identifiers introduced in the current scope
@@ -16,63 +18,66 @@ pub trait IntroducesFreshIdentifiers {
     ///
     /// In general, the only node that introduces identifiers is an initialization,
     /// and a function definition.
-    fn get_introduced_identifiers(&self) -> IndexSet<String>;
+    fn get_introduced_identifiers(&self) -> IndexSet<ScopedIdentifier>;
 }
 impl IntroducesFreshIdentifiers for Initialization {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
-        match &self.kind {
-            InitialisationKind::Packed(p) => p.get_introduced_identifiers(),
-            InitialisationKind::PartiallyUnpacked(p) => p.get_introduced_identifiers(),
-        }
+    fn get_introduced_identifiers(&self) -> IndexSet<ScopedIdentifier> {
+        ScopedIdentifier::scope_locals_with(self.get_assignee_strings(), self.id)
     }
 }
 
-impl IntroducesFreshIdentifiers for PackedInitialisation {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
-        self.assignee.get_introduced_identifiers()
-    }
-}
-impl IntroducesFreshIdentifiers for AssignmentPattern {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
+impl AssignmentPattern {
+    fn get_assignee_strings(&self) -> IndexSet<String> {
         match self {
-            AssignmentPattern::Identifier(s) => IndexSet::from_iter([s.clone()]),
-            AssignmentPattern::Tuple(t) => t
-                .iter()
-                .flat_map(|assignee| assignee.get_introduced_identifiers())
-                .collect(),
+            AssignmentPattern::Identifier(i) => IndexSet::from([i.clone()]),
+            AssignmentPattern::Tuple(v) => {
+                v.iter().flat_map(|i| i.get_assignee_strings()).collect()
+            }
         }
     }
 }
-impl IntroducesFreshIdentifiers for UnpackedInitialisation {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
-        IndexSet::from_iter([self.assignee.clone()])
+
+impl SimpleInitialization {
+    fn get_assignee_strings(&self) -> IndexSet<String> {
+        IndexSet::from([self.assignee.clone()])
     }
 }
-
-impl IntroducesFreshIdentifiers for PartiallyUnpackedInitialisation {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
-        let mut temp_id = self.temporary.get_introduced_identifiers();
+impl PartiallyUnpackedInitialization {
+    fn get_assignee_strings(&self) -> IndexSet<String> {
+        let mut temp_id = self.temporary.get_assignee_strings();
         let unpacked_ids: IndexSet<String> = self
             .unpacked_assignments
             .iter()
-            .flat_map(|init| init.get_introduced_identifiers())
+            .flat_map(|init| init.get_assignee_strings())
             .collect();
         temp_id.extend(unpacked_ids);
         temp_id
     }
 }
-
-impl IntroducesFreshIdentifiers for Statement {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
+impl Initialization {
+    fn get_assignee_strings(&self) -> IndexSet<String> {
         match &self.kind {
-            StatementKind::Initialisation(i) => i.get_introduced_identifiers(),
+            InitializationKind::Packed(_) | InitializationKind::PartiallyUnpacked(_) => {
+                panic!("cannot only build scope for unpacked assignenmts")
+            }
+            InitializationKind::Unpacked(pu) => pu
+                .iter()
+                .flat_map(|init| init.get_assignee_strings())
+                .collect(),
+        }
+    }
+}
+impl IntroducesFreshIdentifiers for Statement {
+    fn get_introduced_identifiers(&self) -> IndexSet<ScopedIdentifier> {
+        match &self.kind {
+            StatementKind::Initialization(i) => i.get_introduced_identifiers(),
             _ => IndexSet::default(),
         }
     }
 }
 
 impl IntroducesFreshIdentifiers for StatementBlock {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
+    fn get_introduced_identifiers(&self) -> IndexSet<ScopedIdentifier> {
         self.statements
             .iter()
             .flat_map(|stmt| stmt.get_introduced_identifiers())
@@ -81,7 +86,7 @@ impl IntroducesFreshIdentifiers for StatementBlock {
 }
 
 impl IntroducesFreshIdentifiers for ExpandedBlockExpr {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
+    fn get_introduced_identifiers(&self) -> IndexSet<ScopedIdentifier> {
         self.statements
             .iter()
             .flat_map(|stmt| stmt.get_introduced_identifiers())
@@ -92,25 +97,106 @@ impl IntroducesFreshIdentifiers for ExpandedBlockExpr {
 }
 
 impl IntroducesFreshIdentifiers for Function {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
-        IndexSet::from_iter([self.name.clone()])
+    fn get_introduced_identifiers(&self) -> IndexSet<ScopedIdentifier> {
+        let mut name: IndexSet<ScopedIdentifier> =
+            IndexSet::from([ScopedIdentifier::func_name(self.id, &self.name)]);
+        let params: IndexSet<ScopedIdentifier> = self
+            .params
+            .iter()
+            .map(|param| ScopedIdentifier::func_param(param.id, &param.name))
+            .collect();
+        name.extend(params);
+        name
     }
 }
 impl IntroducesFreshIdentifiers for Module {
-    fn get_introduced_identifiers(&self) -> IndexSet<String> {
+    fn get_introduced_identifiers(&self) -> IndexSet<ScopedIdentifier> {
         self.get_globally_scoped_identifiers()
+    }
+}
+
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+pub enum ScopedIdentifierKind {
+    LocalVar,
+    GlobalVar,
+    FunctionName,
+    FunctionParam,
+    ImportItem,
+}
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub struct ScopedIdentifier {
+    ident: String,
+    origin: usize,
+    kind: ScopedIdentifierKind,
+}
+impl StructuralEq for ScopedIdentifier {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        self.ident == other.ident && self.kind == other.kind
+    }
+}
+
+impl ScopedIdentifier {
+    pub fn local(origin: usize, ident: &str) -> Self {
+        Self {
+            origin,
+            ident: ident.to_string(),
+            kind: ScopedIdentifierKind::LocalVar,
+        }
+    }
+    pub fn global(origin: usize, ident: &str) -> Self {
+        Self {
+            origin,
+            ident: ident.to_string(),
+            kind: ScopedIdentifierKind::GlobalVar,
+        }
+    }
+    pub fn func_name(origin: usize, ident: &str) -> Self {
+        Self {
+            origin,
+            ident: ident.to_string(),
+            kind: ScopedIdentifierKind::GlobalVar,
+        }
+    }
+    pub fn func_param(origin: usize, ident: &str) -> Self {
+        Self {
+            origin,
+            ident: ident.to_string(),
+            kind: ScopedIdentifierKind::GlobalVar,
+        }
+    }
+
+    pub fn import_item(origin: usize, ident: &str) -> Self {
+        Self {
+            origin,
+            ident: ident.to_string(),
+            kind: ScopedIdentifierKind::ImportItem,
+        }
+    }
+    pub fn scope_locals_with(
+        idents: IndexSet<String>,
+        origin: usize,
+    ) -> IndexSet<ScopedIdentifier> {
+        idents
+            .into_iter()
+            .map(|ident| Self {
+                ident,
+                origin,
+                kind: ScopedIdentifierKind::LocalVar,
+            })
+            .collect()
     }
 }
 
 #[derive(Default, Clone)]
 /// A scope that contains both inherited and introduced identifiers
+#[derive(Debug, ASTStructuralEq)]
 pub struct NodeScope {
-    inherited: IndexSet<String>,
-    introduced: IndexSet<String>,
+    inherited: IndexSet<ScopedIdentifier>,
+    introduced: IndexSet<ScopedIdentifier>,
 }
 
 impl NodeScope {
-    pub fn from_inherited(inherited: IndexSet<String>) -> Self {
+    pub fn from_inherited(inherited: IndexSet<ScopedIdentifier>) -> Self {
         Self {
             inherited,
             introduced: IndexSet::new(),
@@ -121,32 +207,113 @@ impl NodeScope {
         self.inherited.extend(scope.into_union());
     }
 
-    pub fn from_introduced(introduced: IndexSet<String>) -> Self {
+    pub fn from_introduced(introduced: IndexSet<ScopedIdentifier>) -> Self {
         Self {
             introduced,
             inherited: IndexSet::new(),
         }
     }
-    pub fn append_introduced(&mut self, ident: &str) {
+    pub fn append_introduced(&mut self, ident: &ScopedIdentifier) {
         self.introduced.insert(ident.to_owned());
     }
-    pub fn extend_introduced(&mut self, idents: IndexSet<String>) {
+    pub fn extend_introduced(&mut self, idents: IndexSet<ScopedIdentifier>) {
         self.introduced.extend(idents)
     }
-    pub fn append_inherited(&mut self, ident: &str) {
+    pub fn append_inherited(&mut self, ident: &ScopedIdentifier) {
         self.inherited.insert(ident.to_owned());
     }
     /// extend inherited identifiers with
-    pub fn extend_inherited(&mut self, idents: IndexSet<String>) {
+    pub fn extend_inherited(&mut self, idents: IndexSet<ScopedIdentifier>) {
         self.inherited.extend(idents)
     }
 
     /// get the union of the inherited and introduced identifiers, consuming self
-    pub fn into_union(self) -> IndexSet<String> {
+    pub fn into_union(self) -> IndexSet<ScopedIdentifier> {
         let mut inherited = self.inherited;
         let introduced = self.introduced;
         inherited.extend(introduced);
         inherited
+    }
+
+    pub fn inherited_contains_local_str(&self, ident: &str) -> bool {
+        self.inherited
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::LocalVar && si.ident == ident)
+            .is_some()
+    }
+    pub fn inherited_contains_global_str(&self, ident: &str) -> bool {
+        self.inherited
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::GlobalVar && si.ident == ident)
+            .is_some()
+    }
+    pub fn inherited_contains_func_name_str(&self, ident: &str) -> bool {
+        self.inherited
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::FunctionName && si.ident == ident)
+            .is_some()
+    }
+    pub fn inherited_contains_func_param_str(&self, ident: &str) -> bool {
+        self.inherited
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::FunctionParam && si.ident == ident)
+            .is_some()
+    }
+    pub fn inherited_contains_import_item_str(&self, ident: &str) -> bool {
+        self.inherited
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::ImportItem && si.ident == ident)
+            .is_some()
+    }
+
+    pub fn introduced_contains_local_str(&self, ident: &str) -> bool {
+        self.introduced
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::LocalVar && si.ident == ident)
+            .is_some()
+    }
+    pub fn introduced_contains_global_str(&self, ident: &str) -> bool {
+        self.introduced
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::GlobalVar && si.ident == ident)
+            .is_some()
+    }
+    pub fn introduced_contains_func_name_str(&self, ident: &str) -> bool {
+        self.introduced
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::FunctionName && si.ident == ident)
+            .is_some()
+    }
+    pub fn introduced_contains_func_param_str(&self, ident: &str) -> bool {
+        self.introduced
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::FunctionParam && si.ident == ident)
+            .is_some()
+    }
+    pub fn introduced_contains_import_item_str(&self, ident: &str) -> bool {
+        self.introduced
+            .iter()
+            .find(|si| si.kind == ScopedIdentifierKind::ImportItem && si.ident == ident)
+            .is_some()
+    }
+
+    pub fn contains_local_str(&self, ident: &str) -> bool {
+        self.introduced_contains_local_str(ident) || self.inherited_contains_local_str(ident)
+    }
+    pub fn contains_global_str(&self, ident: &str) -> bool {
+        self.inherited_contains_local_str(ident) || self.introduced_contains_global_str(ident)
+    }
+    pub fn contains_func_name_str(&self, ident: &str) -> bool {
+        self.inherited_contains_func_name_str(ident)
+            || self.introduced_contains_func_name_str(ident)
+    }
+    pub fn contains_func_param_str(&self, ident: &str) -> bool {
+        self.introduced_contains_func_param_str(ident)
+            || self.inherited_contains_func_param_str(ident)
+    }
+    pub fn contains_import_item_str(&self, ident: &str) -> bool {
+        self.inherited_contains_import_item_str(ident)
+            || self.introduced_contains_import_item_str(ident)
     }
 }
 
@@ -168,23 +335,23 @@ impl ScopeAnnotations {
         }
     }
 
-    pub fn extend_with_introduced<'iter>(&mut self, id: usize, idents: IndexSet<String>) {
+    pub fn extend_with_introduced<'iter>(&mut self, id: usize, idents: IndexSet<ScopedIdentifier>) {
         self.scopes.entry(id).or_default().extend_introduced(idents)
     }
 
-    pub fn append_with_introduced<'iter>(&mut self, id: usize, ident: &str) {
+    pub fn append_with_introduced<'iter>(&mut self, id: usize, ident: &ScopedIdentifier) {
         self.scopes.entry(id).or_default().append_introduced(ident);
     }
 
-    pub fn get_inherited_identifiers_of(&mut self, id: usize) -> &IndexSet<String> {
+    pub fn get_inherited_identifiers_of(&mut self, id: usize) -> &IndexSet<ScopedIdentifier> {
         &self.scopes.entry(id).or_default().inherited
     }
 
-    pub fn get_introduced_identifiers_of(&mut self, id: usize) -> &IndexSet<String> {
+    pub fn get_introduced_identifiers_of(&mut self, id: usize) -> &IndexSet<ScopedIdentifier> {
         &self.scopes.entry(id).or_default().introduced
     }
 
-    pub fn get_all_identifiers_of(&mut self, id: usize) -> IndexSet<String> {
+    pub fn get_all_identifiers_of(&mut self, id: usize) -> IndexSet<ScopedIdentifier> {
         self.scopes.entry(id).or_default().clone().into_union()
     }
 
@@ -198,15 +365,15 @@ impl ScopeAnnotations {
             .insert(child_id, NodeScope::from_inherited(parent_idents));
     }
 
-    pub fn inherited_scope_contains(&mut self, scope_id: usize, ident: &str) -> bool {
+    pub fn inherited_scope_contains(&mut self, scope_id: usize, ident: &ScopedIdentifier) -> bool {
         self.get_inherited_identifiers_of(scope_id).contains(ident)
     }
 
-    pub fn introduced_scope_contains(&mut self, scope_id: usize, ident: &str) -> bool {
+    pub fn introduced_scope_contains(&mut self, scope_id: usize, ident: &ScopedIdentifier) -> bool {
         self.get_introduced_identifiers_of(scope_id).contains(ident)
     }
 
-    pub fn is_shadowed_in(&mut self, scope_id: usize, ident: &str) -> bool {
+    pub fn is_shadowed_in(&mut self, scope_id: usize, ident: &ScopedIdentifier) -> bool {
         self.introduced_scope_contains(scope_id, ident)
             && self.inherited_scope_contains(scope_id, ident)
     }
@@ -261,46 +428,19 @@ pub trait AcceptScopeBuilder {
         nearest_scope_id: usize,
         scope_builder: &mut ScopeAnnotations,
     );
-}
 
-impl AcceptScopeBuilder for PartiallyUnpackedInitialisation {
-    fn build_scope_with_parent(
-        &self,
-        nearest_scoped_id: usize,
-        scope_builder: &mut ScopeAnnotations,
-    ) {
-        let new_identifiers = self.get_introduced_identifiers();
-        scope_builder.extend_with_introduced(nearest_scoped_id, new_identifiers);
-
-        self.temporary
-            .build_scope_with_parent(nearest_scoped_id, scope_builder);
-        for assignment in self.unpacked_assignments.iter() {
-            assignment.build_scope_with_parent(nearest_scoped_id, scope_builder);
-        }
+    fn get_scope_annotations(&self) -> ScopeAnnotations {
+        let mut new = ScopeAnnotations::new();
+        self.build_scope_with_parent(0, &mut new);
+        new
     }
 }
-
-impl AcceptScopeBuilder for UnpackedInitialisation {
+impl AcceptScopeBuilder for SimpleInitialization {
     fn build_scope_with_parent(
         &self,
         nearest_scope_id: usize,
         scope_builder: &mut ScopeAnnotations,
     ) {
-        let new_identifiers = self.get_introduced_identifiers();
-        scope_builder.extend_with_introduced(nearest_scope_id, new_identifiers);
-        self.value
-            .build_scope_with_parent(nearest_scope_id, scope_builder);
-    }
-}
-
-impl AcceptScopeBuilder for PackedInitialisation {
-    fn build_scope_with_parent(
-        &self,
-        nearest_scope_id: usize,
-        scope_builder: &mut ScopeAnnotations,
-    ) {
-        let my_assignees = self.get_introduced_identifiers();
-        scope_builder.extend_with_introduced(nearest_scope_id, my_assignees);
         self.value
             .build_scope_with_parent(nearest_scope_id, scope_builder);
     }
@@ -313,11 +453,15 @@ impl AcceptScopeBuilder for Initialization {
         scope_builder: &mut ScopeAnnotations,
     ) {
         match &self.kind {
-            InitialisationKind::Packed(p) => {
-                p.build_scope_with_parent(nearest_scope_id, scope_builder)
+            InitializationKind::PartiallyUnpacked(_) | InitializationKind::Packed(_) => {
+                panic!("can only build scope for unpacked initialization")
             }
-            InitialisationKind::PartiallyUnpacked(p) => {
-                p.build_scope_with_parent(nearest_scope_id, scope_builder)
+            InitializationKind::Unpacked(v) => {
+                let new = self.get_introduced_identifiers();
+                scope_builder.extend_with_introduced(nearest_scope_id, new);
+                for init in v.iter() {
+                    init.build_scope_with_parent(nearest_scope_id, scope_builder)
+                }
             }
         }
     }
@@ -386,7 +530,7 @@ impl AcceptScopeBuilder for Statement {
         scope_builder: &mut ScopeAnnotations,
     ) {
         match &self.kind {
-            StatementKind::Initialisation(i) => {
+            StatementKind::Initialization(i) => {
                 i.build_scope_with_parent(nearest_scope_id, scope_builder)
             }
             StatementKind::Reassignment(r) => {
@@ -487,532 +631,56 @@ pub struct ASTValidator {
 pub enum SemanticASTViolation<'ast> {
     UntypedGlobalVar(&'ast Initialization),
     UnexpandedBlock(&'ast Statement),
-    StrayPackedAssignment(&'ast Initialization),
-}
-
-macro_rules! visit_annotate {
-    (block $ast_l:lifetime $f:expr) => {
-        fn visit_block(&mut self, block: &'ast ExpandedBlockExpr) -> Result<(), SemanticASTViolation<$ast_l>> {
-            let f: fn(&$ast_l ExpandedBlockExpr) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
-            f(block)
-        }
-    };
-    (unexp_block $ast_l:lifetime $f:expr) => {
-        fn visit_unexpanded_block(&mut self, block: &'ast StatementBlock) -> Result<(), SemanticASTViolation<$ast_l>> {
-            let f: fn(&$ast_l StatementBlock) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
-            f(block)
-        }
-    };
-    (module_global_variable $ast_l:lifetime $f:expr) => {
-        fn visit_module_global_variable(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
-            let f: fn(&$ast_l Initialization) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
-            for var in module.global_vars.iter() {
-                f(var)?;
-            }
-            Ok(())
-        }
-    };
-    (module_function_definition $ast_l:lifetime $f:expr) => {
-        fn visit_module_function_definition(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
-            let f: fn(&$ast_l Function) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
-            for func in module.functions.iter() {
-                f(func)?;
-            }
-            Ok(())
-        }
-    };
-    (initialization $ast_l:lifetime $f:expr) => {
-        fn visit_initialization(&mut self, module: &$ast_l Module) -> Result<(), SemanticASTViolation<$ast_l>> {
-            let f: fn(&$ast_l Function) -> Result<(), SemanticASTViolation<$ast_l>> = $f;
-            for func in module.functions.iter() {
-                f(func)?;
-            }
-            Ok(())
-        }
-    };
-}
-pub(crate) use visit_annotate;
-
-macro_rules! annotating_visitor {
-    ($ast_l:lifetime $name:ident with $($impl_item:item)*) => {
-        impl<'ast> AnnotatingVisitor<'ast> for $name {
-            $($impl_item)*
-        }
-    };
-}
-
-annotating_visitor! {'ast ASTValidator with
-    visit_annotate!(block 'ast
-        |_block| Ok(())
-    );
-}
-pub(crate) use annotating_visitor;
-
-pub trait AcceptAnnotatingVisitor<'ast> {
-    /// Let the visitor traverse all children of this node
-    fn visit_children(
-        &'ast self,
-        _visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    /// Let the visitor perform its annotation in this node
-    fn accept(
-        &'ast self,
-        _visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-}
-
-/// This trait defines what behavior an implementing visitor shows for each type of AST node.
-///
-/// This is inspired by the Python [Lark](https://lark-parser.readthedocs.io/en/stable/visitors.html)
-/// package.
-///
-/// This is done by using the [`annotating_visitor`] macro
-/// and providing a lambda for each AST node that the visitor should do something with:
-///
-/// # Examples
-/// ```
-/// pub struct SomeVisitor;
-///
-/// annotating_visitor!{'ast SomeVisitor
-///     visit_annotate!{block 'ast
-///         |block| {println!(block.id); Ok(())}
-///     }
-/// }
-///
-/// fn do<'ast>(ast: &'ast Module) -> Result<(), SemanticASTViolation<'ast>>{
-///     let v = SomeVisitor::new();
-///     v.traverse(ast)
-/// }
-/// ```
-pub trait AnnotatingVisitor<'ast>: Sized {
-    fn visit_block(
-        &mut self,
-        _v: &'ast ExpandedBlockExpr,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_unexpanded_block(
-        &mut self,
-        _v: &'ast StatementBlock,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_stmt(&mut self, _v: &'ast Statement) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_initialization(
-        &mut self,
-        _v: &'ast Initialization,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_reassignment(
-        &mut self,
-        _v: &'ast Reassignment,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_if_then_else(
-        &mut self,
-        _v: &'ast IfThenElse,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_func_call(
-        &mut self,
-        _v: &'ast FunctionCall,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_return(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_block_tail(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module(&mut self, _v: &'ast Module) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module_global_var(
-        &mut self,
-        _id: usize,
-        _v: &'ast PackedInitialisation,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module_struct_definition(
-        &mut self,
-        _v: &'ast StructDataTypeDefinition,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module_enum_definition(
-        &mut self,
-        _v: &'ast TaggedUnionDataTypeDefinition,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_module_function_definition(
-        &mut self,
-        _v: &'ast Function,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr(&mut self, _v: &'ast Expression) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_binop(
-        &mut self,
-        _id: usize,
-        _op: &'ast BinOp,
-        _lhs: &'ast Expression,
-        _rhs: &'ast Expression,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_unop(
-        &mut self,
-        _id: usize,
-        _op: &'ast UnOp,
-        _arg: &'ast Expression,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_ident(
-        &mut self,
-        _id: usize,
-        _v: &'ast String,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_literal_int(
-        &mut self,
-        _id: usize,
-        _v: &'ast u64,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_literal_float(
-        &mut self,
-        _id: usize,
-        _v: &'ast f64,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_literal_bool(
-        &mut self,
-        _id: usize,
-        _v: &'ast bool,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_literal_string(
-        &mut self,
-        _id: usize,
-        _v: &'ast String,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_unit(&mut self, _id: usize) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_if_then_else(
-        &mut self,
-        _id: usize,
-        _v: &'ast IfThenElse,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_function_call(
-        &mut self,
-        _id: usize,
-        _v: &'ast FunctionCall,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_block(
-        &mut self,
-        _id: usize,
-        _v: &'ast ExpandedBlockExpr,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_unexpanded_block(
-        &mut self,
-        _id: usize,
-        _v: &'ast StatementBlock,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn visit_expr_member_access(
-        &mut self,
-        _id: usize,
-        _data: &'ast Expression,
-        _member: &'ast String,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        Ok(())
-    }
-    fn traverse(&mut self, module: &'ast Module) -> Result<(), SemanticASTViolation<'ast>> {
-        module.accept(self)
-    }
-}
-
-impl<'ast> AcceptAnnotatingVisitor<'ast> for Expression {
-    fn visit_children(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        match &self.kind {
-            ExpressionKind::Unit => visitor.visit_expr_unit(self.id),
-            ExpressionKind::IntegerLiteral(v) => visitor.visit_expr_literal_int(self.id, v),
-            ExpressionKind::BoolLiteral(v) => visitor.visit_expr_literal_bool(self.id, v),
-            ExpressionKind::FloatLiteral(v) => visitor.visit_expr_literal_float(self.id, v),
-            ExpressionKind::StringLiteral(v) => visitor.visit_expr_literal_string(self.id, v),
-            ExpressionKind::Ident(v) => visitor.visit_expr_ident(self.id, v),
-
-            ExpressionKind::FunctionCall(v) => {
-                visitor.visit_expr_function_call(self.id, v)?;
-                v.accept(visitor)
-            }
-            ExpressionKind::BinOpExpr(op, lhs, rhs) => {
-                lhs.accept(visitor)?;
-                rhs.accept(visitor)?;
-                visitor.visit_expr_binop(self.id, op, lhs, rhs)
-            }
-            ExpressionKind::UnOpExpr(op, arg) => {
-                arg.accept(visitor)?;
-                visitor.visit_expr_unop(self.id, op, arg)
-            }
-            ExpressionKind::MemberAccess(data, member) => {
-                data.accept(visitor)?;
-                visitor.visit_expr_member_access(self.id, data, member)
-            }
-            ExpressionKind::IfThenElse(ite) => ite.accept(visitor),
-            ExpressionKind::Block(unexp) => unexp.accept(visitor),
-            ExpressionKind::ExpandedBlock(b) => b.accept(visitor),
-        }
-    }
-    fn accept(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_expr(self)?;
-        self.visit_children(visitor)
-    }
-}
-
-impl<'ast> AcceptAnnotatingVisitor<'ast> for Statement {
-    fn visit_children(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        match &self.kind {
-            StatementKind::Initialisation(v) => v.accept(visitor),
-            StatementKind::Reassignment(v) => v.value.accept(visitor),
-            StatementKind::FunctionCall(v) => v.accept(visitor),
-            StatementKind::Return(v) => v.accept(visitor),
-            StatementKind::BlockTail(v) => v.accept(visitor),
-            StatementKind::Block(v) => v.accept(visitor),
-            StatementKind::ExpandedBlock(v) => v.accept(visitor),
-            StatementKind::IfThenElse(v) => v.accept(visitor),
-        }
-    }
-    fn accept(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_stmt(self)?;
-        self.visit_children(visitor)
-    }
-}
-impl<'ast> AcceptAnnotatingVisitor<'ast> for Module {
-    fn visit_children(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        for init in self.global_vars.iter() {
-            init.accept(visitor)?;
-        }
-        for func in self.functions.iter() {
-            for stmt in func.body.statements.iter() {
-                stmt.accept(visitor)?;
-            }
-        }
-        Ok(())
-    }
-    fn accept(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_module(self)?;
-        for init in self.global_vars.iter() {
-            let InitialisationKind::Packed(ref p) = init.kind else {
-                unreachable!(
-                    "global initializations should be packed; got {:?}",
-                    init.kind
-                )
-            };
-            visitor.visit_module_global_var(init.id, p)?;
-        }
-        for func in self.functions.iter() {
-            visitor.visit_module_function_definition(func)?;
-        }
-        for data_struct in self.struct_definitions.iter() {
-            visitor.visit_module_struct_definition(data_struct)?;
-        }
-
-        // for data_enum in self.enum_definitions.iter() {
-        //     visitor.visit_module_enum_definition(data_enum)?;
-        // }
-        self.visit_children(visitor)
-    }
-}
-
-impl<'ast> AcceptAnnotatingVisitor<'ast> for StatementBlock {
-    fn visit_children(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        for stmt in self.statements.iter() {
-            stmt.accept(visitor)?;
-        }
-        Ok(())
-    }
-    fn accept(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_unexpanded_block(self)?;
-        self.visit_children(visitor)
-    }
-}
-
-impl<'ast> AcceptAnnotatingVisitor<'ast> for ExpandedBlockExpr {
-    fn visit_children(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        for stmt in self.statements.iter() {
-            stmt.accept(visitor)?;
-        }
-        self.last.accept(visitor)
-    }
-    fn accept(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_block(self)?;
-        self.visit_children(visitor)
-    }
-}
-impl<'ast> AcceptAnnotatingVisitor<'ast> for IfThenElse {
-    fn visit_children(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        self.condition.accept(visitor)?;
-        self.true_case.accept(visitor)?;
-        if let Some(ref false_case) = self.false_case {
-            false_case.accept(visitor)?;
-        }
-        Ok(())
-    }
-    fn accept(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_if_then_else(self)?;
-        self.visit_children(visitor)
-    }
-}
-
-impl<'ast> AcceptAnnotatingVisitor<'ast> for FunctionCall {
-    fn visit_children(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        for arg in self.args.iter() {
-            arg.accept(visitor)?;
-        }
-        Ok(())
-    }
-    fn accept(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_func_call(self)?;
-        self.visit_children(visitor)
-    }
-}
-
-impl<'ast> AcceptAnnotatingVisitor<'ast> for Initialization {
-    fn visit_children(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        match &self.kind {
-            InitialisationKind::Packed(p) => p.value.accept(visitor),
-            InitialisationKind::PartiallyUnpacked(u) => {
-                for unpack in u.unpacked_assignments.iter() {
-                    unpack.accept(visitor)?;
-                }
-                u.temporary.value.accept(visitor)
-            }
-        }
-    }
-    fn accept(
-        &'ast self,
-        visitor: &mut impl AnnotatingVisitor<'ast>,
-    ) -> Result<(), SemanticASTViolation<'ast>> {
-        visitor.visit_initialization(self)?;
-        self.visit_children(visitor)
-    }
+    StrayPackedAssignment(&'ast PackedInitialization),
 }
 
 #[cfg(test)]
 mod introduces_fresh_identifiers_tests {
     use super::*;
     use crate::zea::test_ast_macros::{block, expr, func, pat, stmt, ztyp};
+    use crate::zea::visitors::altering::LabelSentinelIDs;
 
     #[test]
     fn test_packed_initialization_introduces_single_ident() {
-        let init = Initialization::packed(None, pat!(a), expr!(litint 1));
-        let introduced = init.get_introduced_identifiers();
-        assert!(introduced.contains("a"), "should introduce 'a'");
-        assert_eq!(introduced.len(), 1);
+        let mut init = Initialization::packed(None, pat!(a), expr!(litint 1));
+        init.label_sentinel_ids();
+        let introduced = NodeScope::from_introduced(init.get_introduced_identifiers());
+        assert!(introduced.contains_local_str("a"), "should introduce 'a'");
+        assert_eq!(introduced.introduced.len(), 1);
     }
 
     #[test]
     fn test_packed_initialization_introduces_tuple() {
-        let init = Initialization::packed(None, pat!((a, b)), expr!(ident some_tuple));
-        let introduced = init.get_introduced_identifiers();
-        assert!(introduced.contains("a"), "should introduce 'a'");
-        assert!(introduced.contains("b"), "should introduce 'b'");
-        assert_eq!(introduced.len(), 2);
+        let mut init = Initialization::packed(None, pat!((a, b)), expr!(ident some_tuple));
+        init.label_sentinel_ids();
+        let mut introduced = init.get_scope_annotations();
+        let introduced = introduced.get_scope_for(init.id);
+        assert!(introduced.contains_local_str("a"), "should introduce 'a'");
+        assert!(introduced.contains_local_str("b"), "should introduce 'b'");
+        assert_eq!(introduced.introduced.len(), 2);
     }
 
     #[test]
     fn test_nested_tuple_pattern() {
-        let init = Initialization::packed(None, pat!((a, (b, c))), expr!(ident nested));
-        let introduced = init.get_introduced_identifiers();
-        assert!(introduced.contains("a"));
-        assert!(introduced.contains("b"));
-        assert!(introduced.contains("c"));
-        assert_eq!(introduced.len(), 3);
+        let mut init = Initialization::packed(None, pat!((a, (b, c))), expr!(ident nested));
+        init.label_sentinel_ids();
+
+        let introduced = NodeScope::from_introduced(init.get_introduced_identifiers());
+        assert!(introduced.contains_local_str("a"));
+        assert!(introduced.contains_local_str("b"));
+        assert!(introduced.contains_local_str("c"));
+        assert_eq!(introduced.introduced.len(), 3);
     }
 
     #[test]
     fn test_function_introduces_function_name() {
         use crate::zea::{Function, Statement, StatementBlock, StatementKind, TypeSpecifier};
         let body = block!(stmt!(init pat!(a) ;= expr!(litint 3)));
-        let func = func!(foo() -> ztyp!(Int); {body} );
-        let introduced = func.get_introduced_identifiers();
+        let mut func = func!(foo() -> ztyp!(Int); {body} );
+        func.label_sentinel_ids();
+        let introduced = NodeScope::from_introduced(func.get_introduced_identifiers());
         assert!(
-            introduced.contains("foo"),
+            introduced.contains_func_name_str("foo"),
             "function should introduce its own name"
         );
     }
@@ -1022,6 +690,7 @@ mod introduces_fresh_identifiers_tests {
 mod scope_builder_tests {
     use super::*;
     use crate::zea::test_ast_macros::{block, expr, func, pat, stmt, ztyp};
+    use crate::zea::visitors::altering::LabelSentinelIDs;
     use crate::zea::BareNodeLabeler;
 
     #[test]
@@ -1029,7 +698,7 @@ mod scope_builder_tests {
         use crate::zea::{Initialization, Module};
 
         let global_init = Initialization::packed(None, pat!(global_var), expr!(litint 1));
-        let mut module = Module {
+        let module = Module {
             id: 1,
             imports: vec![],
             exports: vec![],
@@ -1040,9 +709,9 @@ mod scope_builder_tests {
         let (module, _) = module.give_ids(BareNodeLabeler::new());
 
         let mut scopes = module.annotate_scopes();
-        let global_scope = scopes.get_introduced_identifiers_of(module.id);
+        let global_scope = scopes.get_scope_for(module.id);
         assert!(
-            global_scope.contains("global_var"),
+            global_scope.contains_global_str("global_var"),
             "global var should be in module scope"
         );
     }
@@ -1064,14 +733,14 @@ mod scope_builder_tests {
             functions: vec![func],
             struct_definitions: vec![],
         };
-        let (module, _) = module.give_ids(BareNodeLabeler::new());
+        module.label_sentinel_ids();
 
-        let mut scopes = module.annotate_scopes();
+        let mut scopes = module.get_scope_annotations();
 
         let func = &module.functions[0];
-        let body_scope = scopes.get_all_identifiers_of(func.body.id);
+        let body_scope = scopes.get_scope_for(func.body.id);
         assert!(
-            body_scope.contains("local_var"),
+            body_scope.contains_local_str("local_var"),
             "local var should be in function body scope"
         );
     }
@@ -1092,35 +761,32 @@ mod scope_builder_tests {
             functions: vec![func],
             struct_definitions: vec![],
         };
-        let (module, _) = module.give_ids(BareNodeLabeler::new());
+        module.label_sentinel_ids();
 
         let mut scopes = module.annotate_scopes();
 
         let func = &module.functions[0];
-        let body_scope = dbg!(scopes.get_all_identifiers_of(func.body.id));
+        let body_scope = dbg!(scopes.get_scope_for(func.body.id));
         assert!(
-            body_scope.contains("local_var"),
+            body_scope.contains_local_str("local_var"),
             "local var should be in function body scope"
         );
         assert!(
-            body_scope.contains("global_var"),
+            body_scope.contains_global_str("global_var"),
             "global var should be in function body scope"
         );
-        let expected = IndexSet::from(["global_var".to_string(), "local_var".to_string(), "foo".to_string()]);
+
         assert!(
-            body_scope
-                .difference(&expected)
-                .collect::<IndexSet<&String>>()
-                .is_empty(),
-            "scope should contain global_var, local_var and foo"
+            body_scope.contains_func_name_str("foo"),
+            "global var should be in function body scope"
         );
     }
 
     #[test]
     fn test_scope_for_known_id() {
         let mut scopes = ScopeAnnotations::new();
-        scopes.extend_with_introduced(42, IndexSet::from(["x".to_string()]));
+        scopes.extend_with_introduced(42, IndexSet::from([ScopedIdentifier::local(41, "x")]));
         let scope = scopes.get_scope_for(42);
-        assert!(scope.introduced.contains("x"));
+        assert!(scope.introduced.contains(&ScopedIdentifier::local(41, "x")));
     }
 }

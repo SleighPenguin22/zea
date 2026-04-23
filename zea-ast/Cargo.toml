@@ -9,7 +9,7 @@ indexmap = "2.14.0"
 
 [features]
 visualisation = []
-default = ["visualisation"]
+#default = ["visualisation"]
 
 [lib]
 doctest = false

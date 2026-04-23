@@ -57,7 +57,7 @@ ModExports: Vec<String> = {
     "exports"  "{" <imps:Comma0<ExprIdent>>  "}"=> imps
 };
 
-ModSymbols: (Vec<Initialisation>, Vec<Function>, Vec<StructDataTypeDefinition>, Vec<TaggedUnionDataTypeDefinition>) = {
+ModSymbols: (Vec<Initialization>, Vec<Function>, Vec<StructDataTypeDefinition>, Vec<TaggedUnionDataTypeDefinition>) = {
     ModSymbolsHelper => separate_module_items(<>)
 };
 
@@ -92,16 +92,16 @@ pub StructDef: StructDataTypeDefinition = {
  },
 };
 
-pub Init: Initialisation = {
+pub Init: Initialization = {
     <p:AssignPat> ":" "=" <val:Expr> ";" => {
-    Initialisation::packed (
+    Initialization::packed (
         None,
         p,
         val
     )
  },
     <p:AssignPat> ":" <typ:TType> "=" <val:Expr> ";" => {
-    Initialisation::packed (
+    Initialization::packed (
             Some(typ),
             p,
             val
@@ -139,10 +139,11 @@ pub Func: Function = {
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
     <funcbody:Block> => {
+        let params: Vec<FuncParam> = args.into_iter().map(FuncParam::from).collect();
         Function {
             id: 0,
             name,
-            args: args,
+            params,
             returns: TypeSpecifier::Basic("Void".to_string()),
             body: funcbody
         }
@@ -150,10 +151,11 @@ pub Func: Function = {
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
     "->" <funcreturns:TType> <funcbody:Block> => {
+        let params: Vec<FuncParam> = args.into_iter().map(FuncParam::from).collect();
         Function {
             id: 0,
             name,
-            args: args,
+            params,
             returns: funcreturns,
             body: funcbody
         }
@@ -192,7 +194,7 @@ pub Stmt: Statement = {
     },
     <init:Init> => Statement {
         id: 0,
-        kind: StatementKind::Initialisation(init)
+        kind: StatementKind::Initialization(init)
     },
     <reinit:Reassign> => reinit.wrap_in_statement(),
     <block:Block> => block.wrap_in_statement(),

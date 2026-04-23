@@ -1,4 +1,6 @@
 use crate::zea;
+use crate::zea::FuncParam;
+
 pub trait IndentPrint {
     fn indent_print(&self, depth: usize) -> String;
 }
@@ -8,6 +10,15 @@ macro_rules! indent {
         let d: usize = $d;
         "-".repeat(d * 2)
     }};
+}
+
+impl IndentPrint for FuncParam {
+    fn indent_print(&self, depth: usize) -> String {
+        let mut buffer = "#PARAM".indent_print(depth);
+        buffer += &self.name.indent_print(depth + 1);
+        buffer += &self.typ.indent_print(depth + 1);
+        buffer
+    }
 }
 
 impl IndentPrint for zea::Module {
@@ -58,7 +69,7 @@ impl IndentPrint for zea::Function {
         buffer += &"#RETURNS".indent_print(depth + 1);
         buffer += &self.returns.indent_print(depth + 2);
         buffer += &"#ARGS".indent_print(depth + 1);
-        for arg in self.args.iter() {
+        for arg in self.params.iter() {
             buffer += &arg.indent_print(depth + 2);
         }
         buffer += &"#BODY".indent_print(depth + 1);
@@ -79,14 +90,14 @@ impl IndentPrint for zea::TypedIdentifier {
 
 impl IndentPrint for zea::StatementBlock {
     fn indent_print(&self, depth: usize) -> String {
-        let mut buffer = format!("BLOCK {}", self.id).indent_print(depth);
+        let mut buffer = "BLOCK".indent_print(depth);
 
         for s in self.statements.iter() {
-            buffer += &format!("BLOCKSTMT {}", s.id).indent_print(depth + 1);
+            buffer += &"BLOCKSTMT".indent_print(depth + 1);
             buffer += &s.indent_print(depth + 1);
-            buffer += &format!("/BLOCKSTMT {}", s.id).indent_print(depth + 1);
+            buffer += &"/BLOCKSTMT".indent_print(depth + 1);
         }
-        buffer += &format!("/BLOCK {}", self.id).indent_print(depth);
+        buffer += &"/BLOCK".indent_print(depth);
 
         buffer
     }
@@ -94,16 +105,16 @@ impl IndentPrint for zea::StatementBlock {
 
 impl IndentPrint for zea::ExpandedBlockExpr {
     fn indent_print(&self, depth: usize) -> String {
-        let mut buffer = format!("BLOCK {}", self.id).indent_print(depth);
+        let mut buffer = "BLOCK".indent_print(depth);
 
         for s in self.statements.iter() {
-            buffer += &format!("BLOCKSTMT {}", s.id).indent_print(depth + 1);
+            buffer += &"BLOCKSTMT".indent_print(depth + 1);
             buffer += &s.indent_print(depth + 2);
-            buffer += &format!("/BLOCKSTMT {}", s.id).indent_print(depth + 1);
+            buffer += &"/BLOCKSTMT".indent_print(depth + 1);
         }
         buffer += &self.last.indent_print(depth + 1);
 
-        buffer += &format!("/BLOCK {}", self.id).indent_print(depth);
+        buffer += &"/BLOCK".indent_print(depth);
 
         buffer
     }
@@ -114,7 +125,7 @@ impl IndentPrint for zea::Statement {
         use zea::StatementKind;
         match &self.kind {
             StatementKind::Return(e) => "RETURN".indent_print(depth) + &e.indent_print(depth + 1),
-            StatementKind::Initialisation(i) => i.indent_print(depth),
+            StatementKind::Initialization(i) => i.indent_print(depth),
             StatementKind::BlockTail(e) => "TAIL".indent_print(depth) + &e.indent_print(depth + 1),
             StatementKind::IfThenElse(b) => b.indent_print(depth),
             StatementKind::ExpandedBlock(eb) => eb.indent_print(depth),
@@ -125,15 +136,23 @@ impl IndentPrint for zea::Statement {
 }
 impl IndentPrint for zea::Initialization {
     fn indent_print(&self, depth: usize) -> String {
-        use zea::InitialisationKind;
+        use zea::InitializationKind;
         match &self.kind {
-            InitialisationKind::Packed(p) => p.indent_print(depth),
-            InitialisationKind::PartiallyUnpacked(p) => p.indent_print(depth),
+            InitializationKind::Packed(p) => p.indent_print(depth),
+            InitializationKind::PartiallyUnpacked(p) => p.indent_print(depth),
+            InitializationKind::Unpacked(p) => {
+                let mut buffer = "U_INIT_BLOCK".indent_print(depth);
+                for init in p.iter() {
+                    buffer += &init.indent_print(depth + 1);
+                }
+                buffer += &"/U_INIT_BLOCK".indent_print(depth);
+                buffer
+            }
         }
     }
 }
 
-impl IndentPrint for zea::PackedInitialisation {
+impl IndentPrint for zea::PackedInitialization {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "P_INIT".indent_print(depth);
         buffer += &"#PATTERN".indent_print(depth + 1);
@@ -174,21 +193,21 @@ impl IndentPrint for Option<zea::TypeSpecifier> {
     }
 }
 
-impl IndentPrint for zea::UnpackedInitialisation {
+impl IndentPrint for zea::SimpleInitialization {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "UNP_INIT".indent_print(depth);
-        buffer += &"#PATTERN".indent_print(depth + 1);
+        buffer += &"#ASSIGNEE".indent_print(depth + 1);
         buffer += &self.assignee.indent_print(depth + 2);
         buffer += &"#TYPE".indent_print(depth + 1);
         buffer += &self.typ.indent_print(depth + 2);
         buffer += &"#VALUE".indent_print(depth + 1);
-        buffer += &self.value.indent_print(depth + 1);
+        buffer += &self.value.indent_print(depth + 2);
         buffer += &"/UNP_INIT".indent_print(depth);
         buffer
     }
 }
 
-impl IndentPrint for zea::PartiallyUnpackedInitialisation {
+impl IndentPrint for zea::PartiallyUnpackedInitialization {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = self.temporary.indent_print(depth);
         for u in self.unpacked_assignments.iter() {

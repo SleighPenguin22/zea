@@ -593,8 +593,8 @@ mod tests {
     #[test]
     fn init_inferred() {
         let i = parse_init("x := 42;");
-        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
-        let (InitialisationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, InitializationKind::Packed(_)));
+        let (InitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
         assert!(matches!(&i.assignee, AssignmentPattern::Identifier(s) if s == "x"));
@@ -603,8 +603,8 @@ mod tests {
     #[test]
     fn init_explicit_type() {
         let i = parse_init("x : U64 = 42;");
-        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
-        let (InitialisationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, InitializationKind::Packed(_)));
+        let (InitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
         assert!(matches!(&i.typ, Some(TypeSpecifier::Basic(t)) if t == "U64"));
@@ -613,8 +613,8 @@ mod tests {
     #[test]
     fn init_pointer_type() {
         let i = parse_init("p : U8* = ptr;");
-        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
-        let (InitialisationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, InitializationKind::Packed(_)));
+        let (InitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
         assert!(matches!(&i.typ, Some(TypeSpecifier::Pointer(inner))
@@ -624,8 +624,8 @@ mod tests {
     #[test]
     fn init_array_type() {
         let i = parse_init("xs : [U32] = arr;");
-        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
-        let (InitialisationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, InitializationKind::Packed(_)));
+        let (InitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
         assert!(matches!(&i.typ, Some(TypeSpecifier::ArrayOf(_))));
@@ -634,8 +634,8 @@ mod tests {
     #[test]
     fn init_tuple_destructure() {
         let i = parse_init("(a, b) := pair;");
-        assert!(matches!(i.kind, InitialisationKind::Packed(_)));
-        let (InitialisationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, InitializationKind::Packed(_)));
+        let (InitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
         assert!(matches!(&i.assignee, AssignmentPattern::Tuple(v) if v.len() == 2));
@@ -666,7 +666,7 @@ mod tests {
     fn stmt_init() {
         assert!(matches!(
             parse_stmt("x := 1;").kind,
-            StatementKind::Initialisation(_)
+            StatementKind::Initialization(_)
         ));
     }
 
@@ -692,22 +692,22 @@ mod tests {
     fn func_no_args_void_return() {
         let f = parse_func("fn greet() {}");
         assert_eq!(f.name, "greet");
-        assert!(f.args.is_empty());
+        assert!(f.params.is_empty());
         assert!(matches!(&f.returns, TypeSpecifier::Basic(s) if s == "Void"));
     }
 
     #[test]
     fn func_args_no_trailing() {
         let f = parse_func("fn add(a: U64, b: U64) -> U64 { return a + b; }");
-        assert_eq!(f.args.len(), 2);
-        assert_eq!(f.args[0].name, "a");
-        assert_eq!(f.args[1].name, "b");
+        assert_eq!(f.params.len(), 2);
+        assert_eq!(f.params[0].name, "a");
+        assert_eq!(f.params[1].name, "b");
     }
 
     #[test]
     fn func_args_trailing_comma() {
         let f = parse_func("fn add(a: U64, b: U64,) -> U64 { return a + b; }");
-        assert_eq!(f.args.len(), 2);
+        assert_eq!(f.params.len(), 2);
     }
 
     #[test]
