@@ -1,7 +1,23 @@
+use crate::helper_impls::StructuralEq;
+use crate::visualisation::IndentPrint;
 use crate::zea;
 use crate::zea::visitors::annotating::ScopeAnnotations;
-use crate::zea::{BinOp, ExpressionKind, Module, UnOp};
+use crate::zea::Hash;
+use crate::zea::Hasher;
+use crate::zea::{BinOp, ExpressionKind, Module, TypeSpecifier, UnOp};
 use indexmap::{IndexMap, IndexSet};
+use zea_macros::{ASTStructuralEq, HashEqById};
+
+pub struct TupleSignature {
+    members: Vec<TypeSpecifier>,
+}
+
+#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+pub struct HoistedDeclaration {
+    pub id: usize,
+    pub typ: TypeSpecifier,
+    pub assignee: String,
+}
 
 #[allow(non_snake_case)]
 pub fn BUILTIN_TYPES() -> [zea::TypeSpecifier; 5] {
@@ -445,13 +461,25 @@ impl<'ast> ModuleInferenceContext<'ast> {
             UnOp::BitNot => todo!(),
         }
     }
+    pub fn infer_unop_log_not(
+        &mut self,
+        arg: &zea::Expression,
+    ) -> Result<InferenceId, TypeCheckError> {
+        let bool_type = self.type_bool_inference_id();
+
+        let targ = self.infer_expr(arg)?;
+        let targ = self.follow_inference_id(targ);
+        self.unify_ids(targ, bool_type)?;
+
+        Ok(bool_type)
+    }
 
     pub fn infer_func_call(
         &mut self,
         expr: &zea::Expression,
     ) -> Result<InferenceId, TypeCheckError> {
         let ExpressionKind::FunctionCall(call) = &expr.kind else {
-            panic!("infer_branch expects branch, got {:?}", expr.kind)
+            panic!("infer_func_call expects branch, got {:?}", expr.kind)
         };
 
         let func = self
@@ -460,8 +488,9 @@ impl<'ast> ModuleInferenceContext<'ast> {
             .find(|func| func.name == call.name)
             .expect("AST should have ");
         let returns_id: InferenceId = self.intering_table.introduce(&func.returns).into();
+
         let expr_inference_id = self.get_inference_id(expr)?;
-        self.unify_ids(returns_id, expr_inference_id)?;
+        self.unify_ids(expr_inference_id, returns_id)?;
 
         let param_types: Vec<&zea::TypeSpecifier> = func.params.iter().map(|ti| &ti.typ).collect();
 
@@ -511,16 +540,11 @@ impl<'ast> ModuleInferenceContext<'ast> {
                 ExpressionKind::BinOpExpr(_, _, _) => self.infer_binop(expr),
                 ExpressionKind::UnOpExpr(_, _) => self.infer_unop(expr),
                 ExpressionKind::MemberAccess(_, _) => self.infer_member_access(expr),
-
-                ExpressionKind::Block(_) => {
-                    unreachable!("AST should not contain un-expanded blocks")
-                }
-                ExpressionKind::StringLiteral(_) => todo!("string types in Zea"),
                 // ExpressionKind::Unit => {}
                 // ExpressionKind::IntegerLiteral(_) => {}
                 // ExpressionKind::BoolLiteral(_) => {}
                 // ExpressionKind::FloatLiteral(_) => {}
-                _ => unreachable!(),
+                _ => unreachable!("ILLEGAL NODE WHILE INFERRING:\n{}", expr.indent_print(1)),
             }
         }
     }

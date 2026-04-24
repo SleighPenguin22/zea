@@ -469,14 +469,6 @@ impl Reassignment {
 }
 
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
-pub struct HoistedDeclaration {
-    pub id: usize,
-    pub typ: TypeSpecifier,
-    pub assignee: String,
-    pub value: Expression,
-}
-
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct FunctionCall {
     pub id: usize,
     pub name: String,
@@ -841,9 +833,6 @@ pub struct StructDataTypeDefinition {
     pub members: Vec<TypedIdentifier>,
 }
 
-pub struct TupleSignature {
-    members: Vec<TypeSpecifier>,
-}
 
 pub struct TaggedUnionDataTypeDefinition {
     pub name: String,
