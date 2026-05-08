@@ -291,9 +291,9 @@ pub use crate::zea::visitors::altering::{BareNodeLabeler, BlockExpander, NodeLab
 use crate::zea::visitors::annotating::ScopedIdentifier;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
-use zea_macros::{ASTStructuralEq, HashEqById, VariantToStr};
+use zea_macros::{ASTStructuralEq, VariantToStr};
 
-#[derive(Default, HashEqById, Debug, ASTStructuralEq)]
+#[derive(Default, Debug)]
 pub struct Module {
     pub id: usize,
     pub imports: Vec<String>,
@@ -301,6 +301,17 @@ pub struct Module {
     pub global_vars: Vec<Initialization>,
     pub functions: Vec<Function>,
     pub struct_definitions: Vec<StructDataTypeDefinition>,
+}
+impl StructuralEq for Module {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.imports).eq_ignore_id(&other.imports);
+        is_eq &= (self.exports).eq_ignore_id(&other.exports);
+        is_eq &= (self.global_vars).eq_ignore_id(&other.global_vars);
+        is_eq &= (self.functions).eq_ignore_id(&other.functions);
+        is_eq &= (self.struct_definitions).eq_ignore_id(&other.struct_definitions);
+        is_eq
+    }
 }
 
 impl Module {
@@ -319,11 +330,19 @@ impl Module {
     }
 }
 
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct FuncParam {
     id: usize,
     pub typ: TypeSpecifier,
     pub name: String,
+}
+impl StructuralEq for FuncParam {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.typ).eq_ignore_id(&other.typ);
+        is_eq &= (self.name).eq_ignore_id(&other.name);
+        is_eq
+    }
 }
 impl From<TypedIdentifier> for FuncParam {
     fn from(value: TypedIdentifier) -> Self {
@@ -339,7 +358,7 @@ impl From<TypedIdentifier> for FuncParam {
 ///
 /// Function may be defined only once within a module.
 /// Functions may be imported as many times as needed.
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct Function {
     pub id: usize,
     pub name: String,
@@ -347,13 +366,32 @@ pub struct Function {
     pub returns: TypeSpecifier,
     pub body: StatementBlock,
 }
+impl StructuralEq for Function {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.name).eq_ignore_id(&other.name);
+        is_eq &= (self.params).eq_ignore_id(&other.params);
+        is_eq &= (self.returns).eq_ignore_id(&other.returns);
+        is_eq &= (self.body).eq_ignore_id(&other.body);
+        is_eq
+    }
+}
 
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct HoistedFunctionSignature {
     pub id: usize,
     pub name: String,
     pub args: Vec<FuncParam>,
     pub returns: TypeSpecifier,
+}
+impl StructuralEq for HoistedFunctionSignature {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.name).eq_ignore_id(&other.name);
+        is_eq &= (self.args).eq_ignore_id(&other.args);
+        is_eq &= (self.returns).eq_ignore_id(&other.returns);
+        is_eq
+    }
 }
 
 impl From<Function> for HoistedFunctionSignature {
@@ -366,13 +404,19 @@ impl From<Function> for HoistedFunctionSignature {
         }
     }
 }
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct Statement {
     pub id: usize,
     pub kind: StatementKind,
 }
-
-#[derive(Debug, Clone, PartialEq, VariantToStr, ASTStructuralEq)]
+impl StructuralEq for Statement {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.kind).eq_ignore_id(&other.kind);
+        is_eq
+    }
+}
+#[derive(Debug, Clone, VariantToStr)]
 pub enum StatementKind {
     // initial pass
     /// Variable initialization
@@ -393,10 +437,98 @@ pub enum StatementKind {
     ExpandedBlock(ExpandedBlockExpr),
     IfThenElse(IfThenElse),
 }
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+
+impl StructuralEq for StatementKind {
+    // initial pass
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        match (self, other) {
+            (StatementKind::Initialization(sf0), StatementKind::Initialization(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (StatementKind::Reassignment(sf0), StatementKind::Reassignment(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (StatementKind::FunctionCall(sf0), StatementKind::FunctionCall(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (StatementKind::Return(sf0), StatementKind::Return(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (StatementKind::BlockTail(sf0), StatementKind::BlockTail(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (StatementKind::Block(sf0), StatementKind::Block(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (StatementKind::ExpandedBlock(sf0), StatementKind::ExpandedBlock(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (StatementKind::IfThenElse(sf0), StatementKind::IfThenElse(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+}
+#[derive(Debug, Clone)]
 pub struct Initialization {
     pub id: usize,
     pub kind: InitializationKind,
+}
+impl StructuralEq for Initialization {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.kind).eq_ignore_id(&other.kind);
+        is_eq
+    }
 }
 
 impl Initialization {
@@ -416,20 +548,38 @@ impl Initialization {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct PackedInitialization {
     pub typ: Option<TypeSpecifier>,
     pub assignee: AssignmentPattern,
     pub value: Expression,
 }
+impl StructuralEq for PackedInitialization {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.typ).eq_ignore_id(&other.typ);
+        is_eq &= (self.assignee).eq_ignore_id(&other.assignee);
+        is_eq &= (self.value).eq_ignore_id(&other.value);
+        is_eq
+    }
+}
 
 /// An assignment to a simple, totally unpacked variable.
-#[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct SimpleInitialization {
     id: usize,
     pub typ: Option<TypeSpecifier>,
     pub assignee: String,
     pub value: Expression,
+}
+impl StructuralEq for SimpleInitialization {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.typ).eq_ignore_id(&other.typ);
+        is_eq &= (self.assignee).eq_ignore_id(&other.assignee);
+        is_eq &= (self.value).eq_ignore_id(&other.value);
+        is_eq
+    }
 }
 impl SimpleInitialization {
     pub fn untyped(assignee: &str, value: Expression) -> Self {
@@ -442,23 +592,75 @@ impl SimpleInitialization {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct PartiallyUnpackedInitialization {
     pub temporary: SimpleInitialization,
     pub unpacked_assignments: Vec<Initialization>,
 }
-#[derive(Debug, Clone, Eq, PartialEq, ASTStructuralEq)]
+impl StructuralEq for PartiallyUnpackedInitialization {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.temporary).eq_ignore_id(&other.temporary);
+        is_eq &= (self.unpacked_assignments).eq_ignore_id(&other.unpacked_assignments);
+        is_eq
+    }
+}
+#[derive(Debug, Clone)]
 pub enum InitializationKind {
     Packed(PackedInitialization),
     PartiallyUnpacked(PartiallyUnpackedInitialization),
     Unpacked(Vec<SimpleInitialization>),
 }
+impl StructuralEq for InitializationKind {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        match (self, other) {
+            (InitializationKind::Packed(sf0), InitializationKind::Packed(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (
+                InitializationKind::PartiallyUnpacked(sf0),
+                InitializationKind::PartiallyUnpacked(of0),
+            ) if {
+                let mut sub_items_eq = true;
+                sub_items_eq &= sf0.eq_ignore_id(of0);
+                sub_items_eq
+            } =>
+            {
+                true
+            }
+            (InitializationKind::Unpacked(sf0), InitializationKind::Unpacked(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+}
 
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct Reassignment {
     pub id: usize,
     pub assignee: String,
     pub value: Expression,
+}
+impl StructuralEq for Reassignment {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.assignee).eq_ignore_id(&other.assignee);
+        is_eq &= (self.value).eq_ignore_id(&other.value);
+        is_eq
+    }
 }
 impl Reassignment {
     pub fn wrap_in_statement(self) -> Statement {
@@ -469,11 +671,19 @@ impl Reassignment {
     }
 }
 
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct FunctionCall {
     pub id: usize,
     pub subject: Box<Expression>,
     pub args: Vec<Expression>,
+}
+impl StructuralEq for FunctionCall {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.subject).eq_ignore_id(&other.subject);
+        is_eq &= (self.args).eq_ignore_id(&other.args);
+        is_eq
+    }
 }
 
 impl FunctionCall {
@@ -491,10 +701,17 @@ impl FunctionCall {
         }
     }
 }
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct StatementBlock {
     pub id: usize,
     pub statements: Vec<Statement>,
+}
+impl StructuralEq for StatementBlock {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.statements).eq_ignore_id(&other.statements);
+        is_eq
+    }
 }
 impl StatementBlock {
     pub fn wrap_in_expression(self) -> Expression {
@@ -524,7 +741,7 @@ impl StatementBlock {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, ASTStructuralEq)]
+#[derive(Clone, Debug)]
 pub struct ExpandedBlockExpr {
     /// The label that the block expression has its value assigned to
     /// i.e. `__block0`, `__block1` etc.
@@ -533,11 +750,26 @@ pub struct ExpandedBlockExpr {
     pub statements: Vec<Statement>,
     pub last: Expression,
 }
+impl StructuralEq for ExpandedBlockExpr {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.statements).eq_ignore_id(&other.statements);
+        is_eq &= (self.last).eq_ignore_id(&other.last);
+        is_eq
+    }
+}
 
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+#[derive(Debug, Clone)]
 pub struct Expression {
     pub id: usize,
     pub kind: ExpressionKind,
+}
+impl StructuralEq for Expression {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.kind).eq_ignore_id(&other.kind);
+        is_eq
+    }
 }
 
 impl Expression {
@@ -597,7 +829,7 @@ impl Expression {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, VariantToStr, ASTStructuralEq)]
+#[derive(Debug, Clone, VariantToStr)]
 pub enum ExpressionKind {
     // initial pass
     Unit,
@@ -620,6 +852,138 @@ pub enum ExpressionKind {
 
     // after expansion
     ExpandedBlock(Box<ExpandedBlockExpr>),
+}
+impl StructuralEq for ExpressionKind {
+    // initial pass
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        match (self, other) {
+            (ExpressionKind::Unit, ExpressionKind::Unit) => true,
+            (ExpressionKind::IntegerLiteral(sf0), ExpressionKind::IntegerLiteral(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::BoolLiteral(sf0), ExpressionKind::BoolLiteral(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::FloatLiteral(sf0), ExpressionKind::FloatLiteral(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::StringLiteral(sf0), ExpressionKind::StringLiteral(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::UnScopedIdent(sf0), ExpressionKind::UnScopedIdent(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::ScopedIdent(sf0), ExpressionKind::ScopedIdent(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::FunctionCall(sf0), ExpressionKind::FunctionCall(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (
+                ExpressionKind::BinOpExpr(sf0, sf1, sf2),
+                ExpressionKind::BinOpExpr(of0, of1, of2),
+            ) if {
+                let mut sub_items_eq = true;
+                sub_items_eq &= sf0.eq_ignore_id(of0);
+                sub_items_eq &= sf1.eq_ignore_id(of1);
+                sub_items_eq &= sf2.eq_ignore_id(of2);
+                sub_items_eq
+            } =>
+            {
+                true
+            }
+            (ExpressionKind::UnOpExpr(sf0, sf1), ExpressionKind::UnOpExpr(of0, of1))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq &= sf1.eq_ignore_id(of1);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::MemberAccess(sf0, sf1), ExpressionKind::MemberAccess(of0, of1))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq &= sf1.eq_ignore_id(of1);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::IfThenElse(sf0), ExpressionKind::IfThenElse(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::Block(sf0), ExpressionKind::Block(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (ExpressionKind::ExpandedBlock(sf0), ExpressionKind::ExpandedBlock(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 impl Expression {
@@ -657,7 +1021,7 @@ impl Expression {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, ASTStructuralEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum BinOp {
     Add,
     Sub,
@@ -680,33 +1044,90 @@ pub enum BinOp {
     LT,
     GT,
 }
+impl StructuralEq for BinOp {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        match (self, other) {
+            (BinOp::Add, BinOp::Add) => true,
+            (BinOp::Sub, BinOp::Sub) => true,
+            (BinOp::Mul, BinOp::Mul) => true,
+            (BinOp::Div, BinOp::Div) => true,
+            (BinOp::Mod, BinOp::Mod) => true,
+            (BinOp::LogAnd, BinOp::LogAnd) => true,
+            (BinOp::LogOr, BinOp::LogOr) => true,
+            (BinOp::LogXor, BinOp::LogXor) => true,
+            (BinOp::BitAnd, BinOp::BitAnd) => true,
+            (BinOp::BitOr, BinOp::BitOr) => true,
+            (BinOp::BitXor, BinOp::BitXor) => true,
+            (BinOp::Subscript, BinOp::Subscript) => true,
+            (BinOp::Lsh, BinOp::Lsh) => true,
+            (BinOp::Rsh, BinOp::Rsh) => true,
+            (BinOp::Eq, BinOp::Eq) => true,
+            (BinOp::Neq, BinOp::Neq) => true,
+            (BinOp::Geq, BinOp::Geq) => true,
+            (BinOp::Leq, BinOp::Leq) => true,
+            (BinOp::LT, BinOp::LT) => true,
+            (BinOp::GT, BinOp::GT) => true,
+            _ => false,
+        }
+    }
+}
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, ASTStructuralEq)]
+#[derive(Clone, Debug)]
 pub enum UnOp {
     Neg,
     LogNot,
     BitNot,
 }
+impl StructuralEq for UnOp {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        match (self, other) {
+            (UnOp::Neg, UnOp::Neg) => true,
+            (UnOp::LogNot, UnOp::LogNot) => true,
+            (UnOp::BitNot, UnOp::BitNot) => true,
+            _ => false,
+        }
+    }
+}
 
-#[derive(Clone, Debug, HashEqById, ASTStructuralEq)]
+#[derive(Clone, Debug, ASTStructuralEq)]
 pub struct ConditionMatch {
     pub id: usize,
     conditions: Vec<ConditionMatchArm>,
 }
 
-#[derive(Clone, Debug, HashEqById, ASTStructuralEq)]
+#[derive(Clone, Debug, ASTStructuralEq)]
 pub struct PatternMatch {
     pub id: usize,
     subject: Box<Expression>,
     patterns: Vec<PatternMatchArm>,
 }
 
-#[derive(Clone, Debug, HashEqById, ASTStructuralEq)]
+#[derive(Clone, Debug)]
 pub struct IfThenElse {
     pub id: usize,
     pub condition: Box<Expression>,
     pub true_case: Box<Expression>,
     pub false_case: Option<Box<Expression>>,
+}
+impl PartialEq for IfThenElse {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for IfThenElse {}
+impl Hash for IfThenElse {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
+}
+impl StructuralEq for IfThenElse {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.condition).eq_ignore_id(&other.condition);
+        is_eq &= (self.true_case).eq_ignore_id(&other.true_case);
+        is_eq &= (self.false_case).eq_ignore_id(&other.false_case);
+        is_eq
+    }
 }
 
 impl IfThenElse {
@@ -739,7 +1160,7 @@ impl IfThenElse {
         }
     }
 }
-#[derive(Clone, Debug, HashEqById, ASTStructuralEq)]
+#[derive(Clone, Debug, ASTStructuralEq)]
 pub struct PatternMatchArm {
     pub id: usize,
     pat: AssignmentPattern,
@@ -829,11 +1250,30 @@ impl std::fmt::Display for AssignmentPattern {
 }
 
 /// The Zea named Struct type / product type
-#[derive(HashEqById, ASTStructuralEq, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct StructDataTypeDefinition {
     pub id: usize,
     pub name: String,
     pub members: Vec<TypedIdentifier>,
+}
+impl PartialEq for StructDataTypeDefinition {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+impl Eq for StructDataTypeDefinition {}
+impl Hash for StructDataTypeDefinition {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
+}
+impl StructuralEq for StructDataTypeDefinition {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        let mut is_eq = true;
+        is_eq &= (self.name).eq_ignore_id(&other.name);
+        is_eq &= (self.members).eq_ignore_id(&other.members);
+        is_eq
+    }
 }
 
 pub struct TaggedUnionDataTypeDefinition {
