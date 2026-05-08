@@ -256,7 +256,7 @@ impl IndentPrint for zea::Expression {
         use zea::ExpressionKind;
         let kind_str = self.kind.variant_as_str();
         match &self.kind {
-            ExpressionKind::Ident(i) => format!("{kind_str}({i})").indent_print(depth),
+            ExpressionKind::UnScopedIdent(i) => format!("{kind_str}({i})").indent_print(depth),
             ExpressionKind::IntegerLiteral(i) => format!("Int({i})").indent_print(depth),
             ExpressionKind::FloatLiteral(i) => format!("Float({i})").indent_print(depth),
             ExpressionKind::BinOpExpr(op, l, r) => {
@@ -293,7 +293,7 @@ impl IndentPrint for zea::FunctionCall {
         let mut buffer = "CALL".indent_print(depth);
 
         buffer += &"#FUNC".indent_print(depth + 1);
-        buffer += &self.name.indent_print(depth + 2);
+        buffer += &self.subject.indent_print(depth + 2);
 
         if !self.args.is_empty() {
             for arg in self.args.iter() {

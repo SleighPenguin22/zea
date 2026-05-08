@@ -110,7 +110,7 @@ pub(crate) mod test_ast_macros {
                 id: 0,
                 kind: StatementKind::FunctionCall(FunctionCall {
                     id: 0,
-                    name: $name,
+                    subject: $name,
                     args: vec![$($e),*]
                 })
             }
@@ -177,7 +177,7 @@ pub(crate) mod test_ast_macros {
             use crate::zea::{Expression, ExpressionKind};
             Expression {
                 id: 0,
-                kind: ExpressionKind::Ident(String::from(stringify!($($l)+))),
+                kind: ExpressionKind::UnScopedIdent(String::from(stringify!($($l)+))),
             }
         }};
         (litint $l:literal) => {{
@@ -288,6 +288,7 @@ pub(crate) mod test_ast_macros {
 }
 
 pub use crate::zea::visitors::altering::{BareNodeLabeler, BlockExpander, NodeLabeler};
+use crate::zea::visitors::annotating::ScopedIdentifier;
 use std::fmt::{Debug, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_macros::{ASTStructuralEq, HashEqById, VariantToStr};
@@ -471,7 +472,7 @@ impl Reassignment {
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct FunctionCall {
     pub id: usize,
-    pub name: String,
+    pub subject: Box<Expression>,
     pub args: Vec<Expression>,
 }
 
@@ -550,7 +551,7 @@ impl Expression {
     pub fn ident(ident: &str) -> Expression {
         Expression {
             id: 0,
-            kind: ExpressionKind::Ident(ident.to_string()),
+            kind: ExpressionKind::UnScopedIdent(ident.to_string()),
         }
     }
 
@@ -568,7 +569,7 @@ impl Expression {
         }
     }
 
-    pub fn wrap_lit_int(i: u64) -> Expression {
+    pub fn wrap_lit_int(i: usize) -> Expression {
         Expression {
             id: 0,
             kind: ExpressionKind::IntegerLiteral(i),
@@ -591,7 +592,7 @@ impl Expression {
     pub fn wrap_ident(ident: String) -> Expression {
         Expression {
             id: 0,
-            kind: ExpressionKind::Ident(ident),
+            kind: ExpressionKind::UnScopedIdent(ident),
         }
     }
 }
@@ -600,11 +601,12 @@ impl Expression {
 pub enum ExpressionKind {
     // initial pass
     Unit,
-    IntegerLiteral(u64),
+    IntegerLiteral(usize),
     BoolLiteral(bool),
     FloatLiteral(f64),
     StringLiteral(String),
-    Ident(String),
+    UnScopedIdent(String),
+    ScopedIdent(ScopedIdentifier),
     FunctionCall(FunctionCall),
     BinOpExpr(BinOp, Box<Expression>, Box<Expression>),
     UnOpExpr(UnOp, Box<Expression>),
@@ -706,6 +708,7 @@ pub struct IfThenElse {
     pub true_case: Box<Expression>,
     pub false_case: Option<Box<Expression>>,
 }
+
 impl IfThenElse {
     pub fn if_block(condition: Expression, then: Expression) -> Self {
         IfThenElse {
@@ -826,13 +829,12 @@ impl std::fmt::Display for AssignmentPattern {
 }
 
 /// The Zea named Struct type / product type
-#[derive(HashEqById, ASTStructuralEq, Debug)]
+#[derive(HashEqById, ASTStructuralEq, Debug, Clone)]
 pub struct StructDataTypeDefinition {
     pub id: usize,
     pub name: String,
     pub members: Vec<TypedIdentifier>,
 }
-
 
 pub struct TaggedUnionDataTypeDefinition {
     pub name: String,
@@ -847,10 +849,18 @@ pub enum TaggedUnionVariant {
 /// The Type that is bundled with a:
 /// - function parameter
 /// - identifier in declaration(-assignments)
-#[derive(PartialEq, Eq, Clone, Hash, ASTStructuralEq)]
+#[derive(PartialEq, Eq, Clone, Hash)]
 pub enum TypeSpecifier {
     /// Int, Bool, etc.
     Basic(String),
+    Bool,
+    Integer {
+        width: usize,
+        signed: bool,
+    },
+    Float {
+        width: usize,
+    },
 
     /// `<type>&`
     Pointer(Box<TypeSpecifier>),
@@ -862,10 +872,52 @@ pub enum TypeSpecifier {
     // Option(Box<Type>),
 }
 
+impl StructuralEq for TypeSpecifier {
+    fn eq_ignore_id(&self, other: &Self) -> bool {
+        match (self, other) {
+            (TypeSpecifier::Basic(sf0), TypeSpecifier::Basic(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (TypeSpecifier::Integer { .. }, TypeSpecifier::Integer { .. }) => true,
+            (TypeSpecifier::Float { .. }, TypeSpecifier::Float { .. }) => true,
+            (TypeSpecifier::Pointer(sf0), TypeSpecifier::Pointer(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            (TypeSpecifier::ArrayOf(sf0), TypeSpecifier::ArrayOf(of0))
+                if {
+                    let mut sub_items_eq = true;
+                    sub_items_eq &= sf0.eq_ignore_id(of0);
+                    sub_items_eq
+                } =>
+            {
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 impl Debug for TypeSpecifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             TypeSpecifier::Basic(typ) => typ,
+            TypeSpecifier::Float { width } => &format!("f{width}"),
+            TypeSpecifier::Integer { width, signed } => {
+                &format!("{}{width}", if *signed { 'i' } else { 'u' })
+            }
+            TypeSpecifier::Bool => "Bool",
             TypeSpecifier::ArrayOf(arr) => &format!("[{arr:?}]"),
             // Type::Option(opt) => &format!("?{opt:?}"),
             TypeSpecifier::Pointer(ptr) => &format!("&{ptr:?}"),
@@ -887,23 +939,78 @@ impl From<String> for TypeSpecifier {
         TypeSpecifier::Basic(val)
     }
 }
+
+pub struct TooLargeIntegerLiteral(usize);
 #[allow(non_snake_case)]
 impl TypeSpecifier {
-    pub fn I64() -> Self {
-        Self::from("I64")
+    pub const fn t_ILit_from(literal: usize) -> TypeSpecifier {
+        let width = Self::determine_int_literal_width(literal);
+        Self::Integer {
+            width,
+            signed: false,
+        }
     }
-    pub fn F64() -> Self {
-        Self::from("F64")
+    pub const fn determine_int_literal_width(literal: usize) -> usize {
+        const U8_MAX: usize = u8::MAX as usize;
+        const U16_MAX: usize = u16::MAX as usize;
+        const U32_MAX: usize = u32::MAX as usize;
+        const U64_MAX: usize = u64::MAX as usize;
+        match literal {
+            0..U8_MAX => 8,
+            U8_MAX..U16_MAX => 16,
+            U16_MAX..U32_MAX => 32,
+            U32_MAX.. => 64,
+        }
     }
 
-    pub fn Bool() -> Self {
+    pub fn t_U8() -> TypeSpecifier {
+        Self::Integer {
+            width: 8,
+            signed: false,
+        }
+    }
+    pub fn t_U16() -> TypeSpecifier {
+        Self::Integer {
+            width: 16,
+            signed: false,
+        }
+    }
+    pub fn t_U32() -> TypeSpecifier {
+        Self::Integer {
+            width: 32,
+            signed: false,
+        }
+    }
+    pub fn t_U64() -> TypeSpecifier {
+        Self::from("U64")
+    }
+    pub fn t_I8() -> TypeSpecifier {
+        Self::from("I8")
+    }
+    pub fn t_I16() -> TypeSpecifier {
+        Self::from("I16")
+    }
+    pub fn t_I32() -> TypeSpecifier {
+        Self::from("I32")
+    }
+    pub fn t_I64() -> TypeSpecifier {
+        Self::from("I64")
+    }
+    pub fn t_F64() -> Self {
+        Self::from("F64")
+    }
+    pub fn t_F32() -> Self {
+        Self::from("F32")
+    }
+
+    pub fn t_Bool() -> Self {
         Self::from("Bool")
     }
-    pub fn Unit() -> Self {
+    pub fn t_Unit() -> Self {
         Self::from("Unit")
     }
 
-    pub fn Never() -> Self {
+    pub fn t_Never() -> Self {
         Self::from("Never")
     }
 }

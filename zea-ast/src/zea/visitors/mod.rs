@@ -1,52 +1,36 @@
-use indexmap::IndexSet;
-
 pub mod altering;
+
 use crate::zea::visitors::altering::{
-    AcceptsAssignmentSimplifier, BlockExpander, LabelSentinelIDs, NodeLabeler,
+    AcceptsAssignmentSimplifier, BlockExpander, IdentifierScope, LabelSentinelIDs, NodeLabeler,
+    NotInScopeError,
 };
-use crate::zea::visitors::annotating::{
-    AcceptScopeBuilder, IntroducesFreshIdentifiers, ScopeAnnotations, ScopedIdentifier,
-};
+use crate::zea::visitors::annotating::{ScopeAnnotations, ScopedIdentifier};
 use crate::zea::{
     ExpandedBlockExpr, Expression, Function, FunctionCall, IfThenElse, Initialization, Module,
     Reassignment, Statement,
 };
 use altering::AcceptsBlockExpander;
+use indexmap::IndexSet;
 
 pub mod annotating;
 
 impl Module {
     pub fn get_globally_scoped_identifiers(&self) -> IndexSet<ScopedIdentifier> {
-        let mut global_idents: IndexSet<ScopedIdentifier> = self
-            .global_vars
-            .iter()
-            .flat_map(IntroducesFreshIdentifiers::get_introduced_identifiers)
-            .collect();
-        let func_idents: IndexSet<ScopedIdentifier> = self
-            .functions
-            .iter()
-            .flat_map(IntroducesFreshIdentifiers::get_introduced_identifiers)
-            .collect();
-        let import_idents: IndexSet<ScopedIdentifier> = self
-            .imports
-            .iter()
-            .map(|imp| ScopedIdentifier::import_item(self.id, imp))
-            .collect();
-        global_idents.extend(func_idents);
-        global_idents.extend(import_idents);
-        global_idents
+        let mut annotations = ScopeAnnotations::new();
+        annotations.gather_idents_module(self);
+        annotations.globals()
     }
     pub fn annotate_scopes(&self) -> ScopeAnnotations {
-        let mut scope_builder = ScopeAnnotations::new();
-        self.build_scope_with_parent(self.id, &mut scope_builder);
-        scope_builder
+        todo!()
+    }
+
+    pub fn scopify_identifiers(&mut self) -> Result<(), NotInScopeError> {
+        let mut annotator = IdentifierScope::new(self);
+        annotator.visit_module(self)
     }
 }
 
-pub trait AstNode:
-    AcceptsAssignmentSimplifier + AcceptsBlockExpander + AcceptScopeBuilder + LabelSentinelIDs
-{
-}
+pub trait AstNode: AcceptsAssignmentSimplifier + AcceptsBlockExpander + LabelSentinelIDs {}
 impl AstNode for Module {}
 impl AstNode for Expression {}
 impl AstNode for Statement {}

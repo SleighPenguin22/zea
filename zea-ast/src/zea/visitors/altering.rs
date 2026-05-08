@@ -1,4 +1,5 @@
 use crate::visualisation::IndentPrint;
+use crate::zea::visitors::annotating::{ScopeAnnotations, ScopedIdentifier};
 use crate::zea::{
     AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
     IfThenElse, Initialization, InitializationKind, Module, PackedInitialization,
@@ -152,7 +153,7 @@ impl LabelSentinelIDs for Expression {
             ExpressionKind::BoolLiteral(_) => {}
             ExpressionKind::FloatLiteral(_) => {}
             ExpressionKind::StringLiteral(_) => {}
-            ExpressionKind::Ident(_) => {}
+            ExpressionKind::UnScopedIdent(_) => {}
             ExpressionKind::FunctionCall(call) => call.accept_sentinel_labeler(labeler),
             ExpressionKind::BinOpExpr(_, lhs, rhs) => {
                 lhs.accept_sentinel_labeler(labeler);
@@ -163,6 +164,7 @@ impl LabelSentinelIDs for Expression {
             ExpressionKind::IfThenElse(b) => b.accept_sentinel_labeler(labeler),
             ExpressionKind::Block(b) => b.accept_sentinel_labeler(labeler),
             ExpressionKind::ExpandedBlock(eb) => eb.accept_sentinel_labeler(labeler),
+            ExpressionKind::ScopedIdent(_) => {}
         }
     }
 }
@@ -990,9 +992,10 @@ impl AcceptsBlockExpander for Expression {
             ExpressionKind::BoolLiteral(_) => false,
             ExpressionKind::FloatLiteral(_) => false,
             ExpressionKind::StringLiteral(_) => false,
-            ExpressionKind::Ident(_) => false,
+            ExpressionKind::UnScopedIdent(_) => false,
             ExpressionKind::MemberAccess(_, _) => false,
             ExpressionKind::IfThenElse(b) => b.accept_block_expander(block_expander),
+            ExpressionKind::ScopedIdent(_) => unreachable!("identifiers are not yet scoped"),
         };
 
         self.has_blocks_expanded()
@@ -1108,6 +1111,126 @@ pub trait AcceptsTupleNamer {
     /// ```
     fn accept(&mut self, tuple_namer: &mut BlockExpander) -> bool;
     fn is_expanded(&self, tuple_namer: &mut BlockExpander) -> bool;
+}
+
+pub struct IdentifierScope {
+    /// map an Ident-expression to a scoped identifier and the nearest enclosing block.
+    scope_stack: Vec<usize>,
+    scope_annotations: ScopeAnnotations,
+}
+
+pub struct NotInScopeError {
+    ident: String,
+    scope_id: usize,
+}
+
+impl IdentifierScope {
+    pub fn new(ast: &Module) -> Self {
+        Self {
+            scope_stack: vec![ast.id],
+            scope_annotations: ast.annotate_scopes(),
+        }
+    }
+    fn enter_scope(&mut self, scope: usize) {
+        self.scope_stack.push(scope)
+    }
+    fn exit_scope(&mut self) {
+        self.scope_stack.pop();
+    }
+    fn current_scope(&self) -> usize {
+        *self.scope_stack.last().unwrap()
+    }
+
+    pub(crate) fn visit_module(&mut self, module: &mut Module) -> Result<(), NotInScopeError> {
+        for glob_var in module.global_vars.iter_mut() {
+            self.visit_init(glob_var)?;
+        }
+
+        for func in module.functions.iter_mut() {
+            self.enter_scope(func.body.id);
+            for stmt in func.body.statements.iter_mut() {
+                self.visit_stmt(stmt)?;
+            }
+        }
+        Ok(())
+    }
+    fn visit_init(&mut self, init: &mut Initialization) -> Result<(), NotInScopeError> {
+        let InitializationKind::Unpacked(u) = &mut init.kind else {
+            unreachable!("assignments should be expanded")
+        };
+        for init in u.iter_mut() {
+            self.visit_expr(&mut init.value)?;
+        }
+        Ok(())
+    }
+    fn visit_expr(&mut self, expr: &mut Expression) -> Result<(), NotInScopeError> {
+        match &mut expr.kind {
+            ExpressionKind::Unit => {}
+            ExpressionKind::IntegerLiteral(_) => {}
+            ExpressionKind::BoolLiteral(_) => {}
+            ExpressionKind::FloatLiteral(_) => {}
+            ExpressionKind::StringLiteral(_) => {}
+            ExpressionKind::UnScopedIdent(i) => {
+                let scoped_ident = self.search_for(i)?;
+                expr.kind = ExpressionKind::ScopedIdent(scoped_ident)
+            }
+            ExpressionKind::ScopedIdent(_) => {}
+            ExpressionKind::FunctionCall(call) => self.visit_call(call)?,
+            ExpressionKind::BinOpExpr(_, lhs, rhs) => {
+                self.visit_expr(lhs)?;
+                self.visit_expr(rhs)?;
+            }
+            ExpressionKind::UnOpExpr(_, arg) => self.visit_expr(arg)?,
+            ExpressionKind::MemberAccess(data, _) => self.visit_expr(data)?,
+            ExpressionKind::IfThenElse(ite) => self.visit_branch(ite)?,
+            ExpressionKind::ExpandedBlock(eb) => self.visit_block(eb)?,
+            ExpressionKind::Block(_) => unreachable!("blocks should be expanded"),
+        }
+        Ok(())
+    }
+    fn visit_block(&mut self, block: &mut ExpandedBlockExpr) -> Result<(), NotInScopeError> {
+        self.enter_scope(block.id);
+        for stmt in block.statements.iter_mut() {
+            self.visit_stmt(stmt)?;
+        }
+        self.exit_scope();
+        Ok(())
+    }
+    fn visit_stmt(&mut self, stmt: &mut Statement) -> Result<(), NotInScopeError> {
+        match &mut stmt.kind {
+            StatementKind::Initialization(init) => self.visit_init(init),
+            StatementKind::Reassignment(reinit) => self.visit_reassignment(reinit),
+            StatementKind::FunctionCall(call) => self.visit_call(call),
+            StatementKind::Return(e) => self.visit_expr(e),
+            StatementKind::BlockTail(e) => self.visit_expr(e),
+            StatementKind::ExpandedBlock(eb) => self.visit_block(eb),
+            StatementKind::IfThenElse(ite) => self.visit_branch(ite),
+            StatementKind::Block(_) => unreachable!("blocks should be expanded"),
+        }
+    }
+    fn search_for(&mut self, _ident: &str) -> Result<ScopedIdentifier, NotInScopeError> {
+        todo!()
+    }
+
+    fn visit_branch(&mut self, branch: &mut IfThenElse) -> Result<(), NotInScopeError> {
+        self.visit_expr(&mut branch.condition)?;
+        self.visit_expr(&mut branch.true_case)?;
+        if let Some(false_case) = &mut branch.false_case {
+            self.visit_expr(false_case)?;
+        }
+        Ok(())
+    }
+
+    fn visit_call(&mut self, call: &mut FunctionCall) -> Result<(), NotInScopeError> {
+        for arg in call.args.iter_mut() {
+            self.visit_expr(arg)?;
+        }
+        Ok(())
+    }
+
+    fn visit_reassignment(&mut self, reinit: &mut Reassignment) -> Result<(), NotInScopeError> {
+        self.visit_expr(&mut reinit.value)
+    }
 }
 
 #[cfg(test)]

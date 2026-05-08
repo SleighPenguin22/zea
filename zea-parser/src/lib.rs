@@ -7,7 +7,7 @@ pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
 use lalrpop_util::ParseError;
 use zea_ast::zea::visitors::altering::{
-    AcceptsAssignmentSimplifier, AcceptsBlockExpander, BareNodeLabeler, LabelSentinelIDs,
+    AcceptsAssignmentSimplifier, AcceptsBlockExpander, LabelSentinelIDs,
     NodeLabeler,
 };
 use zea_ast::zea::visitors::annotating::SemanticASTViolation;
@@ -170,27 +170,35 @@ mod tests {
 
     #[test]
     fn identifier_simple() {
-        assert!(matches!(kind(&parse_expr("foo")), ExpressionKind::Ident(s) if s == "foo"));
+        assert!(matches!(kind(&parse_expr("foo")), ExpressionKind::UnScopedIdent(s) if s == "foo"));
     }
 
     #[test]
     fn identifier_with_digits() {
-        assert!(matches!(kind(&parse_expr("foo123")), ExpressionKind::Ident(s) if s == "foo123"));
+        assert!(
+            matches!(kind(&parse_expr("foo123")), ExpressionKind::UnScopedIdent(s) if s == "foo123")
+        );
     }
 
     #[test]
     fn identifier_with_hyphens() {
-        assert!(matches!(kind(&parse_expr("my-var")), ExpressionKind::Ident(s) if s == "my-var"));
+        assert!(
+            matches!(kind(&parse_expr("my-var")), ExpressionKind::UnScopedIdent(s) if s == "my-var")
+        );
     }
 
     #[test]
     fn identifier_question_mark() {
-        assert!(matches!(kind(&parse_expr("empty?")), ExpressionKind::Ident(s) if s == "empty?"));
+        assert!(
+            matches!(kind(&parse_expr("empty?")), ExpressionKind::UnScopedIdent(s) if s == "empty?")
+        );
     }
 
     #[test]
     fn identifier_bang() {
-        assert!(matches!(kind(&parse_expr("reset!")), ExpressionKind::Ident(s) if s == "reset!"));
+        assert!(
+            matches!(kind(&parse_expr("reset!")), ExpressionKind::UnScopedIdent(s) if s == "reset!")
+        );
     }
 
     // ── unary ops ─────────────────────────────────────────────────────────────
@@ -551,7 +559,9 @@ mod tests {
     #[test]
     fn call_name_recorded() {
         match kind(&parse_expr("my-func(x)")) {
-            ExpressionKind::FunctionCall(fc) => assert_eq!(fc.name, "my-func"),
+            ExpressionKind::FunctionCall(fc) => assert!(
+                matches!(&fc.subject.kind, ExpressionKind::UnScopedIdent(s) if s == "my-func")
+            ),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -565,17 +575,17 @@ mod tests {
 
     #[test]
     fn pat_tuple_no_trailing() {
-        assert!(matches!(parse_pat("(a, b)"), AssignmentPattern::Tuple(v) if v.len() == 2));
+        assert!(matches!(parse_pat("@(a, b)"), AssignmentPattern::Tuple(v) if v.len() == 2));
     }
 
     #[test]
     fn pat_tuple_trailing_comma() {
-        assert!(matches!(parse_pat("(a, b,)"), AssignmentPattern::Tuple(v) if v.len() == 2));
+        assert!(matches!(parse_pat("@(a, b,)"), AssignmentPattern::Tuple(v) if v.len() == 2));
     }
 
     #[test]
     fn pat_nested_tuple() {
-        match parse_pat("((a, b), c)") {
+        match parse_pat("@((a, b), c)") {
             AssignmentPattern::Tuple(outer) => {
                 assert_eq!(outer.len(), 2);
                 assert!(matches!(&outer[0], AssignmentPattern::Tuple(_)));
@@ -629,7 +639,7 @@ mod tests {
 
     #[test]
     fn init_tuple_destructure() {
-        let i = parse_init("(a, b) := pair;");
+        let i = parse_init("@(a, b) := pair;");
         assert!(matches!(i.kind, InitializationKind::Packed(_)));
         let (InitializationKind::Packed(i)) = i.kind else {
             unreachable!()

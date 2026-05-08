@@ -11,6 +11,13 @@ Comma0<T>: Vec<T> = {
         items
     }
 };
+Comma0NoTrail<T>: Vec<T> = {
+    <first:T> <items:(","<T> )*> => {
+        let mut first = vec![first];
+        first.extend(items);
+        first
+    }
+};
 
 Comma1<T>: Vec<T> = {
     <first:T> <rest:("," <T>)*> ","? => {
@@ -56,7 +63,7 @@ ModImports: Vec<String> = {
 ModExports: Vec<String> = {
     "exports"  "{" <imps:Comma0<ExprIdent>>  "}"=> imps
 };
-
+#[inline]
 ModSymbols: (Vec<Initialization>, Vec<Function>, Vec<StructDataTypeDefinition>, Vec<TaggedUnionDataTypeDefinition>) = {
     ModSymbolsHelper => separate_module_items(<>)
 };
@@ -108,10 +115,15 @@ pub Init: Initialization = {
         )
  },
 }
-
 pub AssignPat: AssignmentPattern = {
     <i:ExprIdent> => AssignmentPattern::Identifier(i),
-    "(" <pats:Comma1<AssignPat>> ")" => AssignmentPattern::Tuple(pats)
+    "@" <AssignPatInner>
+}
+
+#[inline]
+AssignPatInner: AssignmentPattern = {
+    <i:ExprIdent> => AssignmentPattern::Identifier(i),
+    "(" <pats:Comma1<AssignPatInner>> ")" => AssignmentPattern::Tuple(pats)
 }
 
 pub Reassign: Reassignment = {
@@ -123,12 +135,11 @@ pub Reassign: Reassignment = {
         }
  }
 };
-
 pub FuncCall: FunctionCall = {
-    <name:ExprIdent> "(" <args:Comma0<Expr>> ")" => {
+    <subject:ExprIdent> "(" <args:Comma0<Expr>> ")" => {
         FunctionCall {
             id: 0,
-            name,
+            subject: Box::new(Expression::wrap_ident(subject)),
             args
         }
     }
@@ -210,78 +221,79 @@ ExprBranch: Expression = {
 };
 
 ExprOr: Expression = {
-    <l:ExprOr> "||" <r:ExprXor> => Expression::binop(BinOp::LogOr, l, r),
+    <l:ExprXor> "||" <r:ExprOr>  => Expression::binop(BinOp::LogOr, l, r),
     ExprXor,
 };
 ExprXor: Expression = {
-    <l:ExprXor> "^^" <r:ExprAnd> => Expression::binop(BinOp::LogXor, l, r),
+    <l:ExprAnd> "^^" <r:ExprXor> => Expression::binop(BinOp::LogXor, l, r),
     ExprAnd,
 };
 ExprAnd: Expression = {
-    <l:ExprAnd> "&&" <r:ExprBitOr> => Expression::binop(BinOp::LogAnd, l, r),
-    ExprBitOr,
+    <l:ExprBit> "&&" <r:ExprAnd> => Expression::binop(BinOp::LogAnd, l, r),
+    ExprBit,
 };
-ExprBitOr: Expression = {
-    <l:ExprBitOr> "|" <r:ExprBitXor> => Expression::binop(BinOp::BitOr, l, r),
-    ExprBitXor,
-};
-ExprBitXor: Expression = {
-    <l:ExprBitXor> "^" <r:ExprBitAnd> => Expression::binop(BinOp::BitXor, l, r),
-    ExprBitAnd,
-};
-ExprBitAnd: Expression = {
-    <l:ExprBitAnd> "&" <r:ExprEq> => Expression::binop(BinOp::BitAnd, l, r),
+ExprBit: Expression = {
+     <l:ExprEq> "|" <r:ExprBit> => Expression::binop(BinOp::BitOr, l, r),
+    <l:ExprEq> "^" <r:ExprBit> => Expression::binop(BinOp::BitXor, l, r),
+    <l:ExprEq> "&" <r:ExprBit> => Expression::binop(BinOp::BitAnd, l, r),
     ExprEq,
 };
 ExprEq: Expression = {
-    <l:ExprEq> "==" <r:ExprCmp> => Expression::binop(BinOp::Eq, l, r),
-    <l:ExprEq> "!=" <r:ExprCmp> => Expression::binop(BinOp::Neq, l, r),
+    <l:ExprCmp> "==" <r:ExprEq> => Expression::binop(BinOp::Eq, l, r),
+    <l:ExprCmp> "!=" <r:ExprEq> => Expression::binop(BinOp::Neq, l, r),
     ExprCmp,
 };
 ExprCmp: Expression = {
-    <l:ExprCmp> "<"  <r:ExprShift> => Expression::binop(BinOp::LT, l, r),
-    <l:ExprCmp> ">"  <r:ExprShift> => Expression::binop(BinOp::GT, l, r),
-    <l:ExprCmp> "<=" <r:ExprShift> => Expression::binop(BinOp::Leq, l, r),
-    <l:ExprCmp> ">=" <r:ExprShift> => Expression::binop(BinOp::Geq, l, r),
+    <l:ExprShift> "<" <r:ExprCmp> => Expression::binop(BinOp::LT, l, r),
+    <l:ExprShift> ">" <r:ExprCmp>  => Expression::binop(BinOp::GT, l, r),
+    <l:ExprShift> "<=" <r:ExprCmp>  => Expression::binop(BinOp::Leq, l, r),
+    <l:ExprShift> ">=" <r:ExprCmp>  => Expression::binop(BinOp::Geq, l, r),
     ExprShift,
 };
 ExprShift: Expression = {
-    <l:ExprShift> "<<" <r:ExprAdd> => Expression::binop(BinOp::Lsh, l, r),
-    <l:ExprShift> ">>" <r:ExprAdd> => Expression::binop(BinOp::Rsh, l, r),
+    <l:ExprAdd> "<<" <r:ExprShift>  => Expression::binop(BinOp::Lsh, l, r),
+    <l:ExprAdd> ">>" <r:ExprShift> => Expression::binop(BinOp::Rsh, l, r),
     ExprAdd,
 };
 ExprAdd: Expression = {
-    <l:ExprAdd> "+" <r:ExprMul> => Expression::binop(BinOp::Add, l, r),
-    <l:ExprAdd> "-" <r:ExprMul> => Expression::binop(BinOp::Sub, l, r),
+    <l:ExprMul> "+" <r:ExprAdd>  => Expression::binop(BinOp::Add, l, r),
+    <l:ExprMul> "-" <r:ExprAdd> => Expression::binop(BinOp::Sub, l, r),
     ExprMul,
 };
 ExprMul: Expression = {
-    <l:ExprMul> "*" <r:ExprUnary> => Expression::binop(BinOp::Mul, l, r),
-    <l:ExprMul> "/" <r:ExprUnary> => Expression::binop(BinOp::Div, l, r),
-    <l:ExprMul> "%" <r:ExprUnary> => Expression::binop(BinOp::Mod, l, r),
+      <l:ExprMul> "*" <r:ExprUnary> => Expression::binop(BinOp::Mul, l, r),
+     <l:ExprMul> "/" <r:ExprUnary> => Expression::binop(BinOp::Div, l, r),
+     <l:ExprMul> "%" <r:ExprUnary>  => Expression::binop(BinOp::Mod, l, r),
     ExprUnary,
 };
 ExprUnary: Expression = {
     "!" <e:ExprUnary> => Expression::unop(UnOp::LogNot, e),
     "~" <e:ExprUnary> => Expression::unop(UnOp::BitNot, e),
     "-" <e:ExprUnary> => Expression::unop(UnOp::Neg, e),
-    ExprPostfix,
+    ExprCall,
 };
+ExprCall: Expression = {
+    <c:FuncCall> => c.wrap_in_expression(),
+    ExprPostfix
+}
+
 ExprPostfix: Expression = {
     <t:ExprPostfix> "." <m:ExprIdent> => Expression::member_access(t,m),
     <t:ExprPostfix> "[" <i:Expr> "]" => Expression::binop(BinOp::Subscript, t, i),
-    <c:FuncCall> => c.wrap_in_expression(),
-    ExprAtom,
+    ExprAtom
 };
+
+
 ExprAtom: Expression = {
     <n:Num>       => Expression::wrap_lit_int(n),
     <s:ExprIdent> => Expression::wrap_ident(s),
+    "(" <Expr> ")"
 };
 
-Num: u64 = {
-    r"[0-9_]+" => u64::from_str(&<>.replace("_", "")).unwrap(),
-    r"0x[0-9a-fA-F_]+" => u64::from_str_radix(&<>[2..].replace("_", ""), 16).unwrap(),
-    r"0b[01_]+" => u64::from_str_radix(&<>[2..].replace("_", ""), 2).unwrap(),
+Num: usize = {
+    r"[0-9_]+" => usize::from_str(&<>.replace("_", "")).unwrap(),
+    r"0x[0-9a-fA-F_]+" => usize::from_str_radix(&<>[2..].replace("_", ""), 16).unwrap(),
+    r"0b[01_]+" => usize::from_str_radix(&<>[2..].replace("_", ""), 2).unwrap(),
 };
 TypeIdent: String = {r"[A-Z][a-zA-Z_0-9]*" => String::from(<>)}
 ExprIdent: String = {r"[a-z][a-z0-9-]*[?!]*" => String::from(<>)}
