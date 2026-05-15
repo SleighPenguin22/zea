@@ -59,52 +59,91 @@ impl NodeLabeler for BareNodeLabeler {
 }
 
 impl Transfomer for BareNodeLabeler {
-    fn visit_block(&mut self, block: &mut ExpandedBlockExpr) {
+    type TransformerOk = ();
+    type TransformerError = ();
+    fn visit_block(
+        &mut self,
+        block: &mut ExpandedBlockExpr,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut block.id);
-        walk_mut_block(self, block);
+        walk_mut_block(self, block)
     }
-    fn visit_branch(&mut self, branch: &mut IfThenElse) {
+    fn visit_branch(
+        &mut self,
+        branch: &mut IfThenElse,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut branch.id);
-        walk_mut_branch(self, branch);
+        walk_mut_branch(self, branch)
     }
-    fn visit_call(&mut self, call: &mut FunctionCall) {
+    fn visit_call(
+        &mut self,
+        call: &mut FunctionCall,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut call.id);
-        walk_mut_call(self, call);
+        walk_mut_call(self, call)
     }
-    fn visit_expr(&mut self, expr: &mut Expression) {
+    fn visit_expr(
+        &mut self,
+        expr: &mut Expression,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut expr.id);
-        walk_mut_expr(self, expr);
+        walk_mut_expr(self, expr)
     }
-    fn visit_funcdef(&mut self, funcdef: &mut Function) {
+    fn visit_funcdef(
+        &mut self,
+        funcdef: &mut Function,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut funcdef.id);
         walk_mut_funcdef(self, funcdef)
     }
-    fn visit_init(&mut self, init: &mut SimpleInitialization) {
+    fn visit_init(
+        &mut self,
+        init: &mut SimpleInitialization,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut init.id);
-        walk_mut_unpacked_init(self, init);
+        walk_mut_unpacked_init(self, init)
     }
-    fn visit_initblock(&mut self, init: &mut InitializationBlock) {
+    fn visit_initblock(
+        &mut self,
+        init: &mut InitializationBlock,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut init.id);
+        walk_mut_initblock(self, init)
     }
-    fn visit_module(&mut self, module: &mut Module) {
+    fn visit_module(
+        &mut self,
+        module: &mut Module,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut module.id);
-        walk_mut_module(self, module);
+        walk_mut_module(self, module)
     }
-    fn visit_reassignment(&mut self, reinit: &mut Reassignment) {
+    fn visit_reassignment(
+        &mut self,
+        reinit: &mut Reassignment,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut reinit.id);
-        walk_mut_reassignment(self, reinit);
+        walk_mut_reassignment(self, reinit)
     }
-    fn visit_stmt(&mut self, stmt: &mut Statement) {
+    fn visit_stmt(
+        &mut self,
+        stmt: &mut Statement,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut stmt.id);
-        walk_mut_stmt(self, stmt);
+        walk_mut_stmt(self, stmt)
     }
-    fn visit_structdef(&mut self, structdef: &mut StructDataTypeDefinition) {
+    fn visit_structdef(
+        &mut self,
+        structdef: &mut StructDataTypeDefinition,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut structdef.id);
-        walk_mut_structdef(self, structdef);
+        walk_mut_structdef(self, structdef)
     }
-    fn visit_sugared_block(&mut self, sugared_block: &mut StatementBlock) {
+    fn visit_sugared_block(
+        &mut self,
+        sugared_block: &mut StatementBlock,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut sugared_block.id);
-        walk_mut_sugared_block(self, sugared_block);
+        walk_mut_sugared_block(self, sugared_block)
     }
 }
 
@@ -134,7 +173,12 @@ impl NodeLabeler for AssignmentSimplifier {
 }
 
 impl Transfomer for AssignmentSimplifier {
-    fn visit_initblock(&mut self, init: &mut InitializationBlock) {
+    type TransformerError = ();
+    type TransformerOk = ();
+    fn visit_initblock(
+        &mut self,
+        init: &mut InitializationBlock,
+    ) -> Result<Self::TransformerOk, Self::TransformerOk> {
         match init.kind {
             InitializationKind::Packed(_) => {
                 init.kind = InitializationKind::Unpacked(self.expand_assignment(init.clone()));
@@ -148,7 +192,7 @@ impl Transfomer for AssignmentSimplifier {
 impl AssignmentSimplifier {
     /// synthesize a [`SimpleInitialization`] for use in assignment expansion.
     ///
-    /// Also generates an expression referencing that
+    /// Also generates an expression referencing that initialization.
     fn synthesize_temporary(&mut self, value: Expression) -> (SimpleInitialization, Expression) {
         let (id, label) = self.next_label_with_ident_string();
         let mut init = SimpleInitialization::untyped(&label, value);
@@ -167,30 +211,6 @@ impl AssignmentSimplifier {
         member_access.id = self.next_id();
         PackedInitialization::untyped(assignee, member_access)
     }
-    /// Given a tuple-value to unpack,
-    /// generate a sequence of initializations that assign each member of the tuple-value:
-    /// ```ignore
-    /// tuple@(a,b) := label;
-    ///
-    /// becomes
-    ///
-    /// a := label._0;
-    /// b := label._1;
-    ///
-    /// likewise:
-    ///
-    /// tup@((a,b),c)) = label;
-    ///
-    /// becomes:
-    ///
-    /// __unpack0 := label._0;
-    /// a := __unpack0._0;
-    /// b := __unpack0._1;
-    /// c := label._1;
-    /// ```
-    ///
-    /// That is, for each member of the assignment-pattern, generate a new initialization,
-    /// That gets assigned one field of the value
     fn expand_assignment(&mut self, init: InitializationBlock) -> Vec<SimpleInitialization> {
         match init.kind {
             InitializationKind::Packed(p) => self.expand_packed_init(p),
@@ -247,7 +267,12 @@ impl NodeLabeler for BlockExpander {
 }
 
 impl Transfomer for BlockExpander {
-    fn visit_stmt(&mut self, stmt: &mut Statement) {
+    type TransformerError = ();
+    type TransformerOk = ();
+    fn visit_stmt(
+        &mut self,
+        stmt: &mut Statement,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         match &mut stmt.kind {
             StatementKind::Initialization(_) => {}
             StatementKind::Reassignment(_) => {}
@@ -261,7 +286,7 @@ impl Transfomer for BlockExpander {
             StatementKind::Block(_) => {}
             StatementKind::IfThenElse(_) => {}
         }
-        walk_mut_stmt(self, stmt);
+        walk_mut_stmt(self, stmt)
     }
 }
 
@@ -295,23 +320,7 @@ impl BlockExpander {
     }
 }
 
-pub trait AcceptsTupleNamer {
-    /// Let the expander perform some transformation on `self`. Return false if no changes have been made.
-    /// Repeatedly calling this method is guaranteed to eventually return false:
-    ///
-    /// ```ignore
-    /// let ast = StatementBlock {
-    ///     id: NodeId::sentinel(,
-    ///     statements: vec![...]
-    /// };
-    /// let mut expander = NodeExpander::new()
-    /// while !ast.accept(&mut expander) {} // will always terminate
-    /// ```
-    fn accept(&mut self, tuple_namer: &mut BlockExpander) -> bool;
-    fn is_expanded(&self, tuple_namer: &mut BlockExpander) -> bool;
-}
-
-pub struct IdentifierScope {
+pub struct IdentifierScoper {
     /// map an Ident-expression to a scoped identifier and the nearest enclosing block.
     scope_stack: Vec<NodeId>,
     scope_annotations: ScopeAnnotations,
@@ -322,11 +331,11 @@ pub struct NotInScopeError {
     scope_id: usize,
 }
 
-impl IdentifierScope {
+impl IdentifierScoper {
     pub fn new(ast: &Module) -> Self {
         Self {
             scope_stack: vec![ast.id],
-            scope_annotations: todo!(),
+            scope_annotations: ScopeAnnotations::new(),
         }
     }
     fn enter_scope(&mut self, scope: NodeId) {
@@ -437,8 +446,8 @@ mod block_expander_tests {
     use crate::helper_impls::StructuralEq;
     use crate::visualisation::IndentPrint;
     use crate::zea::test_ast_macros::*;
-    use crate::zea::visitors::altering::{AssignmentSimplifier, LabelSentinelIDs};
-    use crate::zea::visitors::{AcceptsAssignmentSimplifier, AcceptsBlockExpander, BlockExpander};
+    use crate::zea::visitors::altering::AssignmentSimplifier;
+    use crate::zea::visitors::BlockExpander;
     // use crate::visualisation::IndentPrint;
     use crate::zea::NodeId;
     use crate::zea::{

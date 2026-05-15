@@ -1010,7 +1010,7 @@ impl StructuralEq for ExpressionKind {
 }
 
 impl Expression {
-    pub fn unit(id: NodeId) -> Self {
+    pub const fn unit(id: NodeId) -> Self {
         Expression {
             id,
             kind: ExpressionKind::Unit,
@@ -1029,7 +1029,7 @@ impl Expression {
             kind: ExpressionKind::UnOpExpr(op, Box::new(e)),
         }
     }
-    pub fn block(b: StatementBlock) -> Expression {
+    pub const fn block(b: StatementBlock) -> Expression {
         Expression {
             id: NodeId::sentinel(),
             kind: ExpressionKind::Block(b),

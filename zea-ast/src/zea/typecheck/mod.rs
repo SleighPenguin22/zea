@@ -307,7 +307,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
             intering_table: TypeInterningTable::new_builtin_zea_types(),
             subst_table: TypeVarSubstitutionTable::new(),
             node_types: IndexMap::new(),
-            scopes: todo!(),
+            scopes: ScopeAnnotations::new(),
         }
     }
 

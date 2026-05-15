@@ -1,11 +1,14 @@
 use crate::helper_impls::StructuralEq;
 use crate::zea::{
     ExpandedBlockExpr, Expression, ExpressionKind, FuncParam, Function, FunctionCall, IfThenElse,
-    InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization, SimpleInitialization,
-    Statement, StatementKind,
+    InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
+    SimpleInitialization, Statement, StatementKind,
 };
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use std::collections::HashSet;
+
+type NodeIdMap<T> = IndexMap<NodeId, T>;
+type NodeIdSet = IndexSet<NodeId>;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub enum ScopedIdentifierKind {
@@ -35,41 +38,41 @@ impl ScopedIdentifier {
             kind: ScopedIdentifierKind::LocalVar,
         }
     }
-    pub fn global(origin: NodeId, ident: &str) -> Self {
+    pub fn global(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
-            ident: ident.to_string(),
+            ident,
             kind: ScopedIdentifierKind::GlobalVar,
         }
     }
-    pub fn func_name(origin: NodeId, ident: &str) -> Self {
+    pub fn func_name(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
-            ident: ident.to_string(),
+            ident,
             kind: ScopedIdentifierKind::FunctionName,
         }
     }
-    pub fn func_param(origin: NodeId, ident: &str) -> Self {
+    pub fn func_param(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
-            ident: ident.to_string(),
+            ident,
             kind: ScopedIdentifierKind::FunctionParam,
         }
     }
     pub fn from_func_param(func_param: &FuncParam) -> Self {
-        ScopedIdentifier::func_param(func_param.id, func_param.name.as_ref())
+        ScopedIdentifier::func_param(func_param.id, func_param.name.clone())
     }
     pub fn from_local_init(init: &SimpleInitialization) -> Self {
         ScopedIdentifier::local(init.id, init.assignee.clone())
     }
     pub fn from_global_init(init: &SimpleInitialization) -> Self {
-        ScopedIdentifier::global(init.id, init.assignee.as_ref())
+        ScopedIdentifier::global(init.id, init.assignee.clone())
     }
 
-    pub fn import_item(origin: NodeId, ident: &str) -> Self {
+    pub fn import_item(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
-            ident: ident.to_string(),
+            ident,
             kind: ScopedIdentifierKind::ImportItem,
         }
     }
@@ -86,8 +89,6 @@ pub struct ScopeAnnotations {
     // Map some node id to its ScopedIdentifier counterpart.
     identifiers: IndexSet<ScopedIdentifier>,
 }
-
-impl ScopedIdentifier {}
 
 impl ScopeAnnotations {
     pub fn new() -> Self {
@@ -135,7 +136,7 @@ impl ScopeAnnotations {
     fn gather_idents_func_def(&mut self, func_def: &Function) {
         self.identifiers.insert(ScopedIdentifier::func_name(
             func_def.id,
-            func_def.name.as_ref(),
+            func_def.name.clone(),
         ));
         for param in func_def.params.iter() {
             self.identifiers

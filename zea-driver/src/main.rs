@@ -8,9 +8,9 @@
 use std::fs::read_to_string;
 use std::process::exit;
 use zea_ast::visualisation::IndentPrint;
-use zea_ast::zea::{BlockExpander, NodeLabeler};
 use zea_ast::zea::visitors::altering::AssignmentSimplifier;
 use zea_ast::zea::visitors::Transfomer;
+use zea_ast::zea::{BlockExpander, NodeLabeler};
 use zea_parser::parse_module;
 
 fn main() {
@@ -27,11 +27,10 @@ fn main() {
     };
     println!("after expansions:\n{}", module.indent_print(0));
 
-
     let mut block_expander: BlockExpander = generator.labeler_into();
-    block_expander.visit_module(&mut module);
+    let _ = block_expander.visit_module(&mut module);
     let mut simplifier: AssignmentSimplifier = block_expander.labeler_into();
-    simplifier.visit_module(&mut module);
+    let _ = simplifier.visit_module(&mut module);
 
     println!("after expansions:\n{}", module.indent_print(0));
 }
