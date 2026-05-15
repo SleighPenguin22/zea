@@ -6,24 +6,23 @@ pub use grammar::ExprParser as ExpressionParser;
 pub use grammar::ModParser as ModuleParser;
 pub use grammar::StmtParser as StatementParser;
 use lalrpop_util::ParseError;
-use zea_ast::zea::visitors::altering::{
-    AcceptsAssignmentSimplifier, AcceptsBlockExpander, LabelSentinelIDs,
-    NodeLabeler,
-};
+use zea_ast::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
 use zea_ast::zea::visitors::annotating::SemanticASTViolation;
-use zea_ast::zea::visitors::label_desugar;
+
+use zea_ast::zea::visitors::Transfomer;
 use zea_ast::zea::{
-    Function, Initialization, Module, StructDataTypeDefinition, TaggedUnionDataTypeDefinition,
+    Function, InitializationBlock, Module, StructDataTypeDefinition, TaggedUnionDataTypeDefinition,
 };
 
 pub fn parse_module(
     src: &'_ str,
-) -> Result<(Module, impl NodeLabeler), ParseError<usize, lalrpop_util::lexer::Token<'_>, &'_ str>>
+) -> Result<(Module, BareNodeLabeler), ParseError<usize, lalrpop_util::lexer::Token<'_>, &'_ str>>
 {
     let p = ModuleParser::new();
     let mut module = p.parse(src)?;
-    let (module, g) = label_desugar(module);
-    Ok((module, g))
+    let mut labeler = BareNodeLabeler::new();
+    labeler.visit_module(&mut module);
+    Ok((module, labeler))
 }
 
 pub fn semantic_annotations(ast: &'_ Module) -> Result<Module, SemanticASTViolation<'_>> {
@@ -31,7 +30,7 @@ pub fn semantic_annotations(ast: &'_ Module) -> Result<Module, SemanticASTViolat
 }
 
 pub(crate) enum ModuleItem {
-    Init(Initialization),
+    Init(InitializationBlock),
     Func(Function),
     StructDef(StructDataTypeDefinition),
     EnumDef(TaggedUnionDataTypeDefinition),
@@ -40,7 +39,7 @@ pub(crate) enum ModuleItem {
 pub(crate) fn separate_module_items(
     items: Vec<ModuleItem>,
 ) -> (
-    Vec<Initialization>,
+    Vec<InitializationBlock>,
     Vec<Function>,
     Vec<StructDataTypeDefinition>,
     Vec<TaggedUnionDataTypeDefinition>,
@@ -88,7 +87,7 @@ mod tests {
             .unwrap_or_else(|e| panic!("func parse failed for {src:?}:\n  {e}"))
     }
 
-    fn parse_init(src: &str) -> Initialization {
+    fn parse_init(src: &str) -> InitializationBlock {
         InitParser::new()
             .parse(src)
             .unwrap_or_else(|e| panic!("init parse failed for {src:?}:\n  {e}"))
@@ -688,7 +687,7 @@ mod tests {
     fn stmt_nested_block() {
         assert!(matches!(
             parse_stmt("{ x := 1; }").kind,
-            StatementKind::Block(_)
+            StatementKind::SugaredBlock(_)
         ));
     }
 

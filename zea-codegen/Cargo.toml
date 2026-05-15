@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 zea-ast = {path = "../zea-ast"}
-zea-macros = { path = "../zea-macros"}
+zea-internal-macros = { path = "../zea-internal-macros" }
+qbe = "4.0.0"
 
 [lib]
 doctest = false

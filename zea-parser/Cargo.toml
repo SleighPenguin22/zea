@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 zea-ast = { path = "../zea-ast" }
-zea-macros = { path = "../zea-macros" }
+zea-internal-macros = { path = "../zea-internal-macros" }
 lalrpop-util = { version = "0.23.1", features = ["lexer", "unicode"] }
 
 [build-dependencies]

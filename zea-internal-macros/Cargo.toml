@@ -1,5 +1,5 @@
 [package]
-name = "zea-macros"
+name = "zea-internal-macros"
 version = "0.1.0"
 edition = "2024"
 

@@ -34,7 +34,7 @@ TTypedIdent:TypedIdentifier = {
 pub Mod: Module = {
     <name:ModName> <imports:ModImports?> <exports:ModExports?> <(global_vars, functions, struct_definitions, tagged_unions):ModSymbols> => {
         Module {
-            id: 0,
+            id: NodeId::sentinel(),
             imports: imports.unwrap_or(vec![]),
             exports: exports.unwrap_or(vec![]),
             global_vars,
@@ -92,7 +92,7 @@ ModSymbolsHelper: Vec<ModuleItem> = {
 pub StructDef: StructDataTypeDefinition = {
     "struct" <name:TypeIdent> "{" <members:Comma0<TTypedIdent>> "}" => {
         StructDataTypeDefinition {
-            id: 0,
+            id: NodeId::sentinel(),
             name,
             members: vec![],
         }
@@ -129,7 +129,7 @@ AssignPatInner: AssignmentPattern = {
 pub Reassign: Reassignment = {
     <i:ExprIdent> "=" <v:Expr> ";" => {
         Reassignment {
-            id: 0,
+            id: NodeId::sentinel(),
             assignee: i,
             value: v
         }
@@ -138,7 +138,7 @@ pub Reassign: Reassignment = {
 pub FuncCall: FunctionCall = {
     <subject:ExprIdent> "(" <args:Comma0<Expr>> ")" => {
         FunctionCall {
-            id: 0,
+            id: NodeId::sentinel(),
             subject: Box::new(Expression::wrap_ident(subject)),
             args
         }
@@ -152,7 +152,7 @@ pub Func: Function = {
     <funcbody:Block> => {
         let params: Vec<FuncParam> = args.into_iter().map(FuncParam::from).collect();
         Function {
-            id: 0,
+            id: NodeId::sentinel(),
             name,
             params,
             returns: TypeSpecifier::Basic("Void".to_string()),
@@ -164,14 +164,13 @@ pub Func: Function = {
     "->" <funcreturns:TType> <funcbody:Block> => {
         let params: Vec<FuncParam> = args.into_iter().map(FuncParam::from).collect();
         Function {
-            id: 0,
+            id: NodeId::sentinel(),
             name,
             params,
             returns: funcreturns,
             body: funcbody
         }
     }
-
 };
 TType:TypeSpecifier = {
    TypeIdent => {TypeSpecifier::Basic(<>)},
@@ -184,13 +183,13 @@ Block: StatementBlock = {
         let mut stmts = stmts;
         if let Some(tail) = tail {
             let tail = Statement {
-                id:0,
+                id: NodeId::sentinel(),
                 kind:StatementKind::BlockTail(tail)
             };
             stmts.push(tail);
         }
         StatementBlock {
-            id: 0,
+            id: NodeId::sentinel(),
             statements: stmts
         }
     },
@@ -199,12 +198,12 @@ Block: StatementBlock = {
 pub Stmt: Statement = {
     "return" <e:Expr> ";" => {
         Statement {
-            id: 0,
+            id: NodeId::sentinel(),
             kind: StatementKind::Return(e)
         }
     },
     <init:Init> => Statement {
-        id: 0,
+        id: NodeId::sentinel(),
         kind: StatementKind::Initialization(init)
     },
     <reinit:Reassign> => reinit.wrap_in_statement(),

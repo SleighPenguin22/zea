@@ -6,17 +6,26 @@ use zea_ast::c::{
     Expression, FunctionDeclaration, FunctionDefinition, Initialisation, Reassignment, Statement,
     StatementBlock, TypedIdentifier, VariableDeclaration,
 };
+use zea_ast::zea::visitors::annotating::ScopedIdentifierKind;
 
 pub mod node_c_conversion;
 
-pub fn canoncalize_zea_identifier(identifier: &str) -> String {
-    identifier
-        .replace("-", "_")
-        .replace("!", "_bang_")
-        .replace("?", "_maybe_")
-        // .replace("__", "_")
-        .trim_end_matches("_")
-        .to_string()
+pub fn canoncalize_zea_identifier(identifier: zea_ast::zea::ScopedIdentifier) -> String {
+    // match identifier.kind {
+    //     ScopedIdentifierKind::LocalVar => {}
+    //     ScopedIdentifierKind::GlobalVar => {}
+    //     ScopedIdentifierKind::FunctionName => {}
+    //     ScopedIdentifierKind::FunctionParam => {}
+    //     ScopedIdentifierKind::ImportItem => {}
+    // };
+    // identifier
+    //     .replace("-", "_")
+    //     .replace("!", "_bang_")
+    //     .replace("?", "_maybe_")
+    //     // .replace("__", "_")
+    //     .trim_end_matches("_")
+    //     .to_string()
+    todo!()
 }
 
 pub trait EmitC {
@@ -53,15 +62,16 @@ pub fn fold_str(iter: impl Iterator<Item = String>, with: &str) -> String {
 }
 
 pub fn fmt_typed_assignee(typename: &TypeSpecifier, assignee: &str) -> String {
-    fn fmt_assignee(typename: &TypeSpecifier, assignee: &str) -> String {
-        match typename {
-            TypeSpecifier::Basic(t) => canoncalize_zea_identifier(assignee),
-            TypeSpecifier::Pointer(t) => fmt_assignee(t.as_ref(), &format!("*{assignee}")),
-        }
-    }
-
-    let assignee = fmt_assignee(typename, assignee);
-    format!("{} {assignee}", typename.get_deepest())
+    // fn fmt_assignee(typename: &TypeSpecifier, assignee: &str) -> String {
+    //     match typename {
+    //         TypeSpecifier::Basic(t) => canoncalize_zea_identifier(assignee),
+    //         TypeSpecifier::Pointer(t) => fmt_assignee(t.as_ref(), &format!("*{assignee}")),
+    //     }
+    // }
+    //
+    // let assignee = fmt_assignee(typename, assignee);
+    // format!("{} {assignee}", typename.get_deepest())
+    todo!()
 }
 
 impl EmitC for VariableDeclaration {
@@ -172,20 +182,20 @@ mod tests {
     use zea_ast::c;
     use zea_ast::c::{TypeQualifier, TypeSpecifier};
 
-    #[test]
-    fn test_canonicalize_zea_identifier() {
-        use super::canoncalize_zea_identifier as c;
-        let s1 = "even?";
-        let s2 = "kebab-case";
-        let s3 = "map!";
-        let s4 = "unify-types?!";
-        let s5 = "unify-types?_!";
-        assert_eq!(c(s1), "even_maybe");
-        assert_eq!(c(s2), "kebab_case");
-        assert_eq!(c(s3), "map_bang");
-        assert_eq!(c(s4), "unify_types_maybe__bang");
-        assert_eq!(c(s5), "unify_types_maybe___bang");
-    }
+    // #[test]
+    // fn test_canonicalize_zea_identifier() {
+    //     use super::canoncalize_zea_identifier as c;
+    //     let s1 = "even?";
+    //     let s2 = "kebab-case";
+    //     let s3 = "map!";
+    //     let s4 = "unify-types?!";
+    //     let s5 = "unify-types?_!";
+    //     assert_eq!(c(s1), "even_maybe");
+    //     assert_eq!(c(s2), "kebab_case");
+    //     assert_eq!(c(s3), "map_bang");
+    //     assert_eq!(c(s4), "unify_types_maybe__bang");
+    //     assert_eq!(c(s5), "unify_types_maybe___bang");
+    // }
 
     #[test]
     fn test_fold_str() {

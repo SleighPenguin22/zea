@@ -4,13 +4,13 @@ use crate::zea;
 use crate::zea::typecheck::TypeCheckError::{MissingInternedTypeId, UnifyError};
 use crate::zea::visitors::annotating::ScopeAnnotations;
 use crate::zea::{
-    BinOp, ExpressionKind, Function, IfThenElse, Initialization, InitializationKind, Module,
-    SimpleInitialization, StructDataTypeDefinition, TypeSpecifier, UnOp,
+    BinOp, ExpressionKind, Function, IfThenElse, InitializationBlock, InitializationKind, Module,
+    NodeId, SimpleInitialization, StructDataTypeDefinition, TypeSpecifier, UnOp,
 };
 use crate::zea::{FunctionCall, Hasher};
 use crate::zea::{Hash, StatementKind};
 use indexmap::{IndexMap, IndexSet};
-use zea_macros::{ASTStructuralEq, HashEqById};
+use zea_internal_macros::{ASTStructuralEq, HashEqById};
 
 pub struct TupleSignature {
     members: Vec<zea::TypeSpecifier>,
@@ -18,29 +18,26 @@ pub struct TupleSignature {
 
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct HoistedDeclaration {
-    pub id: usize,
+    pub id: NodeId,
     pub typ: zea::TypeSpecifier,
     pub assignee: String,
 }
 
-#[allow(non_snake_case)]
-pub fn BUILTIN_SCALAR_TYPES() -> [zea::TypeSpecifier; 13] {
-    [
-        zea::TypeSpecifier::t_Bool(),
-        zea::TypeSpecifier::t_I8(),
-        zea::TypeSpecifier::t_I16(),
-        zea::TypeSpecifier::t_I32(),
-        zea::TypeSpecifier::t_I64(),
-        zea::TypeSpecifier::t_U8(),
-        zea::TypeSpecifier::t_U16(),
-        zea::TypeSpecifier::t_U32(),
-        zea::TypeSpecifier::t_U64(),
-        zea::TypeSpecifier::t_F32(),
-        zea::TypeSpecifier::t_F64(),
-        zea::TypeSpecifier::t_Unit(),
-        zea::TypeSpecifier::t_Never(),
-    ]
-}
+const BUILTIN_SCALAR_TYPES: [TypeSpecifier; 13] = [
+    TypeSpecifier::t_Bool(),
+    TypeSpecifier::t_I8(),
+    TypeSpecifier::t_I16(),
+    TypeSpecifier::t_I32(),
+    TypeSpecifier::t_I64(),
+    TypeSpecifier::t_U8(),
+    TypeSpecifier::t_U16(),
+    TypeSpecifier::t_U32(),
+    TypeSpecifier::t_U64(),
+    TypeSpecifier::t_F32(),
+    TypeSpecifier::t_F64(),
+    TypeSpecifier::t_Unit(),
+    TypeSpecifier::t_Never(),
+];
 
 pub enum TypeCheckError {
     UnifyError(TypeConcreteId, TypeConcreteId),
@@ -75,7 +72,7 @@ pub struct TypeInterningTable {
 impl TypeInterningTable {
     pub fn new_builtin_zea_types() -> Self {
         Self {
-            type_ids: IndexSet::from_iter(BUILTIN_SCALAR_TYPES()),
+            type_ids: IndexSet::from(BUILTIN_SCALAR_TYPES),
         }
     }
     pub fn introduce(&mut self, typ: &zea::TypeSpecifier) -> TypeConcreteId {
@@ -294,12 +291,12 @@ impl InferenceId {
 pub struct ModuleInferenceContext<'ast> {
     ast: &'ast Module,
     /// unique types within a program, use a [`TypeConcreteId`] to lookup
-    intering_table: TypeInterningTable,
+    pub intering_table: TypeInterningTable,
     /// type variables, use a [`TypeVarId`] to lookup,
     /// call [`ModuleInferenceContext::follow_inference_id`] to get the possibly known type
     subst_table: TypeVarSubstitutionTable,
     /// map a node id to its (possibly not-yet-known) type.)
-    node_types: IndexMap<usize, InferenceId>,
+    node_types: IndexMap<NodeId, InferenceId>,
     scopes: ScopeAnnotations,
 }
 
@@ -310,9 +307,18 @@ impl<'ast> ModuleInferenceContext<'ast> {
             intering_table: TypeInterningTable::new_builtin_zea_types(),
             subst_table: TypeVarSubstitutionTable::new(),
             node_types: IndexMap::new(),
-            scopes: ast.annotate_scopes(),
+            scopes: todo!(),
         }
     }
+
+    // pub fn present_final_node_types(&mut self) -> (TypeInterningTable, IndexMap<NodeId, TypeConcreteId>) {
+    //     let map = IndexMap::new();
+    //     for (_,inference_id) in self.node_types.iter_mut() {
+    //         let id = self.resolve_id_to_concrete(*inference_id).unwrap();
+    //     }
+    //
+    //     (self.intering_table, map)
+    // }
 
     pub fn typespecifier_behind_inference_id(
         &mut self,
@@ -396,7 +402,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
-    fn introduce_visit_initialisation(&mut self, init: &zea::Initialization) {
+    fn introduce_visit_initialisation(&mut self, init: &zea::InitializationBlock) {
         let zea::InitializationKind::Unpacked(unpacked) = &init.kind else {
             unreachable!()
         };
@@ -418,13 +424,13 @@ impl<'ast> ModuleInferenceContext<'ast> {
             StatementKind::Reassignment(r) => self.introduce_visit_expression(&r.value),
             StatementKind::FunctionCall(call) => self.introduce_visit_funccall(call),
             StatementKind::BlockTail(e) => self.introduce_visit_expression(e),
-            StatementKind::ExpandedBlock(b) => {
+            StatementKind::Block(b) => {
                 self.introduce_visit_block(b);
             }
             StatementKind::IfThenElse(branch) => {
                 self.introduce_visit_branch(branch);
             }
-            StatementKind::Block(_) => unreachable!(),
+            StatementKind::SugaredBlock(_) => unreachable!(),
         }
     }
 
@@ -934,7 +940,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
 
     pub fn typecheck_assignment(
         &mut self,
-        init: &mut Initialization,
+        init: &mut InitializationBlock,
     ) -> Result<(), TypeCheckError> {
         let InitializationKind::Unpacked(inits) = &mut init.kind else {
             unreachable!("AST should have assignments unpacked")

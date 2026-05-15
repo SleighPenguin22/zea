@@ -1,7 +1,7 @@
 use crate::helper_impls::StructuralEq;
 use crate::zea::{
     ExpandedBlockExpr, Expression, ExpressionKind, FuncParam, Function, FunctionCall, IfThenElse,
-    Initialization, InitializationKind, Module, PackedInitialization, SimpleInitialization,
+    InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization, SimpleInitialization,
     Statement, StatementKind,
 };
 use indexmap::IndexSet;
@@ -18,7 +18,7 @@ pub enum ScopedIdentifierKind {
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct ScopedIdentifier {
     pub ident: String,
-    pub origin: usize,
+    pub origin: NodeId,
     pub kind: ScopedIdentifierKind,
 }
 impl StructuralEq for ScopedIdentifier {
@@ -28,28 +28,28 @@ impl StructuralEq for ScopedIdentifier {
 }
 
 impl ScopedIdentifier {
-    pub fn local(origin: usize, ident: &str) -> Self {
+    pub fn local(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
             ident: ident.to_string(),
             kind: ScopedIdentifierKind::LocalVar,
         }
     }
-    pub fn global(origin: usize, ident: &str) -> Self {
+    pub fn global(origin: NodeId, ident: &str) -> Self {
         Self {
             origin,
             ident: ident.to_string(),
             kind: ScopedIdentifierKind::GlobalVar,
         }
     }
-    pub fn func_name(origin: usize, ident: &str) -> Self {
+    pub fn func_name(origin: NodeId, ident: &str) -> Self {
         Self {
             origin,
             ident: ident.to_string(),
             kind: ScopedIdentifierKind::FunctionName,
         }
     }
-    pub fn func_param(origin: usize, ident: &str) -> Self {
+    pub fn func_param(origin: NodeId, ident: &str) -> Self {
         Self {
             origin,
             ident: ident.to_string(),
@@ -60,13 +60,13 @@ impl ScopedIdentifier {
         ScopedIdentifier::func_param(func_param.id, func_param.name.as_ref())
     }
     pub fn from_local_init(init: &SimpleInitialization) -> Self {
-        ScopedIdentifier::local(init.id, init.assignee.as_ref())
+        ScopedIdentifier::local(init.id, init.assignee.clone())
     }
     pub fn from_global_init(init: &SimpleInitialization) -> Self {
         ScopedIdentifier::global(init.id, init.assignee.as_ref())
     }
 
-    pub fn import_item(origin: usize, ident: &str) -> Self {
+    pub fn import_item(origin: NodeId, ident: &str) -> Self {
         Self {
             origin,
             ident: ident.to_string(),
@@ -112,7 +112,7 @@ impl ScopeAnnotations {
         }
     }
 
-    fn gather_idents_local_stmt(&mut self, init: &Initialization) {
+    fn gather_idents_local_stmt(&mut self, init: &InitializationBlock) {
         let InitializationKind::Unpacked(u) = &init.kind else {
             unreachable!()
         };
@@ -122,7 +122,7 @@ impl ScopeAnnotations {
         }
     }
 
-    fn gather_idents_global_init(&mut self, init: &Initialization) {
+    fn gather_idents_global_init(&mut self, init: &InitializationBlock) {
         let InitializationKind::Unpacked(u) = &init.kind else {
             unreachable!()
         };
@@ -152,10 +152,10 @@ impl ScopeAnnotations {
             StatementKind::FunctionCall(call) => self.gather_idents_call(call),
             StatementKind::Return(e) => self.gather_idents_expr(e),
             StatementKind::BlockTail(e) => self.gather_idents_expr(e),
-            StatementKind::ExpandedBlock(eb) => self.gather_idents_block(eb),
+            StatementKind::Block(eb) => self.gather_idents_block(eb),
             StatementKind::IfThenElse(ite) => self.gather_idents_branch(ite),
 
-            StatementKind::Block(_) => unreachable!(),
+            StatementKind::SugaredBlock(_) => unreachable!(),
         }
     }
 
@@ -205,10 +205,10 @@ impl ScopeAnnotations {
 /// This visitor will be called after each of the expansion-visitors
 /// to ensure a correct AST before moving on to static analysis.
 pub struct ASTValidator {
-    ids: HashSet<usize>,
+    ids: HashSet<NodeId>,
 }
 pub enum SemanticASTViolation<'ast> {
-    UntypedGlobalVar(&'ast Initialization),
+    UntypedGlobalVar(&'ast InitializationBlock),
     UnexpandedBlock(&'ast Statement),
     StrayPackedAssignment(&'ast PackedInitialization),
 }

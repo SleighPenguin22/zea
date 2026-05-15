@@ -1,5 +1,6 @@
 module main
 
-fn f() -> Int {
-    (a,b,c) := v;
+
+fn g() -> U {
+    @(a,b) := 1;
 }
