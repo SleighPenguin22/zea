@@ -598,7 +598,7 @@ mod block_expander_tests {
 
         let g = AssignmentSimplifier::labeler_from(g);
 
-        stmt.simplify_assignments_with(g);
+        stmt.simplify_assignments_after(g);
 
         println!("_________________--\nMODULE END TO END\n\n");
         println!("{}", stmt.indent_print(0));

@@ -1,11 +1,11 @@
 use crate::helper_impls::StructuralEq;
+use crate::zea::visitors::{walk_block, Visitor};
 use crate::zea::{
     ExpandedBlockExpr, Expression, ExpressionKind, FuncParam, Function, FunctionCall, IfThenElse,
     InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
     SimpleInitialization, Statement, StatementKind,
 };
 use indexmap::{IndexMap, IndexSet};
-use std::collections::HashSet;
 
 type NodeIdMap<T> = IndexMap<NodeId, T>;
 type NodeIdSet = IndexSet<NodeId>;
@@ -205,11 +205,26 @@ impl ScopeAnnotations {
 
 /// This visitor will be called after each of the expansion-visitors
 /// to ensure a correct AST before moving on to static analysis.
-pub struct ASTValidator {
-    ids: HashSet<NodeId>,
-}
+pub struct ASTValidator {}
 pub enum SemanticASTViolation<'ast> {
     UntypedGlobalVar(&'ast InitializationBlock),
     UnexpandedBlock(&'ast Statement),
     StrayPackedAssignment(&'ast PackedInitialization),
+}
+impl ASTValidator {
+    pub fn blocks_expanded_in_module(module: &Module) -> Result<(), NodeId> {
+        let mut validator = Self {};
+        validator.visit_module(module)
+    }
+}
+
+impl Visitor for ASTValidator {
+    type VisitorOk = ();
+    type VisitorError = NodeId;
+    fn visit_block(
+        &mut self,
+        block: &ExpandedBlockExpr,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        walk_block(self, block)
+    }
 }

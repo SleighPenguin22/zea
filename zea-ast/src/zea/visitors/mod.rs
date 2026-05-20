@@ -1,6 +1,6 @@
 pub mod altering;
 
-use crate::zea::visitors::altering::{BlockExpander, NodeLabeler};
+use crate::zea::visitors::altering::{AssignmentSimplifier, BlockExpander, NodeLabeler};
 use crate::zea::{
     AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
     IfThenElse, InitializationBlock, InitializationKind, Module, PackedInitialization,
@@ -644,4 +644,29 @@ fn walk_mut_module<V: Transfomer>(
         v.visit_structdef(datatype)?;
     }
     Ok(V::TransformerOk::default())
+}
+impl Module {
+    pub fn visit_self_with<V: Visitor + NodeLabeler>(
+        &mut self,
+        labeler: impl NodeLabeler,
+    ) -> Result<V, V::VisitorError> {
+        let mut v: V = labeler.labeler_into();
+        v.visit_module(self).map(|_| v)
+    }
+
+    pub fn transform_self_with<V: Transfomer + NodeLabeler>(
+        &mut self,
+        labeler: impl NodeLabeler,
+    ) -> Result<V, V::TransformerError> {
+        let mut v: V = labeler.labeler_into();
+        v.visit_module(self).map(|_| v)
+    }
+
+    pub fn expand_blocks_with(&mut self, labeler: impl NodeLabeler) -> BlockExpander {
+        self.transform_self_with(labeler).unwrap()
+    }
+
+    pub fn simplify_assignments_after(&mut self, labeler: impl NodeLabeler) -> AssignmentSimplifier {
+        self.transform_self_with(labeler).unwrap()
+    }
 }
