@@ -525,6 +525,7 @@ impl StructuralEq for StatementKind {
         }
     }
 }
+/// A packed or unpacked initialisation
 #[derive(Debug, Clone)]
 pub struct InitializationBlock {
     pub id: NodeId,
@@ -554,7 +555,15 @@ impl InitializationBlock {
         }
     }
 }
-
+/// An assignment to a pattern
+/// This node is an intermediate, high level node that gets desugared into a series of assignments
+///
+/// Has one of the forms
+/// - `var: type? = value`
+/// - `@(pat1, pat2, ..., patN): type? = value`
+///
+/// NOTE:
+/// Support for enum destructuring to be added later
 #[derive(Debug, Clone)]
 pub struct PackedInitialization {
     pub typ: Option<TypeSpecifier>,
@@ -583,6 +592,10 @@ impl StructuralEq for PackedInitialization {
 }
 
 /// An assignment to a simple, totally unpacked variable.
+///
+/// Has one of the forms
+/// - `var := value`
+/// - `var: type = value`
 #[derive(Debug, Clone)]
 pub struct SimpleInitialization {
     pub id: NodeId,

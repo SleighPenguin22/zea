@@ -1,4 +1,6 @@
 module main
 
 
-fn foo() -> U {}
+fn foo() -> U {
+    @(a,(b,(c,d))) := coord(1,2);
+}

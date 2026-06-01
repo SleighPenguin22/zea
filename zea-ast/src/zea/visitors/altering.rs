@@ -2,7 +2,7 @@ use crate::zea::visitors::annotating::{ScopeAnnotations, ScopedIdentifier};
 use crate::zea::visitors::{
     walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef, walk_mut_initblock,
     walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef, walk_mut_unpacked_init,
-    Transfomer, Visitor,
+    Transfomer,
 };
 use crate::zea::{
     AssignmentPattern, BlockExpression, Expression, ExpressionKind, Function, FunctionCall,
@@ -243,26 +243,15 @@ pub struct NotInScopeError {
     scope_id: usize,
 }
 
-impl IdentifierScoper {
-    pub fn new(ast: &Module) -> Self {
-        Self {
-            scope_stack: vec![ast.id],
-            scope_annotations: ScopeAnnotations::new(),
-        }
-    }
-    fn enter_scope(&mut self, scope: NodeId) {
-        self.scope_stack.push(scope)
-    }
-    fn exit_scope(&mut self) {
-        self.scope_stack.pop();
-    }
-    fn current_scope(&self) -> NodeId {
-        *self.scope_stack.last().unwrap()
-    }
-
-    pub(crate) fn visit_module(&mut self, module: &mut Module) -> Result<(), NotInScopeError> {
+impl Transfomer for IdentifierScoper {
+    type TransformerOk = ();
+    type TransformerError = NotInScopeError;
+    fn visit_module(
+        &mut self,
+        module: &mut Module,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         for glob_var in module.global_vars.iter_mut() {
-            self.visit_init(glob_var)?;
+            self.visit_initblock(glob_var)?;
         }
 
         for func in module.functions.iter_mut() {
@@ -273,7 +262,10 @@ impl IdentifierScoper {
         }
         Ok(())
     }
-    fn visit_init(&mut self, init: &mut InitializationBlock) -> Result<(), NotInScopeError> {
+    fn visit_initblock(
+        &mut self,
+        init: &mut InitializationBlock,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         let InitializationKind::Unpacked(u) = &mut init.kind else {
             unreachable!("assignments should be expanded")
         };
@@ -282,7 +274,10 @@ impl IdentifierScoper {
         }
         Ok(())
     }
-    fn visit_expr(&mut self, expr: &mut Expression) -> Result<(), NotInScopeError> {
+    fn visit_expr(
+        &mut self,
+        expr: &mut Expression,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         match &mut expr.kind {
             ExpressionKind::Unit => {}
             ExpressionKind::IntegerLiteral(_) => {}
@@ -306,17 +301,12 @@ impl IdentifierScoper {
         }
         Ok(())
     }
-    fn visit_block(&mut self, block: &mut BlockExpression) -> Result<(), NotInScopeError> {
-        self.enter_scope(block.id);
-        for stmt in block.statements.iter_mut() {
-            self.visit_stmt(stmt)?;
-        }
-        self.exit_scope();
-        Ok(())
-    }
-    fn visit_stmt(&mut self, stmt: &mut Statement) -> Result<(), NotInScopeError> {
+    fn visit_stmt(
+        &mut self,
+        stmt: &mut Statement,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
         match &mut stmt.kind {
-            StatementKind::Initialization(init) => self.visit_init(init),
+            StatementKind::Initialization(init) => self.visit_initblock(init),
             StatementKind::Reassignment(reinit) => self.visit_reassignment(reinit),
             StatementKind::FunctionCall(call) => self.visit_call(call),
             StatementKind::Return(e) => self.visit_expr(e),
@@ -325,27 +315,36 @@ impl IdentifierScoper {
             StatementKind::IfThenElse(ite) => self.visit_branch(ite),
         }
     }
+    fn visit_block(
+        &mut self,
+        block: &mut BlockExpression,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
+        self.enter_scope(block.id);
+        for stmt in block.statements.iter_mut() {
+            self.visit_stmt(stmt)?;
+        }
+        self.exit_scope();
+        Ok(())
+    }
+}
+
+impl IdentifierScoper {
+    pub fn new(ast: &Module) -> Self {
+        Self {
+            scope_stack: vec![ast.id],
+            scope_annotations: ScopeAnnotations::new(),
+        }
+    }
+    fn enter_scope(&mut self, scope: NodeId) {
+        self.scope_stack.push(scope)
+    }
+    fn exit_scope(&mut self) {
+        self.scope_stack.pop();
+    }
+    fn current_scope(&self) -> NodeId {
+        *self.scope_stack.last().unwrap()
+    }
     fn search_for(&mut self, _ident: &str) -> Result<ScopedIdentifier, NotInScopeError> {
         todo!()
-    }
-
-    fn visit_branch(&mut self, branch: &mut IfThenElse) -> Result<(), NotInScopeError> {
-        self.visit_expr(&mut branch.condition)?;
-        self.visit_expr(&mut branch.true_case)?;
-        if let Some(false_case) = &mut branch.false_case {
-            self.visit_expr(false_case)?;
-        }
-        Ok(())
-    }
-
-    fn visit_call(&mut self, call: &mut FunctionCall) -> Result<(), NotInScopeError> {
-        for arg in call.args.iter_mut() {
-            self.visit_expr(arg)?;
-        }
-        Ok(())
-    }
-
-    fn visit_reassignment(&mut self, reinit: &mut Reassignment) -> Result<(), NotInScopeError> {
-        self.visit_expr(&mut reinit.value)
     }
 }
