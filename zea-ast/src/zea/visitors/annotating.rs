@@ -1,7 +1,7 @@
 use crate::helper_impls::StructuralEq;
 use crate::zea::visitors::{walk_block, Visitor};
 use crate::zea::{
-    ExpandedBlockExpr, Expression, ExpressionKind, FuncParam, Function, FunctionCall, IfThenElse,
+    BlockExpression, Expression, ExpressionKind, FuncParam, Function, FunctionCall, IfThenElse,
     InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
     SimpleInitialization, Statement, StatementKind,
 };
@@ -155,8 +155,6 @@ impl ScopeAnnotations {
             StatementKind::BlockTail(e) => self.gather_idents_expr(e),
             StatementKind::Block(eb) => self.gather_idents_block(eb),
             StatementKind::IfThenElse(ite) => self.gather_idents_branch(ite),
-
-            StatementKind::SugaredBlock(_) => unreachable!(),
         }
     }
 
@@ -177,9 +175,8 @@ impl ScopeAnnotations {
             ExpressionKind::UnOpExpr(_, arg) => self.gather_idents_expr(arg),
             ExpressionKind::MemberAccess(data, _) => self.gather_idents_expr(data),
             ExpressionKind::IfThenElse(ite) => self.gather_idents_branch(ite),
-            ExpressionKind::ExpandedBlock(eb) => self.gather_idents_block(eb),
-
-            ExpressionKind::Block(_) | ExpressionKind::ScopedIdent(_) => unreachable!(),
+            ExpressionKind::Block(eb) => self.gather_idents_block(eb),
+            ExpressionKind::ScopedIdent(_) => todo!("gather scoped ident"),
         }
     }
     fn gather_idents_call(&mut self, call: &FunctionCall) {
@@ -195,7 +192,7 @@ impl ScopeAnnotations {
         }
     }
 
-    fn gather_idents_block(&mut self, block: &ExpandedBlockExpr) {
+    fn gather_idents_block(&mut self, block: &BlockExpression) {
         for stmt in block.statements.iter() {
             self.gather_idents_stmt(stmt);
         }
@@ -223,7 +220,7 @@ impl Visitor for ASTValidator {
     type VisitorError = NodeId;
     fn visit_block(
         &mut self,
-        block: &ExpandedBlockExpr,
+        block: &BlockExpression,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_block(self, block)
     }

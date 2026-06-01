@@ -6,26 +6,16 @@
 // }
 
 use std::fs::read_to_string;
-use std::process::exit;
 use zea_ast::visualisation::IndentPrint;
 use zea_parser::parse_module;
 
 fn main() {
     let src = read_to_string("zea-driver/test.zea").unwrap();
-    let (mut module, generator) = match parse_module(&src) {
-        Ok((module, generator)) => {
-            // println!("parsed {}", module.indent_print(0));
-            (module, generator)
-        }
-        Err(e) => {
-            eprintln!("{e}");
-            exit(1)
-        }
-    };
+    let (mut module, generator) = parse_module(&src);
+
     println!("after expansions:\n{}", module.indent_print(0));
-
-    let block_expander = module.expand_blocks_with(generator);
-    module.simplify_assignments_after(block_expander);
-
+    //
+    module.simplify_assignments_after(generator);
+    //
     println!("after expansions:\n{}", module.indent_print(0));
 }

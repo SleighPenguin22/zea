@@ -19,7 +19,7 @@ pub struct TupleSignature {
 #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
 pub struct HoistedDeclaration {
     pub id: NodeId,
-    pub typ: zea::TypeSpecifier,
+    pub typ: TypeSpecifier,
     pub assignee: String,
 }
 
@@ -393,12 +393,11 @@ impl<'ast> ModuleInferenceContext<'ast> {
             | ExpressionKind::MemberAccess(_, _)
             | ExpressionKind::ScopedIdent(_)
             | ExpressionKind::IfThenElse(_)
-            | ExpressionKind::ExpandedBlock(_)
+            | ExpressionKind::Block(_)
             | ExpressionKind::UnScopedIdent(_) => {
                 self.introduce_visit_expression_non_trivial_type(expr)
             }
             ExpressionKind::StringLiteral(_) => todo!("string types for Zea"),
-            ExpressionKind::Block(_) => unreachable!("ast should have unexpanded blocks removed"),
         }
     }
 
@@ -410,7 +409,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
             self.introduce_visit_expression(&init.value);
         }
     }
-    fn introduce_visit_block(&mut self, block: &zea::ExpandedBlockExpr) {
+    fn introduce_visit_block(&mut self, block: &zea::BlockExpression) {
         for stmt in block.statements.iter() {
             self.introduce_visit_statement(stmt);
         }
@@ -430,7 +429,6 @@ impl<'ast> ModuleInferenceContext<'ast> {
             StatementKind::IfThenElse(branch) => {
                 self.introduce_visit_branch(branch);
             }
-            StatementKind::SugaredBlock(_) => unreachable!(),
         }
     }
 
@@ -482,13 +480,10 @@ impl<'ast> ModuleInferenceContext<'ast> {
 
                 self.introduce_visit_branch(branch);
             }
-            ExpressionKind::ExpandedBlock(block) => {
+            ExpressionKind::Block(block) => {
                 let var = self.subst_table.fresh();
                 self.node_types.insert(expr.id, var.into());
                 self.introduce_visit_block(block);
-            }
-            ExpressionKind::Block(_) => {
-                unreachable!("AST should not contain any un-expanded blocks")
             }
             _ => unreachable!(
                 "AST node with id {} is not a non-trivial expression: {:?}",
@@ -716,7 +711,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
 
     pub fn infer_block(&mut self, block: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
         let id = self.get_inference_id(block)?;
-        let ExpressionKind::ExpandedBlock(block) = &block.kind else {
+        let ExpressionKind::Block(block) = &block.kind else {
             panic!("infer_block expects block, got {:?}", block.kind)
         };
         let t = self.infer_expr(&block.last)?;
@@ -924,7 +919,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
     pub fn infer_expr(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
         match &expr.kind {
             ExpressionKind::IfThenElse(_) => self.infer_branch(expr),
-            ExpressionKind::ExpandedBlock(_) => self.infer_block(expr),
+            ExpressionKind::Block(_) => self.infer_block(expr),
             ExpressionKind::UnScopedIdent(_) => self.infer_ident(expr),
             ExpressionKind::FunctionCall(_) => self.infer_func_call(expr),
             ExpressionKind::BinOpExpr(_, _, _) => self.infer_binop(expr),

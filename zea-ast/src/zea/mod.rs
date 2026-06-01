@@ -218,7 +218,7 @@ pub(crate) mod test_ast_macros {
             use crate::zea::{Expression,ExpressionKind,StatementBlock};
             Expression {
                 id: NodeId::sentinel(),
-                kind: ExpressionKind::Block($block)
+                kind: ExpressionKind::SugaredBlock($block)
             }
             }
         }
@@ -287,7 +287,7 @@ pub(crate) mod test_ast_macros {
     pub(crate) use ztyp;
 }
 
-pub use crate::zea::visitors::altering::{BareNodeLabeler, BlockExpander, NodeLabeler};
+pub use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
 pub use crate::zea::visitors::annotating::ScopedIdentifier;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -382,7 +382,7 @@ pub struct Function {
     pub name: String,
     pub params: Vec<FuncParam>,
     pub returns: TypeSpecifier,
-    pub body: StatementBlock,
+    pub body: BlockExpression,
 }
 impl StructuralEq for Function {
     fn eq_ignore_id(&self, other: &Self) -> bool {
@@ -447,12 +447,10 @@ pub enum StatementKind {
     /// A tailing expression in a block
     BlockTail(Expression),
 
-    /// A Block of statements
-    SugaredBlock(StatementBlock),
     // CondMatch(Box<ConditionMatch>),
 
     // after expansion
-    Block(ExpandedBlockExpr),
+    Block(BlockExpression),
     IfThenElse(IfThenElse),
 }
 
@@ -497,15 +495,6 @@ impl StructuralEq for StatementKind {
                 true
             }
             (StatementKind::BlockTail(sf0), StatementKind::BlockTail(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (StatementKind::SugaredBlock(sf0), StatementKind::SugaredBlock(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -708,48 +697,9 @@ impl FunctionCall {
         }
     }
 }
-#[derive(Debug, Clone)]
-pub struct StatementBlock {
-    pub id: NodeId,
-    pub statements: Vec<Statement>,
-}
-impl StructuralEq for StatementBlock {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.statements).eq_ignore_id(&other.statements);
-        is_eq
-    }
-}
-impl StatementBlock {
-    pub fn wrap_in_expression(self) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::Block(self),
-        }
-    }
-    pub fn wrap_in_statement(self) -> Statement {
-        Statement {
-            id: NodeId::sentinel(),
-            kind: StatementKind::SugaredBlock(self),
-        }
-    }
-}
-
-impl IntoIterator for StatementBlock {
-    type Item = Statement;
-    type IntoIter = <Vec<Statement> as IntoIterator>::IntoIter;
-    fn into_iter(self) -> Self::IntoIter {
-        self.statements.into_iter()
-    }
-}
-impl StatementBlock {
-    pub fn as_slice(&self) -> &[Statement] {
-        self.statements.as_slice()
-    }
-}
 
 #[derive(Clone, Debug)]
-pub struct ExpandedBlockExpr {
+pub struct BlockExpression {
     /// The label that the block expression has its value assigned to
     /// i.e. `__block0`, `__block1` etc.
     /// This label must be unique to the scope of the function in which it exists
@@ -757,7 +707,23 @@ pub struct ExpandedBlockExpr {
     pub statements: Vec<Statement>,
     pub last: Expression,
 }
-impl StructuralEq for ExpandedBlockExpr {
+
+impl BlockExpression {
+    pub fn wrap_in_statement(self) -> Statement {
+        Statement {
+            id: NodeId::sentinel(),
+            kind: StatementKind::Block(self),
+        }
+    }
+    pub fn wrap_in_expression(self) -> Expression {
+        Expression {
+            id: NodeId::sentinel(),
+            kind: ExpressionKind::Block(Box::new(self)),
+        }
+    }
+}
+
+impl StructuralEq for BlockExpression {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.statements).eq_ignore_id(&other.statements);
@@ -804,9 +770,7 @@ impl Expression {
     pub fn scoped_local(ident: String, origin: NodeId) -> Expression {
         Expression {
             id: NodeId::sentinel(),
-            kind: ExpressionKind::ScopedIdent(
-                ScopedIdentifier::local(origin, ident)
-            ),
+            kind: ExpressionKind::ScopedIdent(ScopedIdentifier::local(origin, ident)),
         }
     }
 
@@ -868,13 +832,12 @@ pub enum ExpressionKind {
     MemberAccess(Box<Expression>, String),
     IfThenElse(IfThenElse),
 
-    Block(StatementBlock),
     // PatternMatch(PatternMatch),
     // ConditionMatch(ConditionMatch),
     // IfThenElse(IfThenElse),
 
     // after expansion
-    ExpandedBlock(Box<ExpandedBlockExpr>),
+    Block(Box<BlockExpression>),
 }
 impl StructuralEq for ExpressionKind {
     // initial pass
@@ -986,16 +949,8 @@ impl StructuralEq for ExpressionKind {
             {
                 true
             }
+
             (ExpressionKind::Block(sf0), ExpressionKind::Block(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::ExpandedBlock(sf0), ExpressionKind::ExpandedBlock(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -1010,9 +965,9 @@ impl StructuralEq for ExpressionKind {
 }
 
 impl Expression {
-    pub const fn unit(id: NodeId) -> Self {
+    pub const fn unit() -> Self {
         Expression {
-            id,
+            id: NodeId::sentinel(),
             kind: ExpressionKind::Unit,
         }
     }
@@ -1027,12 +982,6 @@ impl Expression {
         Expression {
             id: NodeId::sentinel(),
             kind: ExpressionKind::UnOpExpr(op, Box::new(e)),
-        }
-    }
-    pub const fn block(b: StatementBlock) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::Block(b),
         }
     }
 
@@ -1519,7 +1468,7 @@ pub enum ASTNode {
     IfThenElse(IfThenElse),
     FunctionCall(FunctionCall),
     FuncDef(Function),
-    ExpandedBlockExpr(ExpandedBlockExpr),
+    ExpandedBlockExpr(BlockExpression),
     Initialization(InitializationBlock),
     Reassignment(Reassignment),
     Module(Module),
@@ -1547,7 +1496,7 @@ impl ASTNode {
         }
     }
 
-    pub const fn as_block(&self) -> Option<&ExpandedBlockExpr> {
+    pub const fn as_block(&self) -> Option<&BlockExpression> {
         match self {
             Self::ExpandedBlockExpr(v) => Some(v),
             _ => None,

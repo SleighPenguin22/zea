@@ -1,11 +1,11 @@
 pub mod altering;
 
-use crate::zea::visitors::altering::{AssignmentSimplifier, BlockExpander, NodeLabeler};
+use crate::zea::visitors::altering::{AssignmentSimplifier, NodeLabeler};
 use crate::zea::{
-    AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
+    AssignmentPattern, BlockExpression, Expression, ExpressionKind, Function, FunctionCall,
     IfThenElse, InitializationBlock, InitializationKind, Module, PackedInitialization,
     PartiallyUnpackedInitialization, Reassignment, ScopedIdentifier, SimpleInitialization,
-    Statement, StatementBlock, StatementKind, StructDataTypeDefinition, TypeSpecifier,
+    Statement, StatementKind, StructDataTypeDefinition, TypeSpecifier,
 };
 use std::ops::Deref;
 
@@ -26,16 +26,10 @@ pub trait Visitor: Sized {
     fn visit_call(&mut self, call: &FunctionCall) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_call(self, call)
     }
-    fn visit_sugared_block(
-        &mut self,
-        sugared_block: &StatementBlock,
-    ) -> Result<Self::VisitorOk, Self::VisitorError> {
-        walk_sugared_block(self, sugared_block)
-    }
 
     fn visit_block(
         &mut self,
-        block: &ExpandedBlockExpr,
+        block: &BlockExpression,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_block(self, block)
     }
@@ -129,16 +123,10 @@ pub trait Transfomer: Sized {
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_call(self, call)
     }
-    fn visit_sugared_block(
-        &mut self,
-        sugared_block: &mut StatementBlock,
-    ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        walk_mut_sugared_block(self, sugared_block)
-    }
 
     fn visit_block(
         &mut self,
-        block: &mut ExpandedBlockExpr,
+        block: &mut BlockExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_block(self, block)
     }
@@ -241,10 +229,8 @@ fn walk_expr<'v, V: Visitor>(v: &mut V, e: &Expression) -> Result<V::VisitorOk, 
         ExpressionKind::IfThenElse(ite) => {
             v.visit_branch(ite)?;
         }
-        ExpressionKind::Block(b) => {
-            v.visit_sugared_block(b)?;
-        }
-        ExpressionKind::ExpandedBlock(eb) => {
+
+        ExpressionKind::Block(eb) => {
             v.visit_block(eb)?;
         }
     }
@@ -257,7 +243,7 @@ fn walk_stmt<'v, V: Visitor>(v: &mut V, s: &Statement) -> Result<V::VisitorOk, V
         StatementKind::FunctionCall(c) => v.visit_call(c),
         StatementKind::Return(e) => v.visit_expr(e),
         StatementKind::BlockTail(t) => v.visit_expr(t),
-        StatementKind::SugaredBlock(b) => v.visit_sugared_block(b),
+
         StatementKind::Block(eb) => v.visit_block(eb),
         StatementKind::IfThenElse(ite) => v.visit_branch(ite),
     }
@@ -285,19 +271,10 @@ fn walk_call<V: Visitor>(v: &mut V, c: &FunctionCall) -> Result<V::VisitorOk, V:
     Ok(V::VisitorOk::default())
 }
 
-fn walk_sugared_block<V: Visitor>(
-    v: &mut V,
-    block: &StatementBlock,
-) -> Result<V::VisitorOk, V::VisitorError> {
-    for stmt in block.statements.iter() {
-        v.visit_stmt(stmt)?;
-    }
-    Ok(V::VisitorOk::default())
-}
 
 fn walk_block<V: Visitor>(
     v: &mut V,
-    block: &ExpandedBlockExpr,
+    block: &BlockExpression,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     for stmt in block.statements.iter() {
         v.visit_stmt(stmt)?;
@@ -389,7 +366,7 @@ fn walk_initblock<V: Visitor>(
 
 fn walk_funcdef<V: Visitor>(v: &mut V, f: &Function) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_type(&f.returns)?;
-    v.visit_sugared_block(&f.body)?;
+    v.visit_block(&f.body)?;
     for param in f.params.iter() {
         v.visit_type(&param.typ)?;
     }
@@ -449,10 +426,8 @@ fn walk_mut_expr<'v, V: Transfomer>(
         ExpressionKind::IfThenElse(ite) => {
             v.visit_branch(ite)?;
         }
-        ExpressionKind::Block(b) => {
-            v.visit_sugared_block(b)?;
-        }
-        ExpressionKind::ExpandedBlock(eb) => {
+
+        ExpressionKind::Block(eb) => {
             v.visit_block(eb)?;
         }
     };
@@ -468,7 +443,6 @@ fn walk_mut_stmt<'v, V: Transfomer>(
         StatementKind::FunctionCall(c) => v.visit_call(c),
         StatementKind::Return(e) => v.visit_expr(e),
         StatementKind::BlockTail(t) => v.visit_expr(t),
-        StatementKind::SugaredBlock(b) => v.visit_sugared_block(b),
         StatementKind::Block(eb) => v.visit_block(eb),
         StatementKind::IfThenElse(ite) => v.visit_branch(ite),
     }
@@ -503,19 +477,9 @@ fn walk_mut_call<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_sugared_block<V: Transfomer>(
-    v: &mut V,
-    block: &mut StatementBlock,
-) -> Result<V::TransformerOk, V::TransformerError> {
-    for stmt in block.statements.iter_mut() {
-        v.visit_stmt(stmt)?;
-    }
-    Ok(V::TransformerOk::default())
-}
-
 fn walk_mut_block<V: Transfomer>(
     v: &mut V,
-    block: &mut ExpandedBlockExpr,
+    block: &mut BlockExpression,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     for stmt in block.statements.iter_mut() {
         v.visit_stmt(stmt)?;
@@ -613,7 +577,7 @@ fn walk_mut_funcdef<V: Transfomer>(
     f: &mut Function,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_type(&mut f.returns)?;
-    v.visit_sugared_block(&mut f.body)?;
+    v.visit_block(&mut f.body)?;
     for param in f.params.iter_mut() {
         v.visit_type(&mut param.typ)?;
     }
@@ -662,11 +626,10 @@ impl Module {
         v.visit_module(self).map(|_| v)
     }
 
-    pub fn expand_blocks_with(&mut self, labeler: impl NodeLabeler) -> BlockExpander {
-        self.transform_self_with(labeler).unwrap()
-    }
-
-    pub fn simplify_assignments_after(&mut self, labeler: impl NodeLabeler) -> AssignmentSimplifier {
+    pub fn simplify_assignments_after(
+        &mut self,
+        labeler: impl NodeLabeler,
+    ) -> AssignmentSimplifier {
         self.transform_self_with(labeler).unwrap()
     }
 }

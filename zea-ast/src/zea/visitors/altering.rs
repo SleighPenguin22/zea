@@ -1,15 +1,13 @@
-use crate::visualisation::IndentPrint;
 use crate::zea::visitors::annotating::{ScopeAnnotations, ScopedIdentifier};
 use crate::zea::visitors::{
     walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef, walk_mut_initblock,
-    walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef, walk_mut_sugared_block,
-    walk_mut_unpacked_init, Transfomer, Visitor,
+    walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef, walk_mut_unpacked_init,
+    Transfomer, Visitor,
 };
 use crate::zea::{
-    AssignmentPattern, ExpandedBlockExpr, Expression, ExpressionKind, Function, FunctionCall,
+    AssignmentPattern, BlockExpression, Expression, ExpressionKind, Function, FunctionCall,
     IfThenElse, InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
-    Reassignment, SimpleInitialization, Statement, StatementBlock, StatementKind,
-    StructDataTypeDefinition,
+    Reassignment, SimpleInitialization, Statement, StatementKind, StructDataTypeDefinition,
 };
 
 pub trait NodeLabeler: Sized {
@@ -63,7 +61,7 @@ impl Transfomer for BareNodeLabeler {
     type TransformerError = ();
     fn visit_block(
         &mut self,
-        block: &mut ExpandedBlockExpr,
+        block: &mut BlockExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut block.id);
         walk_mut_block(self, block)
@@ -137,13 +135,6 @@ impl Transfomer for BareNodeLabeler {
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut structdef.id);
         walk_mut_structdef(self, structdef)
-    }
-    fn visit_sugared_block(
-        &mut self,
-        sugared_block: &mut StatementBlock,
-    ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        self.update_label(&mut sugared_block.id);
-        walk_mut_sugared_block(self, sugared_block)
     }
 }
 
@@ -241,85 +232,6 @@ impl AssignmentSimplifier {
     }
 }
 
-#[derive(Default)]
-pub struct BlockExpander {
-    label: usize,
-    // hoisted_global_decls: HashSet<HoistedFunctionSignature>,
-    // /// All the types needed for a
-    // hoisted_global_types: HashSet<StructDefinition>,
-    // /// All the hoisted variable declarations within a function (blocks as expressions)
-    // hoisted_local_function_decls: HashMap<HoistedFunctionSignature, Vec<TypedIdentifier>>,
-}
-
-/// Tranform some node into a given variant, and label it.
-
-impl NodeLabeler for BlockExpander {
-    fn labeler_from(mut other_generator: impl NodeLabeler) -> Self {
-        Self {
-            label: other_generator.next_id().0,
-        }
-    }
-    fn next_id(&mut self) -> NodeId {
-        let label = self.label;
-        self.label += 1;
-        NodeId(label)
-    }
-}
-
-impl Transfomer for BlockExpander {
-    type TransformerError = ();
-    type TransformerOk = ();
-    fn visit_stmt(
-        &mut self,
-        stmt: &mut Statement,
-    ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        match &mut stmt.kind {
-            StatementKind::Initialization(_) => {}
-            StatementKind::Reassignment(_) => {}
-            StatementKind::FunctionCall(_) => {}
-            StatementKind::Return(_) => {}
-            StatementKind::BlockTail(_) => {}
-            StatementKind::SugaredBlock(sb) => {
-                let eb = self.expand_expr_block(sb.clone());
-                stmt.kind = StatementKind::Block(eb);
-            }
-            StatementKind::Block(_) => {}
-            StatementKind::IfThenElse(_) => {}
-        }
-        walk_mut_stmt(self, stmt)
-    }
-}
-
-impl BlockExpander {
-    pub fn new() -> Self {
-        Self { label: 1 }
-    }
-
-    /// Expand some expression block
-    ///
-    /// Inserts a unit-tail if the block does not end with a tail expression.
-    pub fn expand_expr_block(&mut self, mut block: StatementBlock) -> ExpandedBlockExpr {
-        let (statements, last) = match block.statements.last().cloned() {
-            Some(Statement {
-                kind: StatementKind::BlockTail(tail),
-                ..
-            }) => {
-                // we have already captured the tail expression in the pattern match,
-                // and thus can truncate the vector to avoid a clone.
-                block.statements.truncate(block.statements.len() - 1);
-                (block.statements, tail)
-            }
-            _ => (block.statements, Expression::unit(self.next_id())),
-        };
-
-        ExpandedBlockExpr {
-            id: self.next_id(),
-            statements,
-            last,
-        }
-    }
-}
-
 pub struct IdentifierScoper {
     /// map an Ident-expression to a scoped identifier and the nearest enclosing block.
     scope_stack: Vec<NodeId>,
@@ -390,12 +302,11 @@ impl IdentifierScoper {
             ExpressionKind::UnOpExpr(_, arg) => self.visit_expr(arg)?,
             ExpressionKind::MemberAccess(data, _) => self.visit_expr(data)?,
             ExpressionKind::IfThenElse(ite) => self.visit_branch(ite)?,
-            ExpressionKind::ExpandedBlock(eb) => self.visit_block(eb)?,
-            ExpressionKind::Block(_) => unreachable!("blocks should be expanded"),
+            ExpressionKind::Block(eb) => self.visit_block(eb)?,
         }
         Ok(())
     }
-    fn visit_block(&mut self, block: &mut ExpandedBlockExpr) -> Result<(), NotInScopeError> {
+    fn visit_block(&mut self, block: &mut BlockExpression) -> Result<(), NotInScopeError> {
         self.enter_scope(block.id);
         for stmt in block.statements.iter_mut() {
             self.visit_stmt(stmt)?;
@@ -412,7 +323,6 @@ impl IdentifierScoper {
             StatementKind::BlockTail(e) => self.visit_expr(e),
             StatementKind::Block(eb) => self.visit_block(eb),
             StatementKind::IfThenElse(ite) => self.visit_branch(ite),
-            StatementKind::SugaredBlock(_) => unreachable!("blocks should be expanded"),
         }
     }
     fn search_for(&mut self, _ident: &str) -> Result<ScopedIdentifier, NotInScopeError> {
@@ -437,173 +347,5 @@ impl IdentifierScoper {
 
     fn visit_reassignment(&mut self, reinit: &mut Reassignment) -> Result<(), NotInScopeError> {
         self.visit_expr(&mut reinit.value)
-    }
-}
-
-#[cfg(test)]
-mod block_expander_tests {
-    use crate::helper_impls::assert_structural_eq;
-    use crate::helper_impls::StructuralEq;
-    use crate::visualisation::IndentPrint;
-    use crate::zea::test_ast_macros::*;
-    use crate::zea::visitors::altering::AssignmentSimplifier;
-    use crate::zea::visitors::BlockExpander;
-    // use crate::visualisation::IndentPrint;
-    use crate::zea::NodeId;
-    use crate::zea::{
-        AssignmentPattern, Expression, ExpressionKind, Function, InitializationBlock,
-        InitializationKind, Module, NodeLabeler, PackedInitialization, Statement, StatementBlock,
-        StatementKind, TypeSpecifier,
-    };
-
-    #[test]
-    fn test_expand_block() {
-        let block_expander = BlockExpander::new();
-        let (mut ast, generator) = label_ast!(using block_expander ; zea_module! {
-            imports {}
-            exports {}
-            globs {}
-            funcs {
-                func!(main() -> ztyp!(Int); {block!{
-                    stmt!(tail expr!(litint 3))
-                }})
-            }
-            structs {}
-        });
-
-        let generator = ast.expand_blocks_with(generator);
-        // eprintln!("{:?}", ast.functions[0]);
-        assert!(ast.has_blocks_expanded());
-
-        let (mut ast, generator) = label_ast!(using generator;  expr!(block block! {
-            stmt!(init pat!(a) ;= expr!(litint 3));
-            stmt!(tail expr!(ident a))
-        }));
-        ast.accept_block_expander(&mut BlockExpander::labeler_from(generator));
-        let after = ast;
-        let ExpressionKind::ExpandedBlock(expanded) = after.kind else {
-            unreachable!()
-        };
-        assert_structural_eq!(
-            expanded.statements[0],
-            stmt!(init pat!(a) ;= expr!(litint 3))
-        );
-
-        assert_structural_eq!(expanded.last, expr!(ident a));
-    }
-
-    fn wrap_in_module(init: InitializationBlock) -> Module {
-        Module {
-            id: NodeId::sentinel(),
-            imports: vec![],
-            exports: vec![],
-            global_vars: vec![],
-            functions: vec![Function {
-                id: NodeId::sentinel(),
-                name: "test".to_string(),
-                params: vec![],
-                returns: TypeSpecifier::Basic("Unit".to_string()),
-                body: StatementBlock {
-                    id: NodeId::sentinel(),
-                    statements: vec![Statement {
-                        id: NodeId::sentinel(),
-                        kind: StatementKind::Initialization(init),
-                    }],
-                },
-            }],
-            struct_definitions: vec![],
-        }
-    }
-
-    #[test]
-    fn test_simple_ident_init_is_already_done() {
-        let _simplifier = AssignmentSimplifier::new();
-
-        let mut stmt = stmt!(init pat!(a) ;= expr!(litint 1));
-        let g = stmt.label_sentinel_ids();
-        stmt.accept_assignment_unpacker(&mut AssignmentSimplifier::labeler_from(g));
-        let StatementKind::Initialization(ref init) = stmt.kind else {
-            unreachable!()
-        };
-
-        assert!(
-            init.has_assignments_unpacked(),
-            "Packed(Identifier) should already be considered unpacked"
-        );
-    }
-
-    #[test]
-    fn test_single_level_tuple_unpack() {
-        let mut simplifier = AssignmentSimplifier::new();
-
-        let stmt = stmt!(init pat!((a, b)) ;= expr!(ident some_tuple));
-        let StatementKind::Initialization(mut init) = stmt.kind else {
-            unreachable!()
-        };
-
-        assert!(
-            !init.has_assignments_unpacked(),
-            "Tuple init should not be considered done before simplification"
-        );
-
-        init.accept_assignment_unpacker(&mut simplifier);
-
-        let InitializationKind::PartiallyUnpacked(ref p) = init.kind else {
-            panic!(
-                "Expected PartiallyUnpacked after one pass, got {:?}",
-                init.kind
-            );
-        };
-
-        assert_eq!(p.temporary.assignee, "__unpack1");
-        assert_eq!(p.unpacked_assignments.len(), 2);
-
-        for sub in &p.unpacked_assignments {
-            let InitializationKind::Packed(ref packed) = sub.kind else {
-                panic!("Expected Packed sub-assignment");
-            };
-            assert!(matches!(packed.assignee, AssignmentPattern::Identifier(_)));
-            assert!(matches!(
-                packed.value.kind,
-                ExpressionKind::MemberAccess(_, _)
-            ));
-        }
-
-        assert!(init.has_assignments_unpacked());
-    }
-
-    #[test]
-    fn test_nested_tuple_structure() {
-        // ((a, b), c) := nested_tuple
-        let (mut stmt, g) =
-            label_ast!(fresh stmt!(init pat!(((a, b), c)) ;= expr!(ident nested_tuple)));
-
-        let _g = stmt.simplify_assignments_with(g);
-        println!("{}", stmt.indent_print(1));
-    }
-
-    #[test]
-    fn test_module_simplify_assignments_end_to_end() {
-        let (mut stmt, g) = label_ast!(fresh zea_module!(
-        imports {}
-            exports {}
-            globs {}
-            funcs {
-        func!(f() -> ztyp!(Int); {block!{
-                stmt!(init pat!((a, b, c)) ;= expr!(ident v))
-            }})
-            }
-            structs {}
-        ));
-
-        let g = AssignmentSimplifier::labeler_from(g);
-
-        stmt.simplify_assignments_after(g);
-
-        println!("_________________--\nMODULE END TO END\n\n");
-        println!("{}", stmt.indent_print(0));
-
-        println!("BOB");
-        assert!(stmt.has_assignments_unpacked());
     }
 }

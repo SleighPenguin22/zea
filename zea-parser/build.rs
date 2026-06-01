@@ -1,3 +1,4 @@
+#[cfg(feature = "lalrpop_parser")]
 fn main() {
     lalrpop::Configuration::new()
         .set_in_dir("./")
@@ -6,3 +7,6 @@ fn main() {
         .process()
         .unwrap();
 }
+
+#[cfg(not(feature = "lalrpop_parser"))]
+fn main() {}

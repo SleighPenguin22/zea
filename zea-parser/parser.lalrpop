@@ -64,7 +64,7 @@ ModExports: Vec<String> = {
     "exports"  "{" <imps:Comma0<ExprIdent>>  "}"=> imps
 };
 #[inline]
-ModSymbols: (Vec<Initialization>, Vec<Function>, Vec<StructDataTypeDefinition>, Vec<TaggedUnionDataTypeDefinition>) = {
+ModSymbols: (Vec<InitializationBlock>, Vec<Function>, Vec<StructDataTypeDefinition>, Vec<TaggedUnionDataTypeDefinition>) = {
     ModSymbolsHelper => separate_module_items(<>)
 };
 
@@ -99,16 +99,16 @@ pub StructDef: StructDataTypeDefinition = {
  },
 };
 
-pub Init: Initialization = {
+pub Init: InitializationBlock = {
     <p:AssignPat> ":" "=" <val:Expr> ";" => {
-    Initialization::packed (
+    InitializationBlock::packed (
         None,
         p,
         val
     )
  },
     <p:AssignPat> ":" <typ:TType> "=" <val:Expr> ";" => {
-    Initialization::packed (
+    InitializationBlock::packed (
             Some(typ),
             p,
             val
@@ -149,26 +149,26 @@ pub FuncCall: FunctionCall = {
 pub Func: Function = {
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
-    <funcbody:Block> => {
+    <body:Block> => {
         let params: Vec<FuncParam> = args.into_iter().map(FuncParam::from).collect();
         Function {
             id: NodeId::sentinel(),
             name,
             params,
             returns: TypeSpecifier::Basic("Void".to_string()),
-            body: funcbody
+            body
         }
     },
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
-    "->" <funcreturns:TType> <funcbody:Block> => {
+    "->" <funcreturns:TType> <body:Block> => {
         let params: Vec<FuncParam> = args.into_iter().map(FuncParam::from).collect();
         Function {
             id: NodeId::sentinel(),
             name,
             params,
             returns: funcreturns,
-            body: funcbody
+            body
         }
     }
 };
@@ -178,19 +178,31 @@ TType:TypeSpecifier = {
     "[" <t:TType> "]" => {TypeSpecifier::ArrayOf(Box::new(t))},
 };
 
-Block: StatementBlock = {
-    "{" <stmts:(<Stmt>)*> <tail:Expr?> "}" => {
-        let mut stmts = stmts;
-        if let Some(tail) = tail {
-            let tail = Statement {
-                id: NodeId::sentinel(),
-                kind:StatementKind::BlockTail(tail)
-            };
-            stmts.push(tail);
-        }
-        StatementBlock {
+Block: BlockExpression = {
+    "{" <statements:(<Stmt>)*> <tail:Expr?> "}" => {
+        let last = if let Some(tail) = tail {
+            tail
+        } else {
+            Expression::unit()
+        };
+        BlockExpression {
             id: NodeId::sentinel(),
-            statements: stmts
+            statements,
+            last
+        }
+    },
+};
+FuncBody: BlockExpression = {
+    "{" <statements:(<Stmt>)*> <tail:Expr?> "}" => {
+        let last = if let Some(tail) = tail {
+            tail
+        } else {
+            Expression::unit()
+        };
+        BlockExpression {
+            id: NodeId::sentinel(),
+            statements,
+            last
         }
     },
 };

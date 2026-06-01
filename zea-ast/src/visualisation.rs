@@ -128,22 +128,7 @@ impl IndentPrint for zea::TypedIdentifier {
     }
 }
 
-impl IndentPrint for zea::StatementBlock {
-    fn indent_print(&self, depth: usize) -> String {
-        let mut buffer = "block_sugared".indent_print(depth);
-
-        for s in self.statements.iter() {
-            buffer += &"-block_stmt".indent_print(depth + 1);
-            buffer += &s.indent_print(depth + 1);
-            buffer += &"/-block_stmt".indent_print(depth + 1);
-        }
-        buffer += &"/block_sugared".indent_print(depth);
-
-        buffer
-    }
-}
-
-impl IndentPrint for zea::ExpandedBlockExpr {
+impl IndentPrint for zea::BlockExpression {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "block".indent_print(depth);
 
@@ -313,8 +298,8 @@ impl IndentPrint for zea::Expression {
                 buffer
             }
             ExpressionKind::IfThenElse(b) => b.indent_print(depth),
-            ExpressionKind::Block(b) => b.indent_print(depth),
-            ExpressionKind::ExpandedBlock(eb) => eb.indent_print(depth),
+
+            ExpressionKind::Block(eb) => eb.indent_print(depth),
             ExpressionKind::FunctionCall(c) => c.indent_print(depth),
             ExpressionKind::Unit => "unit_value".indent_print(depth),
             ExpressionKind::ScopedIdent(si) => si.indent_print(depth),

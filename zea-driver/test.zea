@@ -1,6 +1,4 @@
 module main
 
 
-fn g() -> U {
-    @(a,b) := 1;
-}
+fn foo() -> U {}

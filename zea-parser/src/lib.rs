@@ -1,28 +1,38 @@
 #![allow(unused)]
 
-mod grammar;
+#[cfg(feature = "lalrpop_parser")]
+mod parser;
 
-pub use grammar::ExprParser as ExpressionParser;
-pub use grammar::ModParser as ModuleParser;
-pub use grammar::StmtParser as StatementParser;
-use lalrpop_util::ParseError;
-use zea_ast::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
+use std::process::exit;
+#[cfg(feature = "lalrpop_parser")]
+pub use parser::ExprParser as ExpressionParser;
+#[cfg(feature = "lalrpop_parser")]
+pub use parser::ModParser as ModuleParser;
+#[cfg(feature = "lalrpop_parser")]
+pub use parser::StmtParser as StatementParser;
+
 use zea_ast::zea::visitors::annotating::SemanticASTViolation;
 
 use zea_ast::zea::visitors::Transfomer;
 use zea_ast::zea::{
-    Function, InitializationBlock, Module, StructDataTypeDefinition, TaggedUnionDataTypeDefinition,
+    BareNodeLabeler, Function, InitializationBlock, Module, StructDataTypeDefinition,
+    TaggedUnionDataTypeDefinition,
 };
 
-pub fn parse_module(
-    src: &'_ str,
-) -> Result<(Module, BareNodeLabeler), ParseError<usize, lalrpop_util::lexer::Token<'_>, &'_ str>>
-{
+#[cfg(feature = "lalrpop_parser")]
+pub fn parse_module(src: &'_ str) -> (Module, BareNodeLabeler) {
     let p = ModuleParser::new();
-    let mut module = p.parse(src)?;
+    let mut module = match p.parse(src) {
+        Ok(module) => module,
+        Err(e) => {
+            eprintln!("{e}");
+
+            exit(1);
+        }
+    };
     let mut labeler = BareNodeLabeler::new();
     labeler.visit_module(&mut module);
-    Ok((module, labeler))
+    (module, labeler)
 }
 
 pub fn semantic_annotations(ast: &'_ Module) -> Result<Module, SemanticASTViolation<'_>> {
@@ -59,9 +69,9 @@ pub(crate) fn separate_module_items(
     (globs, funcs, structs, tagged_unions)
 }
 
-#[cfg(test)]
+#[cfg(all(feature = "lalrpop_parser", test))]
 mod tests {
-    use crate::grammar::{
+    use crate::parser::{
         AssignPatParser, ExprParser, FuncParser, InitParser, ModParser, StmtParser,
     };
 
