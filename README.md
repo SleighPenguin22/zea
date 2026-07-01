@@ -188,3 +188,63 @@ tag HTTPCode {
     Error, // 404
 } 
 ```
+
+to get the value of a tag as an integer, you can use the `discriminant()` method that each tag datatype gets automatically:
+```
+code := HTTPCode:Ok;
+code_as_int := code:discriminant();
+if code_as_int == 202 {
+    stdout:print-line("its okay bro");
+}
+else {
+    stdout:print-line("wtf");
+}
+```
+
+#### Unions
+To define a unions, use the `union` keyword, field are declared the same way a struct does,
+instantiating a union is done by treating the fields as contructor-functions:
+```
+union U64orF64 {
+    uint: U64,
+    float: F64
+}
+
+u := U64orF64:uint(3);
+f := U64ofF64:float(3.1415);
+```
+
+To write to a union, you must select a variant to write to, and provide a value of that same type.
+
+Unions are meant to be very primitive,
+as such, there is no way to check which field was last written to or read from.
+The size of a union is that of its largest variant, the above example would have a size of 64 bits.
+
+Unions can be used to cast pointers,
+thereby allowing you to interpret data as if it were of a different datatype. This is called *type-punning*
+
+See the below example, where the famous [Fast Inverse Square Root from Quake](en.wikipedia.org/wiki/Fast_inverse_square_root) is implemented using type-punning.
+
+```
+union Helper {
+    fptr: F64*,
+    uptr: U64*,
+}
+fn Q-rsqrt(f: F64) -> F64 {
+    x2 := number * 0.5;
+    // construct as F64*
+    i := Helper:fptr(&f);
+    
+    // then read as U64* and write to the U64* variant
+    i.uptr = (0x5f3759df - (i.uptr >> 1));
+
+    // then read and copy the value of the F64* variant, which is now modified 
+    y := *i.fptr; 
+
+    y = y * (3.5 - (x2 * y * y)); // euler shit
+    y // tadaaaaaaa we have (1 / sqrt(f))
+}
+```
+
+#### Tagged unions
+As of right now, tagged unions are 
