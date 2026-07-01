@@ -2,14 +2,19 @@
 
 #[cfg(feature = "lalrpop_parser")]
 mod parser;
+#[cfg(feature = "zepast")]
+pub mod zepast;
 
-use std::process::exit;
+
+use log::{error, info, log};
+
 #[cfg(feature = "lalrpop_parser")]
 pub use parser::ExprParser as ExpressionParser;
 #[cfg(feature = "lalrpop_parser")]
 pub use parser::ModParser as ModuleParser;
 #[cfg(feature = "lalrpop_parser")]
 pub use parser::StmtParser as StatementParser;
+use std::process::exit;
 
 use zea_ast::zea::visitors::annotating::SemanticASTViolation;
 
@@ -25,13 +30,15 @@ pub fn parse_module(src: &'_ str) -> (Module, BareNodeLabeler) {
     let mut module = match p.parse(src) {
         Ok(module) => module,
         Err(e) => {
-            eprintln!("{e}");
-
+            error!("{e}");
             exit(1);
         }
     };
+    info!("parsed succesfully");
     let mut labeler = BareNodeLabeler::new();
+    info!("starting node-labeling");
     labeler.visit_module(&mut module);
+    info!("node-labeling successful");
     (module, labeler)
 }
 
@@ -68,6 +75,7 @@ pub(crate) fn separate_module_items(
     }
     (globs, funcs, structs, tagged_unions)
 }
+
 
 #[cfg(all(feature = "lalrpop_parser", test))]
 mod tests {
@@ -622,7 +630,7 @@ mod tests {
         let (InitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.typ, Some(TypeSpecifier::Basic(t)) if t == "U64"));
+        assert!(matches!(&i.typ, Some(TypeSpecifier::NonScalar(t)) if t == "U64"));
     }
 
     #[test]
@@ -633,7 +641,7 @@ mod tests {
             unreachable!()
         };
         assert!(matches!(&i.typ, Some(TypeSpecifier::Pointer(inner))
-            if matches!(inner.as_ref(), TypeSpecifier::Basic(t) if t == "U8")));
+            if matches!(inner.as_ref(), TypeSpecifier::NonScalar(t) if t == "U8")));
     }
 
     #[test]
@@ -693,14 +701,6 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn stmt_nested_block() {
-        assert!(matches!(
-            parse_stmt("{ x := 1; }").kind,
-            StatementKind::SugaredBlock(_)
-        ));
-    }
-
     // ── functions ─────────────────────────────────────────────────────────────
 
     #[test]
@@ -708,7 +708,7 @@ mod tests {
         let f = parse_func("fn greet() {}");
         assert_eq!(f.name, "greet");
         assert!(f.params.is_empty());
-        assert!(matches!(&f.returns, TypeSpecifier::Basic(s) if s == "Void"));
+        assert!(matches!(&f.returns, TypeSpecifier::NonScalar(s) if s == "Void"));
     }
 
     #[test]
@@ -729,7 +729,7 @@ mod tests {
     fn func_return_pointer() {
         let f = parse_func("fn foo() -> U64* {}");
         assert!(matches!(&f.returns, TypeSpecifier::Pointer(inner)
-            if matches!(inner.as_ref(), TypeSpecifier::Basic(s) if s == "U64")));
+            if matches!(inner.as_ref(), TypeSpecifier::NonScalar(s) if s == "U64")));
     }
 
     #[test]

@@ -631,7 +631,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
     ) -> Result<StructDataTypeDefinition, TypeCheckError> {
         let (s, bob) = self.typespecifier_behind_inference_id(id)?;
         match s {
-            TypeSpecifier::Basic(t) => self.find_struct_def(&t).cloned(),
+            TypeSpecifier::NonScalar(t) => self.find_struct_def(&t).cloned(),
             _ => Err(TypeCheckError::ExpectedStructType(bob)),
         }
     }

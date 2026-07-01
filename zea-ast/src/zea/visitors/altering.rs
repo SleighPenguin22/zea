@@ -1,4 +1,4 @@
-use crate::zea::visitors::annotating::{ScopeAnnotations, ScopedIdentifier};
+use crate::zea::visitors::annotating::ScopedIdentifier;
 use crate::zea::visitors::{
     walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef, walk_mut_initblock,
     walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef, walk_mut_unpacked_init,
@@ -7,8 +7,11 @@ use crate::zea::visitors::{
 use crate::zea::{
     AssignmentPattern, BlockExpression, Expression, ExpressionKind, Function, FunctionCall,
     IfThenElse, InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
-    Reassignment, SimpleInitialization, Statement, StatementKind, StructDataTypeDefinition,
+    Reassignment, SimpleInitialization, Statement, StructDataTypeDefinition,
 };
+use indexmap::set::MutableValues;
+use indexmap::IndexSet;
+use std::collections::HashMap;
 
 pub trait NodeLabeler: Sized {
     /// Start `Self`'s id-generator with the last id that `other_generator` used,
@@ -232,119 +235,284 @@ impl AssignmentSimplifier {
     }
 }
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct BlockScopeIndex(u32);
+
+impl BlockScopeIndex {
+    pub fn sentinel() -> Self {
+        Self(0)
+    }
+    pub fn is_sentinel(&self) -> bool {
+        self.0 == 0
+    }
+}
+
+#[derive(Eq, Hash, PartialEq)]
+pub struct BlockScope {
+    /// The node that created this scope; a link to a [`BlockExpression`]
+    origin: NodeId,
+    /// The parent scope; a link to the [`BlockScope`] of the nearest enclosing [`BlockExpression`]
+    parent: BlockScopeIndex,
+    /// All identifiers the current scope introduces, in order.
+    /// can be used to check if an identifier has been declared at a point in the block.
+    introductions: Vec<ScopedIdentifier>,
+    children: Vec<BlockScopeIndex>,
+}
+
+impl BlockScope {
+    pub fn from_block(block: &BlockExpression, parent: BlockScopeIndex) -> Self {
+        Self {
+            origin: block.id,
+            parent,
+            introductions: vec![],
+            children: vec![],
+        }
+    }
+    pub fn add_child(&mut self, idx: BlockScopeIndex) -> &mut Self {
+        self.children.push(idx);
+        self
+    }
+    pub fn add_introduction(&mut self, ident: ScopedIdentifier) -> &mut Self {
+        self.introductions.push(ident);
+        self
+    }
+    pub fn introduces(&self, ident: &str) -> Option<&ScopedIdentifier> {
+        self.introductions.iter().find(|p| p.ident == ident)
+    }
+    pub fn is_module_root(&self) -> bool {
+        self.parent.is_sentinel()
+    }
+}
+
+/// this pass gathers all scope information within the AST,
+/// and then replaces all occurences of Expression::UnscopedIdent with an
+/// Expression::ScopedIdent.
 pub struct IdentifierScoper {
-    /// map an Ident-expression to a scoped identifier and the nearest enclosing block.
-    scope_stack: Vec<NodeId>,
-    scope_annotations: ScopeAnnotations,
+    /// map an Ident-expression to a BlockScope and the nearest enclosing block.
+    scope_stack: Vec<BlockScopeIndex>,
+    scope_arena: IndexSet<BlockScope>,
+    node_to_scope: HashMap<NodeId, BlockScopeIndex>,
 }
 
 pub struct NotInScopeError {
     ident: String,
-    scope_id: usize,
+    scope_stack_top: BlockScopeIndex,
 }
 
 impl Transfomer for IdentifierScoper {
-    type TransformerOk = ();
     type TransformerError = NotInScopeError;
-    fn visit_module(
-        &mut self,
-        module: &mut Module,
-    ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        for glob_var in module.global_vars.iter_mut() {
-            self.visit_initblock(glob_var)?;
-        }
-
-        for func in module.functions.iter_mut() {
-            self.enter_scope(func.body.id);
-            for stmt in func.body.statements.iter_mut() {
-                self.visit_stmt(stmt)?;
-            }
-        }
-        Ok(())
-    }
-    fn visit_initblock(
-        &mut self,
-        init: &mut InitializationBlock,
-    ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        let InitializationKind::Unpacked(u) = &mut init.kind else {
-            unreachable!("assignments should be expanded")
-        };
-        for init in u.iter_mut() {
-            self.visit_expr(&mut init.value)?;
-        }
-        Ok(())
-    }
+    type TransformerOk = ();
     fn visit_expr(
         &mut self,
         expr: &mut Expression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         match &mut expr.kind {
-            ExpressionKind::Unit => {}
-            ExpressionKind::IntegerLiteral(_) => {}
-            ExpressionKind::BoolLiteral(_) => {}
-            ExpressionKind::FloatLiteral(_) => {}
-            ExpressionKind::StringLiteral(_) => {}
             ExpressionKind::UnScopedIdent(i) => {
-                let scoped_ident = self.search_for(i)?;
-                expr.kind = ExpressionKind::ScopedIdent(scoped_ident)
+                let scoped_ident = self.resolve(i)?.clone();
+                expr.kind = ExpressionKind::ScopedIdent(scoped_ident);
+                return Ok(());
             }
-            ExpressionKind::ScopedIdent(_) => {}
-            ExpressionKind::FunctionCall(call) => self.visit_call(call)?,
-            ExpressionKind::BinOpExpr(_, lhs, rhs) => {
-                self.visit_expr(lhs)?;
-                self.visit_expr(rhs)?;
-            }
-            ExpressionKind::UnOpExpr(_, arg) => self.visit_expr(arg)?,
-            ExpressionKind::MemberAccess(data, _) => self.visit_expr(data)?,
-            ExpressionKind::IfThenElse(ite) => self.visit_branch(ite)?,
-            ExpressionKind::Block(eb) => self.visit_block(eb)?,
+            _ => {}
         }
+        walk_mut_expr(self, expr)?;
         Ok(())
-    }
-    fn visit_stmt(
-        &mut self,
-        stmt: &mut Statement,
-    ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        match &mut stmt.kind {
-            StatementKind::Initialization(init) => self.visit_initblock(init),
-            StatementKind::Reassignment(reinit) => self.visit_reassignment(reinit),
-            StatementKind::FunctionCall(call) => self.visit_call(call),
-            StatementKind::Return(e) => self.visit_expr(e),
-            StatementKind::BlockTail(e) => self.visit_expr(e),
-            StatementKind::Block(eb) => self.visit_block(eb),
-            StatementKind::IfThenElse(ite) => self.visit_branch(ite),
-        }
     }
     fn visit_block(
         &mut self,
         block: &mut BlockExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.enter_scope(block.id);
-        for stmt in block.statements.iter_mut() {
-            self.visit_stmt(stmt)?;
-        }
+        walk_mut_block(self, block)?;
         self.exit_scope();
+        Ok(())
+    }
+    fn visit_module(
+        &mut self,
+        module: &mut Module,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
+        // global variables are considered ordered; their scope covers everything below them.
+        // global variables may not be initialized with function calls; they should be constants.
+        for glob in module.global_vars.iter_mut() {
+            let InitializationKind::Unpacked(u) = &mut glob.kind else {
+                unreachable!("assignment should be unpacked before scope analysis")
+            };
+            for init in u {
+                walk_mut_unpacked_init(self, init)?;
+                self.current_scope()
+                    .add_introduction(ScopedIdentifier::from_global_init(init));
+            }
+        }
+        // Functions and imports are not considered ordered; their scope covers the whole of the module.
+        for imp in module.imports.iter_mut() {
+            self.current_scope()
+                .add_introduction(ScopedIdentifier::import_item(module.id, imp.clone()));
+        }
+
+        for func in module.functions.iter_mut() {
+            self.current_scope()
+                .add_introduction(ScopedIdentifier::from_funcdef(func));
+        }
+
+        for func in module.functions.iter_mut() {
+            walk_mut_funcdef(self, func)?;
+        }
+
+        Ok(())
+    }
+    fn visit_funcdef(
+        &mut self,
+        funcdef: &mut Function,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
+        let scope = self.enter_scope(funcdef.body.id);
+        for param in funcdef.params.iter() {
+            scope.add_introduction(ScopedIdentifier::from_func_param(param));
+        }
+        walk_mut_block(self, &mut funcdef.body)?;
+        self.exit_scope();
+        Ok(())
+    }
+    fn visit_branch(
+        &mut self,
+        branch: &mut IfThenElse,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
+        self.visit_expr(branch.condition.as_mut())?;
+
+        self.visit_branch_twig(&mut branch.true_case)?;
+
+        if let Some(false_case) = branch.false_case.as_mut() {
+            self.visit_branch_twig(false_case.as_mut())?;
+        }
         Ok(())
     }
 }
 
-impl IdentifierScoper {
-    pub fn new(ast: &Module) -> Self {
-        Self {
-            scope_stack: vec![ast.id],
-            scope_annotations: ScopeAnnotations::new(),
-        }
+fn branch_twig_as_block(twig: &mut Expression) -> Option<&mut BlockExpression> {
+    match &mut twig.kind {
+        ExpressionKind::Block(b) => Some(b.as_mut()),
+        _ => None,
     }
-    fn enter_scope(&mut self, scope: NodeId) {
-        self.scope_stack.push(scope)
+}
+
+impl IdentifierScoper {
+    pub fn new(module: &Module) -> Self {
+        let mut new = Self {
+            scope_stack: Vec::with_capacity(16),
+            scope_arena: IndexSet::with_capacity(128),
+            node_to_scope: HashMap::with_capacity(128),
+        };
+        new.build_global_scope_skeleton(module);
+        new
+    }
+    fn build_global_scope_skeleton(&mut self, module: &Module) -> &mut BlockScope {
+        let global_scope = BlockScope {
+            origin: module.id,
+            parent: BlockScopeIndex::sentinel(),
+            introductions: vec![],
+            children: vec![],
+        };
+        *self
+            .scope_arena
+            .get_index_mut2(1)
+            .expect("global scope should live at scope_arena[1]") = global_scope;
+
+        self.scope_stack.push(BlockScopeIndex(1));
+        self.scope_arena
+            .get_index_mut2(1)
+            .expect("global scope at scope_arena[1] should exist")
+    }
+    fn get(&self, idx: BlockScopeIndex) -> &BlockScope {
+        self.scope_arena
+            .get_index(idx.0 as usize)
+            .expect("invalid block scope index")
+    }
+    fn get_scope_mut(&mut self, idx: BlockScopeIndex) -> &mut BlockScope {
+        self.scope_arena
+            .get_index_mut2(idx.0 as usize)
+            .expect("invalid block scope index")
+    }
+
+    fn enter_scope(&mut self, origin: NodeId) -> &mut BlockScope {
+        let parent = BlockScopeIndex(self.scope_stack.len() as u32 - 1);
+        let scope = BlockScope {
+            origin,
+            parent,
+            introductions: Vec::with_capacity(8),
+            children: Vec::with_capacity(4),
+        };
+        let (idx, _duplicate) = self.scope_arena.insert_full(scope);
+        let idx = BlockScopeIndex(idx as u32);
+        self.scope_stack.push(idx);
+        self.get_scope_mut(parent).add_child(idx);
+        self.get_scope_mut(idx)
     }
     fn exit_scope(&mut self) {
+        assert!(self.scope_stack.len() > 0, "cannot pop module scope");
         self.scope_stack.pop();
     }
-    fn current_scope(&self) -> NodeId {
-        *self.scope_stack.last().unwrap()
+    fn current_scope(&mut self) -> &mut BlockScope {
+        let idx = self
+            .scope_stack
+            .last()
+            .expect("scope stack should not be empty");
+        self.get_scope_mut(*idx)
     }
-    fn search_for(&mut self, _ident: &str) -> Result<ScopedIdentifier, NotInScopeError> {
-        todo!()
+    fn current_scope_idx(&self) -> BlockScopeIndex {
+        self.scope_stack
+            .last()
+            .cloned()
+            .expect("scope stack should not be empty")
+    }
+    fn resolve(&mut self, ident: &str) -> Result<ScopedIdentifier, NotInScopeError> {
+        let mut cur_scope_idx = *self.scope_stack.last().expect("stack should not be empty");
+        let mut cur_scope = self.get_scope_mut(cur_scope_idx);
+
+        loop {
+            if let Some(found) = cur_scope.introduces(ident) {
+                return Ok(found.clone());
+            } else {
+                if cur_scope.is_module_root() {
+                    return Err(NotInScopeError {
+                        ident: String::from(ident),
+                        scope_stack_top: cur_scope_idx,
+                    });
+                }
+                cur_scope_idx = cur_scope.parent;
+                cur_scope = self.get_scope_mut(cur_scope_idx);
+            }
+        }
+    }
+    /// visit a branch-twig as a block if it is one, or as a regular expression if it is not.
+    ///
+    ///
+    /// That is, push a new scope only if the twig is of kind [`ExpressionKind::Block`]
+    ///
+    /// as of right now, the parser only accepts blocks as the branch twigs,
+    /// but this might change in the future.
+    /// This method exists as a future proofing thing,
+    /// as the non-block path will never be taken given the current parser implementation.
+    fn visit_branch_twig(&mut self, twig: &mut Expression) -> Result<(), NotInScopeError> {
+        if let Some(twig) = branch_twig_as_block(twig) {
+            self.enter_scope(twig.id);
+            self.visit_block(twig)?;
+            self.exit_scope();
+        } else {
+            self.visit_expr(twig)?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::zea::visitors::Transfomer;
+    use crate::zea::*;
+    use crate::zea::{Module, NodeLabeler};
+    use zea_parser::zepast;
+
+    fn prepare_module(mut ast: Module) -> (Module, impl NodeLabeler) {
+        let mut labeler = BareNodeLabeler::new();
+        labeler.visit_module(&mut ast).unwrap();
+        let labeler = ast.simplify_assignments_after(labeler);
+        (ast, labeler)
     }
 }

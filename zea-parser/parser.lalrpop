@@ -155,7 +155,7 @@ pub Func: Function = {
             id: NodeId::sentinel(),
             name,
             params,
-            returns: TypeSpecifier::Basic("Void".to_string()),
+            returns: TypeSpecifier::NonScalar("Void".to_string()),
             body
         }
     },
@@ -173,7 +173,7 @@ pub Func: Function = {
     }
 };
 TType:TypeSpecifier = {
-   TypeIdent => {TypeSpecifier::Basic(<>)},
+   TypeIdent => {TypeSpecifier::NonScalar(<>)},
     <t:TType> "*" => {TypeSpecifier::Pointer(Box::new(t))},
     "[" <t:TType> "]" => {TypeSpecifier::ArrayOf(Box::new(t))},
 };

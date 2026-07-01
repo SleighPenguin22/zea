@@ -62,6 +62,9 @@ impl ScopedIdentifier {
     pub fn from_func_param(func_param: &FuncParam) -> Self {
         ScopedIdentifier::func_param(func_param.id, func_param.name.clone())
     }
+    pub fn from_funcdef(funcdef: &Function) -> Self {
+        ScopedIdentifier::func_param(funcdef.id, funcdef.name.clone())
+    }
     pub fn from_local_init(init: &SimpleInitialization) -> Self {
         ScopedIdentifier::local(init.id, init.assignee.clone())
     }

@@ -15,6 +15,30 @@ macro_rules! indent {
     }};
 }
 
+fn add_prefix(s: &str, list_depth: usize) -> String {
+    let list_indent = indent!(list_depth);
+    let mut result = String::new();
+    for (i, line) in s.lines().enumerate() {
+        if i == 0 {
+            let trimmed = line.trim_start();
+            result += &format!("{}- {}\n", list_indent, trimmed);
+        } else {
+            let shifted = if line.len() >= 2 { &line[2..] } else { line };
+            result += &format!("{}\n", shifted);
+        }
+    }
+    result
+}
+
+fn fmt_list<T: IndentPrint>(items: &[T], depth: usize) -> String {
+    let mut result = String::new();
+    for item in items {
+        let item_str = item.indent_print(depth + 1);
+        result += &add_prefix(&item_str, depth);
+    }
+    result
+}
+
 impl IndentPrint for FuncParam {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = ".param".indent_print(depth);
@@ -25,84 +49,47 @@ impl IndentPrint for FuncParam {
 }
 
 fn module_imports(imports: &[String], depth: usize) -> String {
-    if imports.is_empty() {
-        ".imports nothing".indent_print(depth + 1)
-    } else {
-        let mut imp_buffer = ".imports".indent_print(depth + 1);
-        for e in imports.iter() {
-            imp_buffer += &e.indent_print(depth + 2);
-        }
-        imp_buffer
+    let mut result = ".imports".indent_print(depth);
+    for e in imports.iter() {
+        result += &format!("{}- {}\n", indent!(depth + 1), e);
     }
+    result
 }
 fn module_exports(imports: &[String], depth: usize) -> String {
-    if imports.is_empty() {
-        ".exports nothing".indent_print(depth + 1)
-    } else {
-        let mut imp_buffer = ".exports".indent_print(depth + 1);
-        for e in imports.iter() {
-            imp_buffer += &e.indent_print(depth + 2);
-        }
-        imp_buffer
+    let mut result = ".exports".indent_print(depth);
+    for e in imports.iter() {
+        result += &format!("{}- {}\n", indent!(depth + 1), e);
     }
+    result
 }
 
 fn module_globs(globs: &[InitializationBlock], depth: usize) -> String {
-    if globs.is_empty() {
-        ".globs none".indent_print(depth + 1)
-    } else {
-        let mut buffer = String::new();
-        buffer += &".globs".indent_print(depth + 1);
-        for glob in globs {
-            buffer += &glob.indent_print(depth + 2);
-        }
-        buffer += &"/.globs".indent_print(depth + 1);
-        buffer
-    }
+    let mut result = ".globs".indent_print(depth);
+    result += &fmt_list(globs, depth + 1);
+    result
 }
 
 fn module_funcs(funcs: &[Function], depth: usize) -> String {
-    if funcs.is_empty() {
-        ".funcs none".indent_print(depth + 1)
-    } else {
-        let mut buffer = String::new();
-        buffer += &".funcs".indent_print(depth + 1);
-        for glob in funcs {
-            buffer += &glob.indent_print(depth + 2);
-        }
-        buffer += &"/.funcs".indent_print(depth + 1);
-        buffer
-    }
+    let mut result = ".funcs".indent_print(depth);
+    result += &fmt_list(funcs, depth + 1);
+    result
 }
 
 impl IndentPrint for zea::Module {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "module".indent_print(depth);
-        let imports = module_imports(&self.imports, depth);
-        buffer += &imports;
-
-        let exports = module_exports(&self.exports, depth);
-        buffer += &exports;
-
-        buffer += &module_globs(&self.global_vars, depth);
-
-        buffer += &module_funcs(&self.functions, depth);
-
-        buffer += &"/module".indent_print(depth);
+        buffer += &module_imports(&self.imports, depth + 1);
+        buffer += &module_exports(&self.exports, depth + 1);
+        buffer += &module_globs(&self.global_vars, depth + 1);
+        buffer += &module_funcs(&self.functions, depth + 1);
         buffer
     }
 }
 
 fn func_params(params: &[FuncParam], depth: usize) -> String {
-    if params.is_empty() {
-        ".params none".indent_print(depth)
-    } else {
-        let mut buffer = ".params".indent_print(depth + 1);
-        for arg in params {
-            buffer += &arg.indent_print(depth + 2);
-        }
-        buffer
-    }
+    let mut buffer = ".params".indent_print(depth);
+    buffer += &fmt_list(params, depth + 1);
+    buffer
 }
 
 impl IndentPrint for zea::Function {
@@ -114,7 +101,6 @@ impl IndentPrint for zea::Function {
         buffer += &func_params(&self.params, depth + 1);
         buffer += &".body".indent_print(depth + 1);
         buffer += &self.body.indent_print(depth + 2);
-        buffer += &format!("/func {}", self.name).indent_print(depth);
         buffer
     }
 }
@@ -122,8 +108,8 @@ impl IndentPrint for zea::Function {
 impl IndentPrint for zea::TypedIdentifier {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = self.name.indent_print(depth);
-        buffer += &".type".indent_print(depth);
-        buffer += &self.typ.indent_print(depth + 1);
+        buffer += &".type".indent_print(depth + 1);
+        buffer += &self.typ.indent_print(depth + 2);
         buffer
     }
 }
@@ -133,13 +119,10 @@ impl IndentPrint for zea::BlockExpression {
         let mut buffer = "block".indent_print(depth);
 
         for s in self.statements.iter() {
-            buffer += &"-block_stmt".indent_print(depth + 1);
-            buffer += &s.indent_print(depth + 2);
-            buffer += &"/-block_stmt".indent_print(depth + 1);
+            let stmt_str = s.indent_print(depth + 2);
+            buffer += &add_prefix(&stmt_str, depth + 1);
         }
         buffer += &self.last.indent_print(depth + 1);
-
-        buffer += &"/block".indent_print(depth);
 
         buffer
     }
@@ -168,9 +151,9 @@ impl IndentPrint for zea::InitializationBlock {
             InitializationKind::Unpacked(p) => {
                 let mut buffer = "init_unpacked_block".indent_print(depth);
                 for init in p.iter() {
-                    buffer += &init.indent_print(depth + 1);
+                    let init_str = init.indent_print(depth + 2);
+                    buffer += &add_prefix(&init_str, depth + 1);
                 }
-                buffer += &"/init_unpacked_block".indent_print(depth);
                 buffer
             }
         }
@@ -185,8 +168,7 @@ impl IndentPrint for zea::PackedInitialization {
         buffer += &".type".indent_print(depth + 1);
         buffer += &self.typ.indent_print(depth + 2);
         buffer += &".value".indent_print(depth + 1);
-        buffer += &self.value.indent_print(depth + 1);
-        buffer += &"/init_packed".indent_print(depth);
+        buffer += &self.value.indent_print(depth + 2);
         buffer
     }
 }
@@ -212,7 +194,7 @@ impl IndentPrint for zea::TypeSpecifier {
 impl IndentPrint for Option<zea::TypeSpecifier> {
     fn indent_print(&self, depth: usize) -> String {
         match self {
-            None => String::from("to be inferred").indent_print(depth),
+            None => String::from("@unknown").indent_print(depth),
             Some(t) => t.indent_print(depth),
         }
     }
@@ -227,14 +209,12 @@ impl IndentPrint for zea::SimpleInitialization {
         buffer += &self.typ.indent_print(depth + 2);
         buffer += &".value".indent_print(depth + 1);
         buffer += &self.value.indent_print(depth + 2);
-        buffer += &"/init".indent_print(depth);
         buffer
     }
 }
 
 impl IndentPrint for zea::AssignmentPattern {
     fn indent_print(&self, depth: usize) -> String {
-        // let mut buffer = "assign_pattern".indent_print(depth);
         match self {
             zea::AssignmentPattern::Identifier(i) => i.indent_print(depth),
             zea::AssignmentPattern::Tuple(tup) => {
@@ -264,7 +244,6 @@ impl IndentPrint for zea::IfThenElse {
             buffer += &e.indent_print(depth + 2);
         };
 
-        buffer += &"/branch".indent_print(depth);
         buffer
     }
 }
@@ -272,36 +251,33 @@ impl IndentPrint for zea::IfThenElse {
 impl IndentPrint for zea::Expression {
     fn indent_print(&self, depth: usize) -> String {
         use zea::ExpressionKind;
-        let kind_str = self.kind.variant_as_str();
         match &self.kind {
-            ExpressionKind::UnScopedIdent(i) => format!("{kind_str}({i})").indent_print(depth),
+            ExpressionKind::UnScopedIdent(i) => format!("ident({i})").indent_print(depth),
             ExpressionKind::IntegerLiteral(i) => format!("lit_int({i})").indent_print(depth),
             ExpressionKind::FloatLiteral(i) => format!("lit_float({i})").indent_print(depth),
             ExpressionKind::BinOpExpr(op, l, r) => {
                 let mut buffer = format!("operator`{op:?}`").indent_print(depth);
                 buffer += &l.indent_print(depth + 1);
                 buffer += &r.indent_print(depth + 1);
-                buffer += &format!("/operator`{op:?}`").indent_print(depth);
                 buffer
             }
             ExpressionKind::UnOpExpr(op, arg) => {
                 let mut buffer = format!("operator`{op:?}`").indent_print(depth);
                 buffer += &arg.indent_print(depth + 1);
-                buffer += &format!("/operator`{op:?}`").indent_print(depth);
                 buffer
             }
             ExpressionKind::MemberAccess(e, m) => {
                 let mut buffer = "expr_member".indent_print(depth);
                 buffer += &e.indent_print(depth + 1);
-                buffer += &m.indent_print(depth + 1);
-                buffer += &format!("/expr_member").indent_print(depth);
+                buffer += &".member".indent_print(depth + 1);
+                buffer += &m.indent_print(depth + 2);
                 buffer
             }
             ExpressionKind::IfThenElse(b) => b.indent_print(depth),
 
             ExpressionKind::Block(eb) => eb.indent_print(depth),
             ExpressionKind::FunctionCall(c) => c.indent_print(depth),
-            ExpressionKind::Unit => "unit_value".indent_print(depth),
+            ExpressionKind::Unit => "@unit".indent_print(depth),
             ExpressionKind::ScopedIdent(si) => si.indent_print(depth),
             _ => todo!("pretty print expression of kind {:?}", self.kind),
         }
@@ -325,10 +301,10 @@ impl IndentPrint for zea::FunctionCall {
         buffer += &self.subject.indent_print(depth + 2);
 
         if !self.args.is_empty() {
+            buffer += &".args".indent_print(depth + 1);
             for arg in self.args.iter() {
-                buffer += &"-arg".indent_print(depth + 1);
-                buffer += &arg.indent_print(depth + 2);
-                buffer += &"/-arg".indent_print(depth + 1);
+                let arg_str = arg.indent_print(depth + 3);
+                buffer += &add_prefix(&arg_str, depth + 2);
             }
         };
         buffer

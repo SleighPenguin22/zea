@@ -1,0 +1,20 @@
+module
+  .imports
+  .exports
+  .globs
+    - init_unpacked_block
+      - init
+        .assignee
+          a
+        .type
+          @unknown
+        .value
+          lit_int(3)
+  .funcs
+    - func `foo`
+      .returns
+        Foo
+      .params
+      .body
+        block
+          ident(a)

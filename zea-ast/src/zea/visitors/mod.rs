@@ -299,7 +299,7 @@ fn walk_assignpat<V: Visitor>(
 
 fn walk_type<V: Visitor>(v: &mut V, typ: &TypeSpecifier) -> Result<V::VisitorOk, V::VisitorError> {
     match typ {
-        TypeSpecifier::Basic(_) => {}
+        TypeSpecifier::NonScalar(_) => {}
         TypeSpecifier::Unit => {}
         TypeSpecifier::Bool => {}
         TypeSpecifier::Integer { .. } => {}
@@ -507,7 +507,7 @@ fn walk_mut_type<V: Transfomer>(
     typ: &mut TypeSpecifier,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     match typ {
-        TypeSpecifier::Basic(_) => {}
+        TypeSpecifier::NonScalar(_) => {}
         TypeSpecifier::Unit => {}
         TypeSpecifier::Bool => {}
         TypeSpecifier::Integer { .. } => {}
