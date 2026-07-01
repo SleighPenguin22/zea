@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 zea-internal-macros = { path = "../zea-internal-macros" }
 indexmap = "2.14.0"
-
+log = "0.4.33"
 
 [dev-dependencies]
 zea-parser = {path = "../zea-parser", features = ["zepast"]}

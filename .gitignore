@@ -25,3 +25,4 @@ test.c
 /renders/
 /renders/*.png
 /zea-parser/src/grammar.rs
+zea-driver/test.zea

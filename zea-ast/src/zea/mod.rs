@@ -22,9 +22,10 @@
 /// grants a unique ID to node with a sentinel ID.
 use crate::helper_impls::StructuralEq;
 
-
 pub mod typecheck;
 pub mod visitors;
+
+pub use typecheck::ModuleInferenceContext as ZeaTypeChecker;
 
 #[cfg(test)]
 pub(crate) mod test_ast_macros {
@@ -1405,10 +1406,11 @@ impl From<String> for TypeSpecifier {
     }
 }
 
-pub struct TooLargeIntegerLiteral(usize);
 #[allow(non_snake_case)]
 impl TypeSpecifier {
-    pub const fn t_ILit_from(literal: usize) -> TypeSpecifier {
+    /// determine the minimal width a given literal needs to fit.
+    /// is always one of 8, 16, 32, 64
+    pub const fn narrowest_int_type_from_literal(literal: usize) -> TypeSpecifier {
         let width = Self::determine_int_literal_width(literal);
         Self::Integer {
             width,

@@ -1,3 +1,6 @@
+use std::marker::PhantomData;
+use std::usize;
+
 use crate::helper_impls::StructuralEq;
 use crate::visualisation::IndentPrint;
 use crate::zea;
@@ -10,20 +13,21 @@ use crate::zea::{
 use crate::zea::{FunctionCall, Hasher};
 use crate::zea::{Hash, StatementKind};
 use indexmap::{IndexMap, IndexSet};
+use log::{info, trace};
 use zea_internal_macros::{ASTStructuralEq, HashEqById};
 
 pub struct TupleSignature {
     members: Vec<zea::TypeSpecifier>,
 }
 
-#[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
-pub struct HoistedDeclaration {
-    pub id: NodeId,
-    pub typ: TypeSpecifier,
-    pub assignee: String,
-}
+// #[derive(Debug, Clone, HashEqById, ASTStructuralEq)]
+// pub struct HoistedDeclaration {
+//     pub id: NodeId,
+//     pub typ: TypeSpecifier,
+//     pub assignee: String,
+// }
 
-const BUILTIN_SCALAR_TYPES: [TypeSpecifier; 13] = [
+const BUILTIN_SCALAR_TYPES: [TypeSpecifier; 9] = [
     TypeSpecifier::t_Bool(),
     TypeSpecifier::t_I8(),
     TypeSpecifier::t_I16(),
@@ -33,12 +37,13 @@ const BUILTIN_SCALAR_TYPES: [TypeSpecifier; 13] = [
     TypeSpecifier::t_U16(),
     TypeSpecifier::t_U32(),
     TypeSpecifier::t_U64(),
-    TypeSpecifier::t_F32(),
-    TypeSpecifier::t_F64(),
-    TypeSpecifier::t_Unit(),
-    TypeSpecifier::t_Never(),
+    // TypeSpecifier::t_F32(),
+    // TypeSpecifier::t_F64(),
+    // TypeSpecifier::t_Unit(),
+    // TypeSpecifier::t_Never(),
 ];
 
+#[derive(Debug)]
 pub enum TypeCheckError {
     UnifyError(TypeConcreteId, TypeConcreteId),
     ExpectedResolvedType(InferenceId),
@@ -53,13 +58,13 @@ pub enum TypeCheckError {
     MissingStructField(TypeConcreteId, String),
 }
 /// The id that a concrete type gets during type-checking
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct TypeConcreteId {
     id: usize,
 }
 
 /// The id that a type-variable gets during type-checking
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct TypeVarId {
     id: usize,
 }
@@ -96,7 +101,7 @@ impl TypeInterningTable {
             .ok_or(MissingInternedTypeId(id))
     }
     pub fn get_interned_int_literal_type(&self, literal: usize) -> TypeConcreteId {
-        let t = zea::TypeSpecifier::t_ILit_from(literal);
+        let t = zea::TypeSpecifier::narrowest_int_type_from_literal(literal);
         TypeConcreteId {
             id: self.type_ids.get_index_of(&t).unwrap(),
         }
@@ -277,7 +282,7 @@ impl From<TypeVarId> for InferenceId {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Copy, Clone)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug)]
 pub enum InferenceId {
     TypeConcrete(TypeConcreteId), // map some type-id to an actual type within an interning-table
     TypeVar(TypeVarId),
@@ -288,8 +293,7 @@ impl InferenceId {
         matches!(self, InferenceId::TypeConcrete(_))
     }
 }
-pub struct ModuleInferenceContext<'ast> {
-    ast: &'ast Module,
+pub struct ModuleInferenceContext {
     /// unique types within a program, use a [`TypeConcreteId`] to lookup
     pub intering_table: TypeInterningTable,
     /// type variables, use a [`TypeVarId`] to lookup,
@@ -300,10 +304,9 @@ pub struct ModuleInferenceContext<'ast> {
     scopes: ScopeAnnotations,
 }
 
-impl<'ast> ModuleInferenceContext<'ast> {
-    pub fn new(ast: &'ast Module) -> Self {
+impl ModuleInferenceContext {
+    pub fn new() -> Self {
         Self {
-            ast,
             intering_table: TypeInterningTable::new_builtin_zea_types(),
             subst_table: TypeVarSubstitutionTable::new(),
             node_types: IndexMap::new(),
@@ -311,15 +314,22 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
-    // pub fn present_final_node_types(&mut self) -> (TypeInterningTable, IndexMap<NodeId, TypeConcreteId>) {
-    //     let map = IndexMap::new();
-    //     for (_,inference_id) in self.node_types.iter_mut() {
-    //         let id = self.resolve_id_to_concrete(*inference_id).unwrap();
-    //     }
-    //
-    //     (self.intering_table, map)
-    // }
+    pub fn all_types_inferred(&self) -> bool {
+        self.node_types.values().all(|v| v.is_concrete())
+    }
 
+    pub fn check_module(&mut self, module: &mut Module) -> Result<(), TypeCheckError> {
+        self.introduce_visit_module(module);
+        while !self.all_types_inferred() {
+            trace!("not yet done typechecking");
+            for init in module.global_vars.iter_mut() {
+                self.typecheck_assignment(init)?;
+            }
+        }
+        Ok(())
+    }
+    /// Get the type specifier and its concrete ID behind an inference ID
+    /// Fails if the type is a variable not yet resolved
     pub fn typespecifier_behind_inference_id(
         &mut self,
         id: InferenceId,
@@ -332,15 +342,17 @@ impl<'ast> ModuleInferenceContext<'ast> {
         Ok((concrete, concrete_id))
     }
 
+    /// The inference ID of booleans
     pub fn type_bool_inference_id(&self) -> InferenceId {
         self.intering_table.interned_bool().into()
     }
-    pub fn type_unit_inference_id(&self) -> InferenceId {
-        self.intering_table.interned_unit().into()
-    }
+    // pub fn type_unit_inference_id(&self) -> InferenceId {
+    //     self.intering_table.interned_unit().into()
+    // }
     pub fn type_u64_inference_id(&self) -> InferenceId {
         self.intering_table.interned_u64().into()
     }
+
     pub fn type_int_inference_id(
         &self,
         width: usize,
@@ -350,54 +362,56 @@ impl<'ast> ModuleInferenceContext<'ast> {
             .lookup_type_specifier(&TypeSpecifier::Integer { width, signed })
             .map(|conc_id| InferenceId::TypeConcrete(conc_id))
     }
-    pub fn type_float_inference_id(&self, width: usize) -> Result<InferenceId, TypeCheckError> {
-        self.intering_table
-            .lookup_type_specifier(&TypeSpecifier::Float { width })
-            .map(|conc_id| InferenceId::TypeConcrete(conc_id))
-    }
+    // pub fn type_float_inference_id(&self, width: usize) -> Result<InferenceId, TypeCheckError> {
+    //     self.intering_table
+    //         .lookup_type_specifier(&TypeSpecifier::Float { width })
+    //         .map(|conc_id| InferenceId::TypeConcrete(conc_id))
+    // }
 
     pub fn introduce_visit_module(&mut self, module: &Module) {
-        for func in module.functions.iter() {
-            self.introduce_visit_function(func);
-        }
+        // for func in module.functions.iter() {
+        //     self.introduce_visit_function(func);
+        // }
         for global_var in module.global_vars.iter() {
             self.introduce_visit_initialisation(global_var);
         }
     }
-    pub fn introduce_visit_function(&mut self, func: &Function) {
-        for stmt in func.body.statements.iter() {
-            self.introduce_visit_statement(stmt);
-        }
-    }
-    pub fn introduce_visit_funccall(&mut self, call: &FunctionCall) {
-        for arg in call.args.iter() {
-            self.introduce_visit_expression(arg);
-        }
-    }
-    pub fn introduce_visit_branch(&mut self, branch: &IfThenElse) {
-        self.introduce_visit_expression(branch.condition.as_ref());
-        self.introduce_visit_expression(branch.true_case.as_ref());
-        if let Some(ref false_case) = branch.false_case {
-            self.introduce_visit_expression(false_case.as_ref());
-        }
-    }
+    // pub fn introduce_visit_function(&mut self, func: &Function) {
+    //     for stmt in func.body.statements.iter() {
+    //         self.introduce_visit_statement(stmt);
+    //     }
+    // }
+    // pub fn introduce_visit_funccall(&mut self, call: &FunctionCall) {
+    //     for arg in call.args.iter() {
+    //         self.introduce_visit_expression(arg);
+    //     }
+    // }
+    // pub fn introduce_visit_branch(&mut self, branch: &IfThenElse) {
+    //     self.introduce_visit_expression(branch.condition.as_ref());
+    //     self.introduce_visit_expression(branch.true_case.as_ref());
+    //     if let Some(ref false_case) = branch.false_case {
+    //         self.introduce_visit_expression(false_case.as_ref());
+    //     }
+    // }
     pub fn introduce_visit_expression(&mut self, expr: &zea::Expression) {
         match expr.kind {
-            ExpressionKind::Unit
-            | ExpressionKind::IntegerLiteral(_)
+            ExpressionKind::IntegerLiteral(_)
             | ExpressionKind::BoolLiteral(_)
-            | ExpressionKind::FloatLiteral(_) => self.introduce_visit_expression_trivial_type(expr),
-            ExpressionKind::FunctionCall(_)
-            | ExpressionKind::BinOpExpr(_, _, _)
-            | ExpressionKind::UnOpExpr(_, _)
-            | ExpressionKind::MemberAccess(_, _)
-            | ExpressionKind::ScopedIdent(_)
-            | ExpressionKind::IfThenElse(_)
-            | ExpressionKind::Block(_)
-            | ExpressionKind::UnScopedIdent(_) => {
-                self.introduce_visit_expression_non_trivial_type(expr)
-            }
-            ExpressionKind::StringLiteral(_) => todo!("string types for Zea"),
+            // | ExpressionKind::Unit
+            // | ExpressionKind::FloatLiteral(_) 
+            => self.introduce_visit_expression_trivial_type(expr),
+            // ExpressionKind::FunctionCall(_)
+            // | ExpressionKind::BinOpExpr(_, _, _)
+            // | ExpressionKind::UnOpExpr(_, _)
+            // | ExpressionKind::MemberAccess(_, _)
+            // | ExpressionKind::ScopedIdent(_)
+            // | ExpressionKind::IfThenElse(_)
+            // | ExpressionKind::Block(_)
+            // | ExpressionKind::UnScopedIdent(_) => {
+            //     self.introduce_visit_expression_non_trivial_type(expr)
+            // }
+            // ExpressionKind::StringLiteral(_) => todo!("string types for Zea"),
+            _ => todo!("only integer and bool right neow bro")
         }
     }
 
@@ -406,96 +420,103 @@ impl<'ast> ModuleInferenceContext<'ast> {
             unreachable!()
         };
         for init in unpacked.iter() {
+            if let Some(typ) = &init.typ {
+                self.intering_table.introduce(typ);
+            } else {
+                let t = self.subst_table.fresh();
+                self.node_types.insert(init.id, InferenceId::TypeVar(t));
+            }
             self.introduce_visit_expression(&init.value);
         }
     }
-    fn introduce_visit_block(&mut self, block: &zea::BlockExpression) {
-        for stmt in block.statements.iter() {
-            self.introduce_visit_statement(stmt);
-        }
-        self.introduce_visit_expression(&block.last);
-    }
+    // fn introduce_visit_block(&mut self, block: &zea::BlockExpression) {
+    //     for stmt in block.statements.iter() {
+    //         self.introduce_visit_statement(stmt);
+    //     }
+    //     self.introduce_visit_expression(&block.last);
+    // }
 
     fn introduce_visit_statement(&mut self, stmt: &zea::Statement) {
         match &stmt.kind {
-            StatementKind::Return(e) => self.introduce_visit_expression(e),
+            // StatementKind::Return(e) => self.introduce_visit_expression(e),
             StatementKind::Initialization(init) => self.introduce_visit_initialisation(init),
-            StatementKind::Reassignment(r) => self.introduce_visit_expression(&r.value),
-            StatementKind::FunctionCall(call) => self.introduce_visit_funccall(call),
-            StatementKind::BlockTail(e) => self.introduce_visit_expression(e),
-            StatementKind::Block(b) => {
-                self.introduce_visit_block(b);
-            }
-            StatementKind::IfThenElse(branch) => {
-                self.introduce_visit_branch(branch);
-            }
+            // StatementKind::Reassignment(r) => self.introduce_visit_expression(&r.value),
+            // StatementKind::FunctionCall(call) => self.introduce_visit_funccall(call),
+            // StatementKind::BlockTail(e) => self.introduce_visit_expression(e),
+            // StatementKind::Block(b) => {
+            //     self.introduce_visit_block(b);
+            // }
+            // StatementKind::IfThenElse(branch) => {
+            //     self.introduce_visit_branch(branch);
+            // }
+            _ => todo!("only integer and bool right neow bro"),
         }
     }
 
     fn introduce_visit_expression_trivial_type(&mut self, expr: &zea::Expression) {
         let inference_id: InferenceId = match expr.kind {
-            ExpressionKind::Unit => self.intering_table.interned_unit().into(),
+            // ExpressionKind::Unit => self.intering_table.interned_unit().into(),
             ExpressionKind::IntegerLiteral(i) => {
                 self.intering_table.get_interned_int_literal_type(i).into()
             }
             ExpressionKind::BoolLiteral(_) => self.intering_table.interned_bool().into(),
-            ExpressionKind::FloatLiteral(_) => self.intering_table.interned_f64().into(),
-            _ => unreachable!(
-                "AST node with id {} is not a trivial expression: {:?}",
-                expr.id, expr.kind
-            ),
+            // ExpressionKind::FloatLiteral(_) => self.intering_table.interned_f64().into(),
+            // _ => unreachable!(
+            //     "AST node with id {} is not a trivial expression: {:?}",
+            //     expr.id, expr.kind
+            // ),
+            _ => todo!("only integer and bool right neow bro"),
         };
         self.node_types.insert(expr.id, inference_id);
     }
-    fn introduce_visit_expression_non_trivial_type(&mut self, expr: &zea::Expression) {
-        match &expr.kind {
-            ExpressionKind::ScopedIdent(_) => {
-                let var = self.subst_table.fresh();
-                self.node_types.insert(expr.id, var.into());
-            }
-            ExpressionKind::FunctionCall(call) => {
-                let var = self.subst_table.fresh();
-                self.node_types.insert(expr.id, var.into());
-                self.introduce_visit_funccall(call);
-            }
-            ExpressionKind::BinOpExpr(_op, l, r) => {
-                let var = self.subst_table.fresh();
-                self.node_types.insert(expr.id, var.into());
-                self.introduce_visit_expression(l.as_ref());
-                self.introduce_visit_expression(r.as_ref());
-            }
-            ExpressionKind::UnOpExpr(_op, arg) => {
-                let var = self.subst_table.fresh();
-                self.node_types.insert(expr.id, var.into());
-                self.introduce_visit_expression(arg.as_ref());
-            }
-            ExpressionKind::MemberAccess(datatype, _member) => {
-                let var = self.subst_table.fresh();
-                self.node_types.insert(expr.id, var.into());
-                self.introduce_visit_expression(datatype.as_ref());
-            }
-            ExpressionKind::IfThenElse(branch) => {
-                let var = self.subst_table.fresh();
-                self.node_types.insert(expr.id, var.into());
+    // fn introduce_visit_expression_non_trivial_type(&mut self, _expr: &zea::Expression) {
+    //     todo!("only integer and bool right neow bro");
 
-                self.introduce_visit_branch(branch);
-            }
-            ExpressionKind::Block(block) => {
-                let var = self.subst_table.fresh();
-                self.node_types.insert(expr.id, var.into());
-                self.introduce_visit_block(block);
-            }
-            _ => unreachable!(
-                "AST node with id {} is not a non-trivial expression: {:?}",
-                expr.id, expr.kind
-            ),
-        };
-    }
+    //     // match &expr.kind {
+    //     //     ExpressionKind::ScopedIdent(_) => {
+    //     //         let var = self.subst_table.fresh();
+    //     //         self.node_types.insert(expr.id, var.into());
+    //     //     }
+    //     //     ExpressionKind::FunctionCall(call) => {
+    //     //         let var = self.subst_table.fresh();
+    //     //         self.node_types.insert(expr.id, var.into());
+    //     //         self.introduce_visit_funccall(call);
+    //     //     }
+    //     //     ExpressionKind::BinOpExpr(_op, l, r) => {
+    //     //         let var = self.subst_table.fresh();
+    //     //         self.node_types.insert(expr.id, var.into());
+    //     //         self.introduce_visit_expression(l.as_ref());
+    //     //         self.introduce_visit_expression(r.as_ref());
+    //     //     }
+    //     //     ExpressionKind::UnOpExpr(_op, arg) => {
+    //     //         let var = self.subst_table.fresh();
+    //     //         self.node_types.insert(expr.id, var.into());
+    //     //         self.introduce_visit_expression(arg.as_ref());
+    //     //     }
+    //     //     ExpressionKind::MemberAccess(datatype, _member) => {
+    //     //         let var = self.subst_table.fresh();
+    //     //         self.node_types.insert(expr.id, var.into());
+    //     //         self.introduce_visit_expression(datatype.as_ref());
+    //     //     }
+    //     //     ExpressionKind::IfThenElse(branch) => {
+    //     //         let var = self.subst_table.fresh();
+    //     //         self.node_types.insert(expr.id, var.into());
 
-    pub fn get_inference_id(
-        &self,
-        node: &'ast zea::Expression,
-    ) -> Result<InferenceId, TypeCheckError> {
+    //     //         self.introduce_visit_branch(branch);
+    //     //     }
+    //     //     ExpressionKind::Block(block) => {
+    //     //         let var = self.subst_table.fresh();
+    //     //         self.node_types.insert(expr.id, var.into());
+    //     //         self.introduce_visit_block(block);
+    //     //     }
+    //     //     _ => unreachable!(
+    //     //         "AST node with id {} is not a non-trivial expression: {:?}",
+    //     //         expr.id, expr.kind
+    //     //     ),
+    //     // };
+    // }
+
+    pub fn get_inference_id(&self, node: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
         self.node_types
             .get(&node.id)
             .cloned()
@@ -517,18 +538,7 @@ impl<'ast> ModuleInferenceContext<'ast> {
         }
     }
 
-    pub fn get_resolved_type(
-        &mut self,
-        inference_id: InferenceId,
-    ) -> Result<&TypeSpecifier, TypeCheckError> {
-        let maybe_con_id = self.follow_inference_id(inference_id);
-        match maybe_con_id {
-            InferenceId::TypeConcrete(c) => self.intering_table.lookup_by_id(c),
-
-            InferenceId::TypeVar(_) => Err(TypeCheckError::ExpectedResolvedType(maybe_con_id)),
-        }
-    }
-
+    /// typecheck two expression nodes
     pub fn try_unify_coerce(
         &mut self,
         expr: &zea::Expression,
@@ -617,24 +627,24 @@ impl<'ast> ModuleInferenceContext<'ast> {
             _ => Err(TypeCheckError::ExpectedArrayType(id)),
         }
     }
-    fn require_array_type(&mut self, id: InferenceId) -> Result<TypeSpecifier, TypeCheckError> {
-        let (typ, id) = self.typespecifier_behind_inference_id(id)?;
-        match typ {
-            TypeSpecifier::ArrayOf(t) => Ok(*t),
-            _ => Err(TypeCheckError::ExpectedArrayType(id)),
-        }
-    }
+    // fn require_array_type(&mut self, id: InferenceId) -> Result<TypeSpecifier, TypeCheckError> {
+    //     let (typ, id) = self.typespecifier_behind_inference_id(id)?;
+    //     match typ {
+    //         TypeSpecifier::ArrayOf(t) => Ok(*t),
+    //         _ => Err(TypeCheckError::ExpectedArrayType(id)),
+    //     }
+    // }
 
-    fn require_struct_type(
-        &mut self,
-        id: InferenceId,
-    ) -> Result<StructDataTypeDefinition, TypeCheckError> {
-        let (s, bob) = self.typespecifier_behind_inference_id(id)?;
-        match s {
-            TypeSpecifier::NonScalar(t) => self.find_struct_def(&t).cloned(),
-            _ => Err(TypeCheckError::ExpectedStructType(bob)),
-        }
-    }
+    // fn require_struct_type(
+    //     &mut self,
+    //     id: InferenceId,
+    // ) -> Result<StructDataTypeDefinition, TypeCheckError> {
+    //     let (s, bob) = self.typespecifier_behind_inference_id(id)?;
+    //     match s {
+    //         TypeSpecifier::NonScalar(t) => self.find_struct_def(&t).cloned(),
+    //         _ => Err(TypeCheckError::ExpectedStructType(bob)),
+    //     }
+    // }
     fn require_bool_type(&mut self, id: InferenceId) -> Result<TypeSpecifier, TypeCheckError> {
         let (s, bob) = self.typespecifier_behind_inference_id(id)?;
         match s {
@@ -708,228 +718,234 @@ impl<'ast> ModuleInferenceContext<'ast> {
             _ => Ok(None),
         }
     }
+    /*
+    // pub fn infer_block(&mut self, block: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        //     let id = self.get_inference_id(block)?;
+        //     let ExpressionKind::Block(block) = &block.kind else {
+            //         panic!("infer_block expects block, got {:?}", block.kind)
+            //     };
+            //     let t = self.infer_expr(&block.last)?;
+            //     self.unify_coerce_ids(id, t)?;
 
-    pub fn infer_block(&mut self, block: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
-        let id = self.get_inference_id(block)?;
-        let ExpressionKind::Block(block) = &block.kind else {
-            panic!("infer_block expects block, got {:?}", block.kind)
-        };
-        let t = self.infer_expr(&block.last)?;
-        self.unify_coerce_ids(id, t)?;
+        //     Ok(self.follow_inference_id(id))
+        // }
 
-        Ok(self.follow_inference_id(id))
-    }
+        // pub fn infer_branch(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        //     let ExpressionKind::IfThenElse(branch) = &expr.kind else {
+            //         panic!("infer_branch expects branch, got {:?}", expr.kind)
+            //     };
 
-    pub fn infer_branch(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
-        let ExpressionKind::IfThenElse(branch) = &expr.kind else {
-            panic!("infer_branch expects branch, got {:?}", expr.kind)
-        };
+            //     let cond_id = self.infer_expr(branch.condition.as_ref())?;
+        //     self.unify_coerce_ids(cond_id, self.type_bool_inference_id())?;
 
-        let cond_id = self.infer_expr(branch.condition.as_ref())?;
-        self.unify_coerce_ids(cond_id, self.type_bool_inference_id())?;
+        //     let true_id = self.infer_expr(branch.true_case.as_ref())?;
 
-        let true_id = self.infer_expr(branch.true_case.as_ref())?;
+        //     if let Some(false_case) = &branch.false_case {
+            //         let false_id = self.infer_expr(false_case.as_ref())?;
+        //         self.unify_coerce_ids(true_id, false_id)?;
+        //     } else {
+        //         self.unify_coerce_ids(true_id, self.type_unit_inference_id())?;
+        //     }
 
-        if let Some(false_case) = &branch.false_case {
-            let false_id = self.infer_expr(false_case.as_ref())?;
-            self.unify_coerce_ids(true_id, false_id)?;
-        } else {
-            self.unify_coerce_ids(true_id, self.type_unit_inference_id())?;
-        }
+        //     let expr_id = self.get_inference_id(expr)?;
+        //     self.unify_coerce_ids(expr_id, true_id)?;
+        //     Ok(self.follow_inference_id(expr_id))
+        // }
 
-        let expr_id = self.get_inference_id(expr)?;
-        self.unify_coerce_ids(expr_id, true_id)?;
-        Ok(self.follow_inference_id(expr_id))
-    }
+        // pub fn infer_binop(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        //     let expr_id = self.get_inference_id(expr)?;
+        //     let ExpressionKind::BinOpExpr(op, lhs, rhs) = &expr.kind else {
+        //         panic!("infer_binop expects binop, got {:?}", expr.kind)
+        //     };
+        //     let t_lhs = self.infer_expr(lhs)?;
+        //     let t_rhs = self.infer_expr(rhs)?;
+        //     match op {
+        //         BinOp::Add
+        //         | BinOp::Sub
+        //         | BinOp::Mul
+        //         | BinOp::Mod
+        //         | BinOp::Div
+        //         | BinOp::BitAnd
+        //         | BinOp::BitOr
+        //         | BinOp::BitXor
+        //         | BinOp::Lsh
+        //         | BinOp::Rsh
+        //         | BinOp::Eq
+        //         | BinOp::Neq
+        //         | BinOp::Geq
+        //         | BinOp::GT
+        //         | BinOp::Leq
+        //         | BinOp::LT => {
+        //             self.unify_coerce_ids(t_lhs, t_rhs)?;
 
-    pub fn infer_binop(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
-        let expr_id = self.get_inference_id(expr)?;
-        let ExpressionKind::BinOpExpr(op, lhs, rhs) = &expr.kind else {
-            panic!("infer_binop expects binop, got {:?}", expr.kind)
-        };
-        let t_lhs = self.infer_expr(lhs)?;
-        let t_rhs = self.infer_expr(rhs)?;
-        match op {
-            BinOp::Add
-            | BinOp::Sub
-            | BinOp::Mul
-            | BinOp::Mod
-            | BinOp::Div
-            | BinOp::BitAnd
-            | BinOp::BitOr
-            | BinOp::BitXor
-            | BinOp::Lsh
-            | BinOp::Rsh
-            | BinOp::Eq
-            | BinOp::Neq
-            | BinOp::Geq
-            | BinOp::GT
-            | BinOp::Leq
-            | BinOp::LT => {
-                self.unify_coerce_ids(t_lhs, t_rhs)?;
+        //             self.unify_coerce_ids(expr_id, t_lhs)?;
+        //         }
 
-                self.unify_coerce_ids(expr_id, t_lhs)?;
-            }
+        //         BinOp::LogAnd | BinOp::LogOr | BinOp::LogXor => {
+        //             self.unify_coerce_ids(t_lhs, self.type_bool_inference_id())?;
+        //             self.unify_coerce_ids(t_rhs, self.type_bool_inference_id())?;
+        //             self.unify_coerce_ids(expr_id, self.type_bool_inference_id())?;
+        //         }
+        //         BinOp::Subscript => {
+        //             self.unify_coerce_ids(t_rhs, self.type_u64_inference_id())?;
+        //             let t_inner = self.require_array_type(t_lhs)?;
+        //             let t_inner_id = self.intering_table.introduce(&t_inner);
+        //             self.unify_equify_ids(expr_id, t_inner_id)?;
+        //         }
+        //     }
+        //     Ok(expr_id)
+        // }
 
-            BinOp::LogAnd | BinOp::LogOr | BinOp::LogXor => {
-                self.unify_coerce_ids(t_lhs, self.type_bool_inference_id())?;
-                self.unify_coerce_ids(t_rhs, self.type_bool_inference_id())?;
-                self.unify_coerce_ids(expr_id, self.type_bool_inference_id())?;
-            }
-            BinOp::Subscript => {
-                self.unify_coerce_ids(t_rhs, self.type_u64_inference_id())?;
-                let t_inner = self.require_array_type(t_lhs)?;
-                let t_inner_id = self.intering_table.introduce(&t_inner);
-                self.unify_equify_ids(expr_id, t_inner_id)?;
-            }
-        }
-        Ok(expr_id)
-    }
+        // pub fn infer_unop(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        //     let ExpressionKind::UnOpExpr(op, arg) = &expr.kind else {
+        //         panic!("infer_unop expects unop, got {:?}", expr.kind)
+        //     };
+        //     let expr_id = self.get_inference_id(expr)?;
+        //     let arg_id = self.infer_expr(arg)?;
 
-    pub fn infer_unop(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
-        let ExpressionKind::UnOpExpr(op, arg) = &expr.kind else {
-            panic!("infer_unop expects unop, got {:?}", expr.kind)
-        };
-        let expr_id = self.get_inference_id(expr)?;
-        let arg_id = self.infer_expr(arg)?;
+        //     match op {
+        //         UnOp::Neg => self.infer_unop_neg(arg_id, expr_id),
+        //         UnOp::LogNot => self.infer_unop_log_not(arg_id),
+        //         UnOp::BitNot => todo!(),
+        //     }
+        // }
+        // pub fn infer_unop_log_not(
+        //     &mut self,
+        //     arg_id: InferenceId,
+        // ) -> Result<InferenceId, TypeCheckError> {
+        //     let bool_type = self.type_bool_inference_id();
+        //     self.require_bool_type(arg_id)?;
 
-        match op {
-            UnOp::Neg => self.infer_unop_neg(arg_id, expr_id),
-            UnOp::LogNot => self.infer_unop_log_not(arg_id),
-            UnOp::BitNot => todo!(),
-        }
-    }
-    pub fn infer_unop_log_not(
-        &mut self,
-        arg_id: InferenceId,
-    ) -> Result<InferenceId, TypeCheckError> {
-        let bool_type = self.type_bool_inference_id();
-        self.require_bool_type(arg_id)?;
+        //     self.unify_coerce_ids(arg_id, bool_type)?;
+        //     Ok(bool_type)
+        // }
+        // pub fn infer_unop_neg(
+        //     &mut self,
+        //     arg_id: InferenceId,
+        //     expr_id: InferenceId,
+        // ) -> Result<InferenceId, TypeCheckError> {
+        //     let typ = self.get_resolved_type(arg_id)?;
+        //     if let TypeSpecifier::Integer {
+        //         width: _w,
+        //         signed: true,
+        //     } = typ
+        //     {
+        //         self.unify_coerce_ids(expr_id, arg_id)?;
+        //     } else if let TypeSpecifier::Integer {
+        //         width: w,
+        //         signed: false,
+        //     } = typ
+        //     {
+        //         let resulting_width = (2 * w).min(64);
+        //         let t_res = self.type_int_inference_id(resulting_width, false)?;
+        //         self.unify_coerce_ids(expr_id, t_res)?;
+        //     } else if let TypeSpecifier::Float { width: _w } = typ {
+        //         self.unify_coerce_ids(expr_id, arg_id)?;
+        //     }
+        //     Ok(expr_id)
+        // }
 
-        self.unify_coerce_ids(arg_id, bool_type)?;
-        Ok(bool_type)
-    }
-    pub fn infer_unop_neg(
-        &mut self,
-        arg_id: InferenceId,
-        expr_id: InferenceId,
-    ) -> Result<InferenceId, TypeCheckError> {
-        let typ = self.get_resolved_type(arg_id)?;
-        if let TypeSpecifier::Integer {
-            width: _w,
-            signed: true,
-        } = typ
-        {
-            self.unify_coerce_ids(expr_id, arg_id)?;
-        } else if let TypeSpecifier::Integer {
-            width: w,
-            signed: false,
-        } = typ
-        {
-            let resulting_width = (2 * w).min(64);
-            let t_res = self.type_int_inference_id(resulting_width, false)?;
-            self.unify_coerce_ids(expr_id, t_res)?;
-        } else if let TypeSpecifier::Float { width: _w } = typ {
-            self.unify_coerce_ids(expr_id, arg_id)?;
-        }
-        Ok(expr_id)
-    }
+        // pub fn infer_unop_bit_not(
+        //     &mut self,
+        //     arg_id: InferenceId,
+        //     expr_id: InferenceId,
+        // ) -> Result<InferenceId, TypeCheckError> {
+        //     // bitwise operations are legal on any integer type
+        //     self.require_integer_type(arg_id, None, None)?;
+        //     self.unify_coerce_ids(arg_id, expr_id)?;
+        //     Ok(expr_id)
+        // }
 
-    pub fn infer_unop_bit_not(
-        &mut self,
-        arg_id: InferenceId,
-        expr_id: InferenceId,
-    ) -> Result<InferenceId, TypeCheckError> {
-        // bitwise operations are legal on any integer type
-        self.require_integer_type(arg_id, None, None)?;
-        self.unify_coerce_ids(arg_id, expr_id)?;
-        Ok(expr_id)
-    }
+        // pub fn infer_func_call(
+        //     &mut self,
+        //     expr: &zea::Expression,
+        // ) -> Result<InferenceId, TypeCheckError> {
+        //     let ExpressionKind::FunctionCall(_call) = &expr.kind else {
+        //         panic!("infer_func_call expects branch, got {:?}", expr.kind)
+        //     };
+        //     todo!()
+        // }
+        // pub fn infer_func_call_named(
+        //     &mut self,
+        //     _expr_id: InferenceId,
+        //     call: &FunctionCall,
+        // ) -> Result<InferenceId, TypeCheckError> {
+        //     let ExpressionKind::ScopedIdent(_s) = &call.subject.kind else {
+        //         unreachable!()
+        //     };
+        //     todo!()
+        // }
 
-    pub fn infer_func_call(
-        &mut self,
-        expr: &zea::Expression,
-    ) -> Result<InferenceId, TypeCheckError> {
-        let ExpressionKind::FunctionCall(_call) = &expr.kind else {
-            panic!("infer_func_call expects branch, got {:?}", expr.kind)
-        };
-        todo!()
-    }
-    pub fn infer_func_call_named(
-        &mut self,
-        _expr_id: InferenceId,
-        call: &FunctionCall,
-    ) -> Result<InferenceId, TypeCheckError> {
-        let ExpressionKind::ScopedIdent(_s) = &call.subject.kind else {
-            unreachable!()
-        };
-        todo!()
-    }
+        // pub fn infer_ident(&mut self, ident: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        //     let ExpressionKind::ScopedIdent(_s) = &ident.kind else {
+        //         unreachable!("infer_ident expects a scoped identifier expression")
+        //     };
+        //     todo!()
+        // }
 
-    pub fn infer_ident(&mut self, ident: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
-        let ExpressionKind::ScopedIdent(_s) = &ident.kind else {
-            unreachable!("infer_ident expects a scoped identifier expression")
-        };
-        todo!()
-    }
+        // pub fn infer_member_access(
+        //     &mut self,
+        //     member_access: &zea::Expression,
+        // ) -> Result<InferenceId, TypeCheckError> {
+        //     let ExpressionKind::MemberAccess(datatype, member) = &member_access.kind else {
+        //         panic!(
+        //             "infer_member_access expects member_access, got {:?}",
+        //             member_access.kind
+        //         )
+        //     };
+        //     let expr_id = self.get_inference_id(member_access)?;
+        //     let datatype_infer_id = self.infer_expr(datatype)?;
+        //     let s = self.require_struct_type(datatype_infer_id)?;
 
-    pub fn infer_member_access(
-        &mut self,
-        member_access: &zea::Expression,
-    ) -> Result<InferenceId, TypeCheckError> {
-        let ExpressionKind::MemberAccess(datatype, member) = &member_access.kind else {
-            panic!(
-                "infer_member_access expects member_access, got {:?}",
-                member_access.kind
-            )
-        };
-        let expr_id = self.get_inference_id(member_access)?;
-        let datatype_infer_id = self.infer_expr(datatype)?;
-        let s = self.require_struct_type(datatype_infer_id)?;
-
-        let field = self.get_struct_member_type(&s, member)?;
-        let field_id = self.intering_table.introduce(&field).into();
-        self.unify_coerce_ids(expr_id, field_id)?;
-        Ok(field_id)
-    }
-    fn find_struct_def(&self, name: &str) -> Result<&StructDataTypeDefinition, TypeCheckError> {
-        self.ast
-            .struct_definitions
-            .iter()
-            .find(|s| s.name == name)
-            .ok_or(TypeCheckError::MissingStructDefinition(name.to_string()))
-    }
-    fn get_struct_member_type(
-        &mut self,
-        struct_def: &StructDataTypeDefinition,
-        field: &str,
-    ) -> Result<TypeSpecifier, TypeCheckError> {
-        let struct_spec = TypeSpecifier::from(struct_def.name.as_str());
-        let struct_id = self.intering_table.lookup_type_specifier(&struct_spec)?;
-        struct_def
-            .members
-            .iter()
-            .find_map(|member| (member.name == field).then_some(member.typ.clone()))
-            .ok_or(TypeCheckError::MissingStructField(
-                struct_id,
-                field.to_string(),
-            ))
-    }
-
+        //     let field = self.get_struct_member_type(&s, member)?;
+        //     let field_id = self.intering_table.introduce(&field).into();
+        //     self.unify_coerce_ids(expr_id, field_id)?;
+        //     Ok(field_id)
+        // }
+        // fn find_struct_def(&self, name: &str) -> Result<&StructDataTypeDefinition, TypeCheckError> {
+        //     self.ast
+        //         .struct_definitions
+        //         .iter()
+        //         .find(|s| s.name == name)
+        //         .ok_or(TypeCheckError::MissingStructDefinition(name.to_string()))
+        // }
+        // fn get_struct_member_type(
+        //     &mut self,
+        //     struct_def: &StructDataTypeDefinition,
+        //     field: &str,
+        // ) -> Result<TypeSpecifier, TypeCheckError> {
+        //     let struct_spec = TypeSpecifier::from(struct_def.name.as_str());
+        //     let struct_id = self.intering_table.lookup_type_specifier(&struct_spec)?;
+        //     struct_def
+        //         .members
+        //         .iter()
+        //         .find_map(|member| (member.name == field).then_some(member.typ.clone()))
+        //         .ok_or(TypeCheckError::MissingStructField(
+        //             struct_id,
+        //             field.to_string(),
+        //         ))
+        // }
+        */
     pub fn infer_expr(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
+        // todo!("only integer and bool right neow bro");
+
         match &expr.kind {
-            ExpressionKind::IfThenElse(_) => self.infer_branch(expr),
-            ExpressionKind::Block(_) => self.infer_block(expr),
-            ExpressionKind::UnScopedIdent(_) => self.infer_ident(expr),
-            ExpressionKind::FunctionCall(_) => self.infer_func_call(expr),
-            ExpressionKind::BinOpExpr(_, _, _) => self.infer_binop(expr),
-            ExpressionKind::UnOpExpr(_, _) => self.infer_unop(expr),
-            ExpressionKind::MemberAccess(_, _) => self.infer_member_access(expr),
+            // ExpressionKind::IfThenElse(_) => self.infer_branch(expr),
+            // ExpressionKind::Block(_) => self.infer_block(expr),
+            // ExpressionKind::UnScopedIdent(_) => self.infer_ident(expr),
+            // ExpressionKind::FunctionCall(_) => self.infer_func_call(expr),
+            // ExpressionKind::BinOpExpr(_, _, _) => self.infer_binop(expr),
+            // ExpressionKind::UnOpExpr(_, _) => self.infer_unop(expr),
+            // ExpressionKind::MemberAccess(_, _) => self.infer_member_access(expr),
             // ExpressionKind::Unit => {}
-            // ExpressionKind::IntegerLiteral(_) => {}
-            // ExpressionKind::BoolLiteral(_) => {}
+            ExpressionKind::IntegerLiteral(i) => {
+                let width = zea::TypeSpecifier::determine_int_literal_width(*i);
+                self.type_int_inference_id(width, false)
+            }
+            ExpressionKind::BoolLiteral(_) => Ok(self.type_bool_inference_id()),
             // ExpressionKind::FloatLiteral(_) => {}
-            _ => unreachable!("ILLEGAL NODE WHILE INFERRING:\n{}", expr.indent_print(1)),
+            _ => todo!("only integer and bool right neow bro"),
+            // _ => unreachable!("ILLEGAL NODE WHILE INFERRING:\n{}", expr.indent_print(1)),
         }
     }
 
@@ -951,12 +967,16 @@ impl<'ast> ModuleInferenceContext<'ast> {
         init: &mut SimpleInitialization,
     ) -> Result<(), TypeCheckError> {
         let t_actual = self.infer_expr(&init.value)?;
+
         if let Some(t) = &mut init.typ {
             let t_expected = self.intering_table.introduce(&t);
             self.unify_equify_ids(t_actual, t_expected)?;
         } else {
-            let t_actual_spec = self.get_resolved_type(t_actual).cloned()?;
+            let (t_actual_spec, concrete) = self.typespecifier_behind_inference_id(t_actual)?;
+            info!("determined type to be {t_actual_spec:?}");
             init.typ = Some(t_actual_spec);
+            self.node_types
+                .insert(init.id, InferenceId::TypeConcrete(concrete));
         }
         Ok(())
     }
