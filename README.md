@@ -1,6 +1,6 @@
 # zealang
 
-once you Zea it, you wont want to C it.
+once you Zea it, you won't want to C it.
 
 Zea is a preprocessor for C whose main goal is to reduce the boilerplate required to simulate
 features of more modern lagnuages
@@ -24,9 +24,6 @@ pattern ::= tuple-pattern-inner | identifier
 
 
 ## Some ergonomics borrowed from modern languages
-### tagged-unions
-
-WIP
 
 ### order of declaration is not significant
 no more forward declarations!
@@ -61,87 +58,7 @@ fn foo() -> U32 {
 }
 ```
 
-### Namespaces
-A file may declare a module, which contains imports, exports, datatypes, functions and globally-scoped identifiers.
-
-```
-// in file FooMod.zea
-module FooMod
-
-exports {
-    fn foo;
-    bar;
-    struct Baz;
-}
-
-fn foo(a: U32) -> U32 {a * 2}
-bar: U32 = 3;
-
-struct Baz {
-    baz_field: U32,
-}
-```
-Which can then be imported in another module
-```
-// in file Chicken.zea
-module Chicken
-
-imports {
-    FooMod:foo;
-    FooMod:bar;
-    FooMod:struct Baz;
-}
-
-struct Chicken {
-    eggs_laid: U32,
-}
-
-fn Chicken:new() -> Chicken {
-    Chicken {
-        .eggs_laid: 0
-    }
-}
-
-fn Chicken:lay-egg(self: Chicken) {
-    self.eggs_laid += 1;
-    stdout:print-line("pock pock");
-}
-
-fn main(argv: [String]) -> U8 {
-    let c := Chicken:new();
-    c:lay-egg();
-} 
-```
-
-The `:` operator has two uses, as a namespace-accessor, and as an instance-accessor.
-The language knows which one to use as Modules and Types always start with a capital letter,
-and identifiers always start with a lowercase letter.
-`Foo:bar()` (module-call) calls the `bar()` function defined in the `Foo` module.
-
-`foo:bar()` (instance-call), in the case that `foo` is of type `Foo`,
-calls this same function, passing the variable `foo` as the first argument.
-
-In the case of an instance-call, Zea will infer which function to call by infering the type of the instance variable.
-You may then notice there are now two ways to operate on instances of types:
-```
-module Foo
-exports {struct Foo;}
-
-struct Foo {}
-
-fn bar(foo: Foo) {...}
-
-foo := Foo {}; // instantiate some instance of the Foo type
-
-// we can do an instance-call:
-foo:bar();
-
-// or, alternatively a module-call:
-Foo:bar(foo);
-```
-the use of instance-calls is encouraged.
-
-### defining datatypes
+## defining datatypes
 Zea allows developers to define three kinds of datatypes: structs, tags and unions,
 with plans to add ergonomics for tagged-unions later.
 
@@ -247,4 +164,97 @@ fn Q-rsqrt(f: F64) -> F64 {
 ```
 
 #### Tagged unions
-As of right now, tagged unions are 
+As of right now, tagged unions are a construct developers must build themselves, leading to lots of boilerplate.
+We plan to implement tagged unions in a fshion similar to Rust somewhere in the future.
+
+### Namespaces
+A file may declare a module, which contains imports, exports, datatypes, functions and globally-scoped identifiers.
+
+```
+// in file FooMod.zea
+module FooMod
+
+exports {
+    fn foo;
+    bar;
+    struct Baz;
+}
+
+fn foo(a: U32) -> U32 {a * 2}
+bar: U32 = 3;
+
+struct Baz {
+    baz_field: U32,
+}
+```
+Which can then be imported in another module
+```
+// in file Chicken.zea
+module Chicken
+
+imports {
+    FooMod:foo;
+    FooMod:bar;
+    FooMod:struct Baz;
+}
+
+struct Chicken {
+    eggs_laid: U32,
+}
+
+fn Chicken:new() -> Chicken {
+    Chicken {
+        .eggs_laid: 0
+    }
+}
+
+fn Chicken:lay-egg(self: Chicken) {
+    self.eggs_laid += 1;
+    stdout:print-line("pock pock");
+}
+
+fn main(argv: [String]) -> U8 {
+    let c := Chicken:new();
+    c:lay-egg();
+} 
+```
+
+The `:` operator has two uses, as a namespace-accessor, and as an instance-accessor.
+The language knows which one to use as Modules and Types always start with a capital letter,
+and identifiers always start with a lowercase letter.
+`Foo:bar()` (module-call) calls the `bar()` function defined in the `Foo` module.
+
+`foo:bar()` (instance-call), in the case that `foo` is of type `Foo`,
+calls this same function, passing the variable `foo` as the first argument.
+
+In the case of an instance-call, Zea will infer which function to call by infering the type of the instance variable.
+You may then notice there are now two ways to operate on instances of types:
+```
+module Foo
+exports {struct Foo;}
+
+struct Foo {}
+
+fn bar(foo: Foo) {...}
+
+foo := Foo {}; // instantiate some instance of the Foo type
+
+// we can do an instance-call:
+foo:bar();
+
+// or, alternatively a module-call:
+Foo:bar(foo);
+```
+the use of instance-calls is encouraged.
+
+## The Type System
+Zea approaches types in a manner more similar to functional Rust, where types have no modifiers,
+instead a 'modified' type is considered a separate type.
+
+Take for instance the `unsigned` modifier in C, compared to the `I32` vs. `U32` types in Rust.
+This is done to make both the grammar of the language less ambiguous, and the code easier to understand in a glance.
+
+Zea uses the `var: Type = value` syntax instead of the `Type var = value` syntax. This makes omitting types more pretty: `var := value`,
+and makes the grammar rule for declarations simpler.
+
+As you might have inferred (hah, get it) from the above, Zea features type inference by a simplified Hindley Milner type system.
