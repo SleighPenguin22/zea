@@ -5,7 +5,7 @@
 //     pub filename: String,
 // }
 
-use log::info;
+use log::{error, info};
 use std::fs::read_to_string;
 use zea_ast::visualisation::IndentPrint;
 use zea_parser::parse_module;
@@ -25,7 +25,7 @@ fn main() {
     match type_checker.check_module(&mut module) {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("Type checking error: {e:?}")
+            error!("Type checking error: {e:?}")
         }
     };
     info!("after expansions:\n{}", module.indent_print(0));

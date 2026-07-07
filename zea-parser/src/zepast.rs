@@ -377,12 +377,8 @@ impl<'a> ZeaPrettyAstParser<'a> {
         self.expect_line(0, "module")?;
         let imports = self.parse_field_list("imports", |p, c, _d| Ok(c.to_string()))?;
         let exports = self.parse_field_list("exports", |p, c, _d| Ok(c.to_string()))?;
-        let globs = self.parse_field_list("globs", |p, c, d| {
-            p.parse_init_from_content(c, d)
-        })?;
-        let funcs = self.parse_field_list("funcs", |p, c, d| {
-            p.parse_func_from_content(c, d)
-        })?;
+        let globs = self.parse_field_list("globs", |p, c, d| p.parse_init_from_content(c, d))?;
+        let funcs = self.parse_field_list("funcs", |p, c, d| p.parse_func_from_content(c, d))?;
         Ok(Module {
             id: NodeId::sentinel(),
             imports,
@@ -619,7 +615,9 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// ```
     fn parse_func_body(&mut self, name: String, depth: usize) -> Result<Function, ParseError> {
         self.expect_line(depth + 1, ".returns")?;
-        let returns = self.parse_type_opt(depth + 2)?.unwrap_or(TypeSpecifier::Unit);
+        let returns = self
+            .parse_type_opt(depth + 2)?
+            .unwrap_or(TypeSpecifier::Unit);
 
         self.expect_line(depth + 1, ".params")?;
         let params = self.parse_param_list(depth + 2)?;
@@ -740,9 +738,9 @@ impl<'a> ZeaPrettyAstParser<'a> {
             let n = num
                 .strip_suffix(')')
                 .ok_or_else(|| err_unexpected("lit_int(n)", content, line))?;
-            let val: usize =
-                n.parse()
-                    .map_err(|_| err_unexpected("integer literal", content, line))?;
+            let val: usize = n
+                .parse()
+                .map_err(|_| err_unexpected("integer literal", content, line))?;
             return Ok(Expression::wrap_lit_int(val));
         }
 
@@ -751,9 +749,9 @@ impl<'a> ZeaPrettyAstParser<'a> {
             let n = num
                 .strip_suffix(')')
                 .ok_or_else(|| err_unexpected("lit_float(n)", content, line))?;
-            let val: f64 =
-                n.parse()
-                    .map_err(|_| err_unexpected("float literal", content, line))?;
+            let val: f64 = n
+                .parse()
+                .map_err(|_| err_unexpected("float literal", content, line))?;
             return Ok(Expression::wrap_lit_float(val));
         }
 
@@ -1091,11 +1089,7 @@ fn parse_unop(s: &str) -> Result<UnOp, ParseError> {
         "Neg" => Ok(UnOp::Neg),
         "LogNot" => Ok(UnOp::LogNot),
         "BitNot" => Ok(UnOp::BitNot),
-        _ => Err(err_unexpected(
-            "unary operator (Neg, LogNot, BitNot)",
-            s,
-            0,
-        )),
+        _ => Err(err_unexpected("unary operator (Neg, LogNot, BitNot)", s, 0)),
     }
 }
 
