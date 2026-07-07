@@ -5,13 +5,15 @@
 //     pub filename: String,
 // }
 
-use std::fs::read_to_string;
 use log::info;
+use std::fs::read_to_string;
 use zea_ast::visualisation::IndentPrint;
 use zea_parser::parse_module;
 
 fn main() {
-    colog::init();
+    colog::basic_builder()
+        .filter_level(log::LevelFilter::Error)
+        .init();
     let src = read_to_string("zea-driver/test.zea").unwrap();
     let (mut module, generator) = parse_module(&src);
 
