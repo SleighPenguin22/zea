@@ -26,3 +26,6 @@ test.c
 /renders/*.png
 /zea-parser/src/grammar.rs
 zea-driver/test.zea
+flamegraph.svg
+perf.data
+perf.data.old
