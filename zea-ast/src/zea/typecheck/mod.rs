@@ -1,20 +1,28 @@
+//!
+//! This module contains the implementation of the Zea type-system
+//!
+//! The module contains a couple structs that together orchestrate the solving of Type Variables:
+//! - [`TypeConcreteId`] (wraps a [`usize`]), which holds the index to some [`TypeSpecifier`] in a [`TypeInterningTable`].
+//! - [`TypevarId`] (wraps a [`usize`]) points to some other variable within a [`TypeVarSubstitutionTable`],
+//!   which is a Union-Find structure.
+//!   The set also keeps track of which variables are solved using a hashmap
+//! - [`ModuleInferenceContext`] bundles all of these containers into a single context
+//!   that allows the type checking of [`zea_ast::zea__Module`]'s.
 use std::marker::PhantomData;
-use std::usize;
 
-use crate::helper_impls::StructuralEq;
-use crate::visualisation::IndentPrint;
 use crate::zea;
 use crate::zea::typecheck::TypeCheckError::{MissingInternedTypeId, UnifyError};
 use crate::zea::visitors::annotating::ScopeAnnotations;
+use crate::zea::FunctionCall;
+use crate::zea::Hasher;
+use crate::zea::SimpleInitialization;
+use crate::zea::StructDataTypeDefinition;
 use crate::zea::{
-    BinOp, ExpressionKind, Function, IfThenElse, InitializationBlock, InitializationKind, Module,
-    NodeId, SimpleInitialization, StructDataTypeDefinition, TypeSpecifier, UnOp,
+    ExpressionKind, InitializationBlock, InitializationKind, Module, NodeId, TypeSpecifier,
 };
-use crate::zea::{FunctionCall, Hasher};
 use crate::zea::{Hash, StatementKind};
 use indexmap::{IndexMap, IndexSet};
 use log::{info, trace};
-use zea_internal_macros::{ASTStructuralEq, HashEqById};
 
 pub struct TupleSignature {
     members: Vec<zea::TypeSpecifier>,
@@ -45,17 +53,17 @@ const BUILTIN_SCALAR_TYPES: [TypeSpecifier; 9] = [
 
 #[derive(Debug)]
 pub enum TypeCheckError {
-    UnifyError(TypeConcreteId, TypeConcreteId),
-    ExpectedResolvedType(InferenceId),
+    ExpectedArrayType(TypeConcreteId),
+    ExpectedBoolType(TypeConcreteId),
+    ExpectedIntegerType(TypeConcreteId),
     ExpectedIntroducedType(zea::Expression),
+    ExpectedResolvedType(InferenceId),
+    ExpectedStructType(TypeConcreteId),
     MissingInternedTypeId(TypeConcreteId),
     MissingInternedTypeSpec(TypeSpecifier),
-    ExpectedArrayType(TypeConcreteId),
-    ExpectedIntegerType(TypeConcreteId),
-    ExpectedStructType(TypeConcreteId),
-    ExpectedBoolType(TypeConcreteId),
     MissingStructDefinition(String),
     MissingStructField(TypeConcreteId, String),
+    UnifyError(TypeConcreteId, TypeConcreteId),
 }
 /// The id that a concrete type gets during type-checking
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -304,6 +312,36 @@ pub struct ModuleInferenceContext {
     scopes: ScopeAnnotations,
 }
 
+// 'static' methods (could be const but heap-allocations AAAAAAAAAAAAA)
+impl ModuleInferenceContext {
+    /// The inference ID of booleans
+    pub fn type_bool_inference_id(&self) -> InferenceId {
+        self.intering_table.interned_bool().into()
+    }
+    // pub fn type_unit_inference_id(&self) -> InferenceId {
+    //     self.intering_table.interned_unit().into()
+    // }
+    pub fn type_u64_inference_id(&self) -> InferenceId {
+        self.intering_table.interned_u64().into()
+    }
+
+    pub fn type_int_inference_id(
+        &self,
+        width: usize,
+        signed: bool,
+    ) -> Result<InferenceId, TypeCheckError> {
+        self.intering_table
+            .lookup_type_specifier(&TypeSpecifier::Integer { width, signed })
+            .map(|conc_id| InferenceId::TypeConcrete(conc_id))
+    }
+    // pub fn type_float_inference_id(&self, width: usize) -> Result<InferenceId, TypeCheckError> {
+    //     self.intering_table
+    //         .lookup_type_specifier(&TypeSpecifier::Float { width })
+    //         .map(|conc_id| InferenceId::TypeConcrete(conc_id))
+    // }
+}
+
+// initialization and setup
 impl ModuleInferenceContext {
     pub fn new() -> Self {
         Self {
@@ -341,33 +379,6 @@ impl ModuleInferenceContext {
         let concrete = self.intering_table.lookup_by_id(concrete_id).cloned()?;
         Ok((concrete, concrete_id))
     }
-
-    /// The inference ID of booleans
-    pub fn type_bool_inference_id(&self) -> InferenceId {
-        self.intering_table.interned_bool().into()
-    }
-    // pub fn type_unit_inference_id(&self) -> InferenceId {
-    //     self.intering_table.interned_unit().into()
-    // }
-    pub fn type_u64_inference_id(&self) -> InferenceId {
-        self.intering_table.interned_u64().into()
-    }
-
-    pub fn type_int_inference_id(
-        &self,
-        width: usize,
-        signed: bool,
-    ) -> Result<InferenceId, TypeCheckError> {
-        self.intering_table
-            .lookup_type_specifier(&TypeSpecifier::Integer { width, signed })
-            .map(|conc_id| InferenceId::TypeConcrete(conc_id))
-    }
-    // pub fn type_float_inference_id(&self, width: usize) -> Result<InferenceId, TypeCheckError> {
-    //     self.intering_table
-    //         .lookup_type_specifier(&TypeSpecifier::Float { width })
-    //         .map(|conc_id| InferenceId::TypeConcrete(conc_id))
-    // }
-
     pub fn introduce_visit_module(&mut self, module: &Module) {
         // for func in module.functions.iter() {
         //     self.introduce_visit_function(func);
@@ -537,22 +548,69 @@ impl ModuleInferenceContext {
             InferenceId::TypeVar(_) => None,
         }
     }
+}
 
-    /// typecheck two expression nodes
-    pub fn try_unify_coerce(
+// Inference and typechecking logic
+impl ModuleInferenceContext {
+    fn require_integer_type(
+        &mut self,
+        id: InferenceId,
+        with_minimum_width: Option<usize>,
+        with_sign: Option<bool>,
+    ) -> Result<TypeSpecifier, TypeCheckError> {
+        let (typ, id) = self.typespecifier_behind_inference_id(id)?;
+        match typ {
+            TypeSpecifier::Integer {
+                width: w,
+                signed: s,
+            } if with_minimum_width.is_none_or(|width| width > w)
+                && with_sign.is_none_or(|signed| signed == s) =>
+            {
+                Ok(typ)
+            }
+            _ => Err(TypeCheckError::ExpectedArrayType(id)),
+        }
+    }
+    // fn require_array_type(&mut self, id: InferenceId) -> Result<TypeSpecifier, TypeCheckError> {
+    //     let (typ, id) = self.typespecifier_behind_inference_id(id)?;
+    //     match typ {
+    //         TypeSpecifier::ArrayOf(t) => Ok(*t),
+    //         _ => Err(TypeCheckError::ExpectedArrayType(id)),
+    //     }
+    // }
+
+    // fn require_struct_type(
+    //     &mut self,
+    //     id: InferenceId,
+    // ) -> Result<StructDataTypeDefinition, TypeCheckError> {
+    //     let (s, bob) = self.typespecifier_behind_inference_id(id)?;
+    //     match s {
+    //         TypeSpecifier::NonScalar(t) => self.find_struct_def(&t).cloned(),
+    //         _ => Err(TypeCheckError::ExpectedStructType(bob)),
+    //     }
+    // }
+    fn require_bool_type(&mut self, id: InferenceId) -> Result<TypeSpecifier, TypeCheckError> {
+        let (s, bob) = self.typespecifier_behind_inference_id(id)?;
+        match s {
+            t @ TypeSpecifier::Bool => Ok(t),
+            _ => Err(TypeCheckError::ExpectedBoolType(bob)),
+        }
+    }
+    /// typecheck two expression nodes, see also [`ModuleInferenceContext::try_unify_ids`]
+    pub fn try_unify_expressions(
         &mut self,
         expr: &zea::Expression,
         with: &zea::Expression,
     ) -> Result<(), TypeCheckError> {
         let expr: InferenceId = self.get_inference_id(expr)?;
         let with = self.get_inference_id(with)?;
-        self.unify_coerce_ids(expr, with)
+        self.try_unify_ids(expr, with)
     }
 
-    /// Tell the inference context that `expr` should coerce to the type that `with` has.
+    /// Tell the inference context that `expr` should have the same type that `with` has.
     ///
-    /// Implementation is loosely based on Hindley Milner.
-    pub fn unify_coerce_ids(
+    /// Implementation is based on Hindley Milner.
+    pub fn try_unify_ids(
         &mut self,
         expr: impl Into<InferenceId>,
         with: impl Into<InferenceId>,
@@ -608,51 +666,6 @@ impl ModuleInferenceContext {
         }
     }
 
-    fn require_integer_type(
-        &mut self,
-        id: InferenceId,
-        with_minimum_width: Option<usize>,
-        with_sign: Option<bool>,
-    ) -> Result<TypeSpecifier, TypeCheckError> {
-        let (typ, id) = self.typespecifier_behind_inference_id(id)?;
-        match typ {
-            TypeSpecifier::Integer {
-                width: w,
-                signed: s,
-            } if with_minimum_width.is_none_or(|width| width > w)
-                && with_sign.is_none_or(|signed| signed == s) =>
-            {
-                Ok(typ)
-            }
-            _ => Err(TypeCheckError::ExpectedArrayType(id)),
-        }
-    }
-    // fn require_array_type(&mut self, id: InferenceId) -> Result<TypeSpecifier, TypeCheckError> {
-    //     let (typ, id) = self.typespecifier_behind_inference_id(id)?;
-    //     match typ {
-    //         TypeSpecifier::ArrayOf(t) => Ok(*t),
-    //         _ => Err(TypeCheckError::ExpectedArrayType(id)),
-    //     }
-    // }
-
-    // fn require_struct_type(
-    //     &mut self,
-    //     id: InferenceId,
-    // ) -> Result<StructDataTypeDefinition, TypeCheckError> {
-    //     let (s, bob) = self.typespecifier_behind_inference_id(id)?;
-    //     match s {
-    //         TypeSpecifier::NonScalar(t) => self.find_struct_def(&t).cloned(),
-    //         _ => Err(TypeCheckError::ExpectedStructType(bob)),
-    //     }
-    // }
-    fn require_bool_type(&mut self, id: InferenceId) -> Result<TypeSpecifier, TypeCheckError> {
-        let (s, bob) = self.typespecifier_behind_inference_id(id)?;
-        match s {
-            t @ TypeSpecifier::Bool => Ok(t),
-            _ => Err(TypeCheckError::ExpectedBoolType(bob)),
-        }
-    }
-
     /// (used for implicit casts) try to coerce one type into another.
     ///
     /// Returns Err(..) when some internal operation could not succeed.
@@ -667,6 +680,9 @@ impl ModuleInferenceContext {
     ///     try_coerce_concrete_types(t1, t2); // there is no guarantee that this will be true;
     /// }
     /// ```
+    ///
+    /// for instance in integer promotion:
+    /// `U8 <: U16`, but not `U16 <: U8`
     pub fn try_coerce_concrete_types(
         &self,
         typ: TypeConcreteId,
@@ -926,6 +942,9 @@ impl ModuleInferenceContext {
         //         ))
         // }
         */
+    /// try to infer the return type of some gievn expression.
+    ///
+    /// Upon succesful inference, this method returns `Ok(t)`, where `t` is the inferred type.
     pub fn infer_expr(&mut self, expr: &zea::Expression) -> Result<InferenceId, TypeCheckError> {
         // todo!("only integer and bool right neow bro");
 
@@ -948,7 +967,10 @@ impl ModuleInferenceContext {
             // _ => unreachable!("ILLEGAL NODE WHILE INFERRING:\n{}", expr.indent_print(1)),
         }
     }
-
+    /// Typecheck an assignment,
+    /// if this call retuns `Ok(())`, then the assignment will have its `typ` field set to `Some(t)` where `t` is the now-known type.
+    /// If the `init.typ` was already set, then the typechecker will verify that the `init.value` expression
+    /// does in fact have that type (or a subtype thereof)
     pub fn typecheck_assignment(
         &mut self,
         init: &mut InitializationBlock,
