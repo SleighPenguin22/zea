@@ -12,7 +12,7 @@ use zea_parser::parse_module;
 
 fn main() {
     colog::basic_builder()
-        .filter_level(log::LevelFilter::Error)
+        .filter_level(log::LevelFilter::Trace)
         .init();
     let src = read_to_string("zea-driver/test.zea").unwrap();
     let (mut module, generator) = parse_module(&src);

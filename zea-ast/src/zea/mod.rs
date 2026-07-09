@@ -31,8 +31,8 @@ pub use typecheck::ModuleInferenceContext as ZeaTypeChecker;
 pub(crate) mod test_ast_macros {
     macro_rules! label_ast {
         (fresh $ast:expr) => {{
-            use crate::zea::Module;
             use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
+            use crate::zea::Module;
 
             let mut node_labeler = BareNodeLabeler::new();
             let mut ast = $ast;

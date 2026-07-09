@@ -1,5 +1,7 @@
 use crate::helper_impls::StructuralEq;
-use crate::zea::visitors::{walk_block, Visitor};
+use crate::zea::visitors::{
+    walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init, Visitor,
+};
 use crate::zea::{
     BlockExpression, Expression, ExpressionKind, FuncParam, Function, FunctionCall, IfThenElse,
     InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
@@ -88,6 +90,7 @@ impl ScopedIdentifier {
 ///
 /// note that [`ScopeAnnotations::get_scope`]
 /// does not verify that the given id is of a scope-node.
+#[derive(Debug)]
 pub struct ScopeAnnotations {
     // Map some node id to its ScopedIdentifier counterpart.
     identifiers: IndexSet<ScopedIdentifier>,
@@ -226,5 +229,44 @@ impl Visitor for ASTValidator {
         block: &BlockExpression,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_block(self, block)
+    }
+}
+
+pub struct ExpressionCollector {
+    expressions: Vec<Expression>,
+}
+impl ExpressionCollector {
+    pub fn over(ast: &Module) -> Self {
+        let mut s = Self {
+            expressions: vec![],
+        };
+        let _ = s.visit_module(ast);
+        s
+    }
+    pub fn collect(self) -> Vec<Expression> {
+        self.expressions
+    }
+}
+
+impl Visitor for ExpressionCollector {
+    type VisitorError = ();
+    type VisitorOk = ();
+    fn visit_expr(&mut self, expr: &Expression) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.expressions.push(expr.clone());
+        walk_expr(self, expr)
+    }
+    fn visit_init(
+        &mut self,
+        init: &SimpleInitialization,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.expressions.push(init.value.clone());
+        walk_unpacked_init(self, init)
+    }
+
+    fn visit_branch(
+        &mut self,
+        _branch: &IfThenElse,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        todo!("cannot yet collect expressions in branches")
     }
 }
