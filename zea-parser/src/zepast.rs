@@ -1327,7 +1327,7 @@ mod tests {
             "main",
             vec![],
             t_f64(),
-            block(vec![], expr_float(3.14)),
+            block(vec![], expr_float(3.16)),
         )]));
     }
 

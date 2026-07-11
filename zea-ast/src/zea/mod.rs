@@ -23,9 +23,8 @@
 use crate::helper_impls::StructuralEq;
 
 pub mod typecheck;
+pub use typecheck::ZeaTypeChecker;
 pub mod visitors;
-
-pub use typecheck::ModuleInferenceContext as ZeaTypeChecker;
 
 #[cfg(test)]
 pub(crate) mod test_ast_macros {

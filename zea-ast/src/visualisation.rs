@@ -179,7 +179,7 @@ impl IndentPrint for String {
     }
 }
 
-impl<'a> IndentPrint for &'a str {
+impl IndentPrint for &str {
     fn indent_print(&self, depth: usize) -> String {
         indent!(depth) + self + "\n"
     }
