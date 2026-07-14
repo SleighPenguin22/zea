@@ -2,12 +2,16 @@ use std::{
     arch::x86_64::_SIDD_MASKED_NEGATIVE_POLARITY, collections::HashMap, hash::DefaultHasher,
 };
 
-use indexmap::{map::raw_entry_v1::RawEntryBuilderMut, IndexSet};
+use indexmap::{map::raw_entry_v1::RawEntryBuilderMut, Equivalent, IndexMap, IndexSet};
+use log::trace;
 use zea_internal_macros::VariantToStr;
 
-use crate::zea::{
-    self, Expression, InitializationBlock, InitializationKind, NodeId, SimpleInitialization,
-    TypeSpecifier,
+use crate::{
+    visualisation::IndentPrint,
+    zea::{
+        self, Expression, InitializationBlock, InitializationKind, Module, NodeId,
+        SimpleInitialization, TypeSpecifier,
+    },
 };
 
 const BUILTIN_SCALAR_TYPES: [zea::TypeSpecifier; 9] = [
@@ -25,10 +29,32 @@ const BUILTIN_SCALAR_TYPES: [zea::TypeSpecifier; 9] = [
     // TypeSpecifier::t_Unit(),
     // TypeSpecifier::t_Never(),
 ];
+
+/// Determine the narrowst built-in integer type that fits this literal
+fn narrowest_int_type(literal: usize) -> TypeSpecifier {
+    if literal <= u8::MAX as usize {
+        TypeSpecifier::t_U8()
+    } else if literal <= u16::MAX as usize {
+        TypeSpecifier::t_U16()
+    } else if literal <= u32::MAX as usize {
+        TypeSpecifier::t_U32()
+    } else if literal <= u64::MAX as usize {
+        TypeSpecifier::t_U64()
+    } else {
+        unreachable!("too fucking big literal bra: {literal}")
+    }
+}
+
 /// The id that a concrete type gets during type-checking
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 pub struct InternedTypeId {
     id: usize,
+}
+
+impl InternedTypeId {
+    pub fn as_typevar(self, table: &mut TypeVariableInterningTable) -> TypeVariable {
+        table.interned_type_as_variable(self)
+    }
 }
 
 impl std::fmt::Debug for InternedTypeId {
@@ -51,14 +77,14 @@ impl std::fmt::Debug for TypeVariable {
 
 struct TypeVariableInterningTable {
     typevar_disjoint_set: Vec<usize>,
-    solved_variables: HashMap<TypeVariable, InternedTypeId>,
+    solved_variables: IndexMap<TypeVariable, InternedTypeId>,
 }
 
 impl TypeVariableInterningTable {
     pub fn new() -> Self {
         Self {
             typevar_disjoint_set: vec![],
-            solved_variables: HashMap::new(),
+            solved_variables: IndexMap::new(),
         }
     }
 
@@ -101,7 +127,8 @@ impl TypeVariableInterningTable {
     }
 
     /// Update all paths to point directly at their representative.
-    /// As a result, all path_lengths according to [`TypeVariableInterningTable::follow_with_path_length`]
+    /// As a result, all path_lengths according to
+    /// [`TypeVariableInterningTable::follow_with_path_length`]
     /// will be 1 or less, while representatives are preserved
     ///
     /// ```ignore
@@ -153,6 +180,21 @@ impl TypeVariableInterningTable {
         }
     }
 
+    pub fn interned_type_as_variable(&mut self, interned_type: InternedTypeId) -> TypeVariable {
+        self.solved_variables
+            .iter()
+            // if some typevar has the given type, return that
+            .find_map(|(k, v)| (*v == interned_type).then_some(k))
+            .copied()
+            // otherwise create a dummy type variable that immediatly gets that type
+            .unwrap_or_else(|| self.generate_dummy_variable_with_type(interned_type))
+    }
+    fn generate_dummy_variable_with_type(&mut self, interned_type: InternedTypeId) -> TypeVariable {
+        let t_var = self.fresh_var();
+        let _ = self.set_solved(t_var, interned_type);
+        t_var
+    }
+
     /// add a known type to the table,
     /// such that all type variable within that set now point to the given interned type ID.
     /// Applies path compression
@@ -170,6 +212,19 @@ impl TypeVariableInterningTable {
     pub fn get_solved(&self, typevar: TypeVariable) -> Option<InternedTypeId> {
         let typevar = self.follow_var(typevar);
         self.solved_variables.get(&typevar).cloned()
+    }
+
+    pub fn disjoint_typevars(&self) -> IndexSet<TypeVariable> {
+        let mut res = IndexSet::new();
+
+        for t in self
+            .typevar_disjoint_set
+            .iter()
+            .map(|i| TypeVariable { id: *i })
+        {
+            res.insert(self.follow_var(t));
+        }
+        res
     }
 }
 
@@ -219,34 +274,12 @@ impl TypeInterningTable {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Copy, Clone, Debug, VariantToStr)]
-enum InferenceId {
-    Solved(InternedTypeId), // map some type-id to an actual type within an interning-table
-    Unsolved(TypeVariable),
-}
-impl From<TypeVariable> for InferenceId {
-    fn from(value: TypeVariable) -> Self {
-        InferenceId::Unsolved(value)
-    }
-}
-
-impl From<InternedTypeId> for InferenceId {
-    fn from(value: InternedTypeId) -> Self {
-        InferenceId::Solved(value)
-    }
-}
-
-impl InferenceId {
-    pub fn is_solved(&self) -> bool {
-        matches!(self, InferenceId::Solved(_))
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 enum TypeCheckError {
     MissingInternedType(InternedTypeId),
     MissingTypeVariable(TypeVariable),
     IllegalTypeCoercion(InternedTypeId, InternedTypeId, IllegalTypeCoercionKind),
+    ExpectedSolvedTypeVariable(TypeVariable),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -262,7 +295,8 @@ enum IllegalTypeCoercionKind {
 struct ZeaTypeChecker {
     type_interning_table: TypeInterningTable,
     typevar_interning_table: TypeVariableInterningTable,
-    node_types: HashMap<NodeId, InferenceId>,
+    node_types: HashMap<NodeId, TypeVariable>,
+    symbol_types: HashMap<NodeId, InternedTypeId>,
 }
 
 macro_rules! coercion_rule_widen {
@@ -275,15 +309,60 @@ macro_rules! coercion_rule_widen {
     }};
 }
 
+pub fn typecheck_module(module: &mut Module) {
+    let mut tc = ZeaTypeChecker::new();
+    match tc.check_module(module) {
+        Ok(_) => {}
+        Err(e) => panic!("{e:?}"),
+    }
+}
+
 impl ZeaTypeChecker {
     pub fn new() -> Self {
         Self {
             type_interning_table: TypeInterningTable::with_builtin_types(),
             typevar_interning_table: TypeVariableInterningTable::new(),
             node_types: HashMap::with_capacity(64),
+            symbol_types: HashMap::new(),
         }
     }
-    pub fn check_module(&mut self, _module: &mut zea::Module) -> Result<(), TypeCheckError> {
+    pub fn check_module(&mut self, module: &mut zea::Module) -> Result<(), TypeCheckError> {
+        self.introduce_module(module)?;
+
+        'inner: for glob in module.global_vars.iter_mut() {
+            match self.check_assignment(glob) {
+                Ok(_) | Err(TypeCheckError::ExpectedSolvedTypeVariable(_)) => continue 'inner,
+                other => return other,
+            }
+        }
+        Ok(())
+    }
+
+    fn all_vars_solved(&self) -> bool {
+        self.typevar_interning_table
+            .disjoint_typevars()
+            .iter()
+            .all(|t| {
+                self.typevar_interning_table
+                    .solved_variables
+                    .contains_key(t)
+            })
+    }
+
+    /// Get the type variable associated with some expression node,
+    /// or generate it if it does not yet exist
+    fn get_inference_id(&mut self, id: NodeId) -> &mut TypeVariable {
+        self.node_types
+            .entry(id)
+            .or_insert(self.typevar_interning_table.fresh_var())
+    }
+    fn solve_to_type(
+        &mut self,
+        inf_var: TypeVariable,
+        typ: &TypeSpecifier,
+    ) -> Result<(), TypeCheckError> {
+        let t_id = self.type_interning_table.introduce(typ);
+        let _ = self.typevar_interning_table.set_solved(inf_var, t_id);
         Ok(())
     }
 
@@ -302,53 +381,76 @@ impl ZeaTypeChecker {
         self.introduce_expression(&assignment.value);
     }
 
-    fn generate_inference_id(&mut self, id: NodeId) -> InferenceId {
-        let t_var = self.typevar_interning_table.fresh_var();
-        self.node_types.insert(id, t_var.into());
-        t_var.into()
-    }
-
     fn introduce_expression(&mut self, expr: &Expression) {
-        let _inf_var = self.generate_inference_id(expr.id);
+        let inf_var = *self.get_inference_id(expr.id);
         match &expr.kind {
-            zea::ExpressionKind::Unit => todo!(),
-            zea::ExpressionKind::IntegerLiteral(_) => todo!(),
-            zea::ExpressionKind::BoolLiteral(_) => todo!(),
-            zea::ExpressionKind::FloatLiteral(_) => todo!(),
+            zea::ExpressionKind::Unit => {}
+            zea::ExpressionKind::IntegerLiteral(i) => {
+                let typ = narrowest_int_type(*i);
+                self.solve_to_type(inf_var, &typ)
+                    .expect("integer literals should solve just fine...")
+            }
+            zea::ExpressionKind::BoolLiteral(_) => {
+                self.solve_to_type(inf_var, &TypeSpecifier::Bool)
+                    .expect("boolean literal should solve just fine...");
+            }
+            zea::ExpressionKind::FloatLiteral(_) => {
+                self.solve_to_type(inf_var, &TypeSpecifier::t_F64())
+                    .expect("float literal should solve just fine...");
+            }
             zea::ExpressionKind::StringLiteral(_) => todo!(),
             zea::ExpressionKind::UnScopedIdent(_) => {
                 unreachable!("identifiers should be scoped before type checking")
             }
             zea::ExpressionKind::ScopedIdent(_) => todo!(),
             zea::ExpressionKind::FunctionCall(_) => todo!(),
-            zea::ExpressionKind::BinOpExpr(_, _, _) => todo!(),
-            zea::ExpressionKind::UnOpExpr(_, _) => todo!(),
+            zea::ExpressionKind::BinOpExpr(_, l, r) => {
+                self.introduce_expression(l.as_ref());
+                self.introduce_expression(r.as_ref());
+            }
+            zea::ExpressionKind::UnOpExpr(_, arg) => {
+                self.introduce_expression(arg.as_ref());
+            }
             zea::ExpressionKind::MemberAccess(_, _) => todo!(),
             zea::ExpressionKind::IfThenElse(_) => todo!(),
             zea::ExpressionKind::Block(_) => todo!(),
         }
     }
 
+    fn introduce_module(&mut self, module: &Module) -> Result<(), TypeCheckError> {
+        for glob in module.global_vars.iter() {
+            trace!("entering assignment:\n{}", glob.indent_print(0));
+            self.introduce_assignment(glob);
+        }
+
+        Ok(())
+    }
+
     fn hindley_milner_unify(
         &mut self,
-        a: InferenceId,
-        b: InferenceId,
-    ) -> Result<InferenceId, TypeCheckError> {
-        match (a, b) {
-            (InferenceId::Solved(a_conc), InferenceId::Solved(b_conc)) => {
+        a: TypeVariable,
+        b: TypeVariable,
+    ) -> Result<TypeVariable, TypeCheckError> {
+        let a_solved = self.typevar_interning_table.get_solved(a);
+        let b_solved = self.typevar_interning_table.get_solved(b);
+        match (a_solved, b_solved) {
+            (Some(a_conc), Some(b_conc)) => {
                 self.try_coerce_type_ids(a_conc, b_conc)
+                    .map(|interned_type_id| {
+                        interned_type_id.as_typevar(&mut self.typevar_interning_table)
+                    })
             }
-            (InferenceId::Solved(a_conc), InferenceId::Unsolved(b_var)) => {
-                self.typevar_interning_table.set_solved(b_var, a_conc)?;
+            (Some(a_conc), None) => {
+                self.typevar_interning_table.set_solved(b, a_conc)?;
                 Ok(a)
             }
-            (InferenceId::Unsolved(a_var), InferenceId::Solved(b_conc)) => {
-                self.typevar_interning_table.set_solved(a_var, b_conc)?;
+            (None, Some(b_conc)) => {
+                self.typevar_interning_table.set_solved(a, b_conc)?;
                 Ok(b)
             }
-            (InferenceId::Unsolved(a_var), InferenceId::Unsolved(b_var)) => {
-                self.typevar_interning_table.union(a_var, b_var)?;
-                Ok(self.typevar_interning_table.follow_var(a_var).into())
+            (None, None) => {
+                self.typevar_interning_table.union(a, b)?;
+                Ok(self.typevar_interning_table.follow_var(a))
             }
         }
     }
@@ -357,12 +459,12 @@ impl ZeaTypeChecker {
         &mut self,
         typ: InternedTypeId,
         to: InternedTypeId,
-    ) -> Result<InferenceId, TypeCheckError> {
+    ) -> Result<InternedTypeId, TypeCheckError> {
         let t_from = self.type_interning_table.get_specifier_by_id(typ)?;
         let t_to = self.type_interning_table.get_specifier_by_id(to)?;
         Self::try_coerce_types(t_from, t_to)
             .map_err(|kind| TypeCheckError::IllegalTypeCoercion(typ, to, kind))?;
-        Ok(to.into())
+        Ok(to)
     }
 
     fn try_coerce_types<'types>(
@@ -427,6 +529,70 @@ impl ZeaTypeChecker {
 impl Default for ZeaTypeChecker {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl ZeaTypeChecker {
+    fn check_assignment(&mut self, assign: &mut InitializationBlock) -> Result<(), TypeCheckError> {
+        let InitializationKind::Unpacked(inits) = &mut assign.kind else {
+            unreachable!("inits should be unpacked before type checking");
+        };
+        for init in inits.iter_mut() {
+            self.check_simple_assignment(init)?;
+        }
+        Ok(())
+    }
+
+    fn check_simple_assignment(
+        &mut self,
+        assign: &mut SimpleInitialization,
+    ) -> Result<(), TypeCheckError> {
+        let t_inferred = self.infer_expression(&assign.value)?;
+        if let Some(t_actual) = &assign.typ {
+            let t_actual_id = self.type_interning_table.introduce(t_actual);
+            let t_actual_as_var = t_actual_id.as_typevar(&mut self.typevar_interning_table);
+            self.hindley_milner_unify(t_inferred, t_actual_as_var)?;
+            self.symbol_types.insert(assign.id, t_actual_id);
+        } else {
+            let t_conc_id = self
+                .typevar_interning_table
+                .get_solved(t_inferred)
+                .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(t_inferred))?;
+            let t_conc = self
+                .type_interning_table
+                .get_specifier_by_id(t_conc_id)?
+                .clone();
+            assign.typ = Some(t_conc);
+            self.symbol_types.insert(assign.id, t_conc_id);
+        }
+        Ok(())
+    }
+
+    fn infer_expression(&mut self, expr: &Expression) -> Result<TypeVariable, TypeCheckError> {
+        match &expr.kind {
+            zea::ExpressionKind::IntegerLiteral(_)
+            | zea::ExpressionKind::BoolLiteral(_)
+            | zea::ExpressionKind::FloatLiteral(_)
+            | zea::ExpressionKind::Unit => Ok(*self.get_inference_id(expr.id)),
+
+            zea::ExpressionKind::StringLiteral(_)
+            | zea::ExpressionKind::ScopedIdent(_)
+            | zea::ExpressionKind::FunctionCall(_)
+            | zea::ExpressionKind::BinOpExpr(_, _, _)
+            | zea::ExpressionKind::UnOpExpr(_, _)
+            | zea::ExpressionKind::MemberAccess(_, _)
+            | zea::ExpressionKind::IfThenElse(_)
+            | zea::ExpressionKind::Block(_)
+            | zea::ExpressionKind::UnScopedIdent(_) => todo!(),
+        }
+    }
+
+    fn get_solved(&self, inf_var: TypeVariable) -> Result<&TypeSpecifier, TypeCheckError> {
+        let solved = self
+            .typevar_interning_table
+            .get_solved(inf_var)
+            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(inf_var))?;
+        self.type_interning_table.get_specifier_by_id(solved)
     }
 }
 

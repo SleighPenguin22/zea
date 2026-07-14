@@ -22,7 +22,8 @@
 /// grants a unique ID to node with a sentinel ID.
 use crate::helper_impls::StructuralEq;
 
-pub mod typecheck;
+mod typecheck;
+pub use typecheck::typecheck_module;
 pub mod visitors;
 
 #[cfg(test)]

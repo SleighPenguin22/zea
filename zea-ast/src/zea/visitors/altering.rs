@@ -236,7 +236,7 @@ impl AssignmentSimplifier {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct BlockScopeIndex(u32);
 
 impl BlockScopeIndex {
@@ -248,7 +248,7 @@ impl BlockScopeIndex {
     }
 }
 
-#[derive(Eq, Hash, PartialEq)]
+#[derive(Eq, Hash, PartialEq, Debug)]
 pub struct BlockScope {
     /// The node that created this scope; a link to a [`BlockExpression`]
     origin: NodeId,
@@ -294,7 +294,7 @@ pub struct IdentifierScoper {
     scope_arena: IndexSet<BlockScope>,
     node_to_scope: HashMap<NodeId, BlockScopeIndex>,
 }
-
+#[derive(Debug)]
 pub struct NotInScopeError {
     ident: String,
     scope_stack_top: BlockScopeIndex,
@@ -308,8 +308,14 @@ impl Transfomer for IdentifierScoper {
         expr: &mut Expression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         if let ExpressionKind::UnScopedIdent(i) = &mut expr.kind {
-            let scoped_ident = self.resolve(i)?.clone();
-            expr.kind = ExpressionKind::ScopedIdent(scoped_ident);
+            if i == "true" {
+                expr.kind = ExpressionKind::BoolLiteral(true);
+            } else if i == "false" {
+                expr.kind = ExpressionKind::BoolLiteral(false);
+            } else {
+                let scoped_ident = self.resolve(i)?.clone();
+                expr.kind = ExpressionKind::ScopedIdent(scoped_ident);
+            }
             return Ok(());
         }
         walk_mut_expr(self, expr)?;
@@ -402,16 +408,22 @@ impl IdentifierScoper {
         new
     }
     fn build_global_scope_skeleton(&mut self, module: &Module) -> &mut BlockScope {
+        let dummy_scope = BlockScope {
+            origin: NodeId::sentinel(),
+            parent: BlockScopeIndex::sentinel(),
+            introductions: vec![],
+            children: vec![],
+        };
+
         let global_scope = BlockScope {
             origin: module.id,
             parent: BlockScopeIndex::sentinel(),
             introductions: vec![],
             children: vec![],
         };
-        *self
-            .scope_arena
-            .get_index_mut2(1)
-            .expect("global scope should live at scope_arena[1]") = global_scope;
+        self.scope_arena.insert(dummy_scope);
+        self.scope_arena.insert(global_scope);
+        eprint!("{:?}", self.scope_arena);
 
         self.scope_stack.push(BlockScopeIndex(1));
         self.scope_arena

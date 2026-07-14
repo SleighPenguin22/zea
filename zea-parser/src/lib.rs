@@ -5,7 +5,6 @@ mod parser;
 #[cfg(feature = "zepast")]
 pub mod zepast;
 
-
 use log::{error, info, log};
 
 #[cfg(feature = "lalrpop_parser")]
@@ -75,7 +74,6 @@ pub(crate) fn separate_module_items(
     }
     (globs, funcs, structs, tagged_unions)
 }
-
 
 #[cfg(all(feature = "lalrpop_parser", test))]
 mod tests {

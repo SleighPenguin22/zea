@@ -5,9 +5,9 @@
 //     pub filename: String,
 // }
 
-use log::{error, info};
+use log::info;
 use std::fs::read_to_string;
-use zea_ast::visualisation::IndentPrint;
+use zea_ast::{visualisation::IndentPrint, zea::typecheck_module};
 use zea_parser::parse_module;
 
 fn main() {
@@ -20,13 +20,8 @@ fn main() {
     info!("before expansions:\n{}", module.indent_print(0));
     //
     module.simplify_assignments_after(generator);
+    let (mut module, _) = module.scope_idents();
 
-    // let mut type_checker = zea_ast::zea::ZeaTypeChecker::new();
-    // match type_checker.check_module(&mut module) {
-    //     Ok(_) => {}
-    //     Err(e) => {
-    //         error!("Type checking error: {e:?}")
-    //     }
-    // };
-    // info!("after expansions:\n{}", module.indent_print(0));
+    typecheck_module(&mut module);
+    info!("after expansions:\n{}", module.indent_print(0));
 }

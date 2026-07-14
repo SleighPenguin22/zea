@@ -279,6 +279,13 @@ impl IndentPrint for zea::Expression {
             ExpressionKind::FunctionCall(c) => c.indent_print(depth),
             ExpressionKind::Unit => "@unit".indent_print(depth),
             ExpressionKind::ScopedIdent(si) => si.indent_print(depth),
+            ExpressionKind::BoolLiteral(b) => {
+                if *b {
+                    "true".indent_print(depth)
+                } else {
+                    "false".indent_print(depth)
+                }
+            }
             _ => todo!("pretty print expression of kind {:?}", self.kind),
         }
     }

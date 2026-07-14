@@ -1,6 +1,6 @@
 pub mod altering;
 
-use crate::zea::visitors::altering::{AssignmentSimplifier, NodeLabeler};
+use crate::zea::visitors::altering::{AssignmentSimplifier, IdentifierScoper, NodeLabeler};
 use crate::zea::{
     AssignmentPattern, BlockExpression, Expression, ExpressionKind, Function, FunctionCall,
     IfThenElse, InitializationBlock, InitializationKind, Module, PackedInitialization,
@@ -630,5 +630,12 @@ impl Module {
         labeler: impl NodeLabeler,
     ) -> AssignmentSimplifier {
         self.transform_self_with(labeler).unwrap()
+    }
+    pub fn scope_idents(mut self) -> (Self, IdentifierScoper) {
+        let mut scoper = IdentifierScoper::new(&self);
+        match scoper.visit_module(&mut self) {
+            Ok(_) => (self, scoper),
+            Err(e) => panic!("{e:?}"),
+        }
     }
 }
