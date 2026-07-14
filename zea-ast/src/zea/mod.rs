@@ -297,6 +297,17 @@ pub(crate) mod test_ast_macros {
     }
     pub(crate) use func;
     macro_rules! ztyp {
+        (U8) => {
+            {
+            use crate::zea::TypeSpecifier;
+            TypeSpecifier::t_U8()
+        }
+    };
+        (I8) => {
+            {use crate::zea::TypeSpecifier;
+            TypeSpecifier::t_I8()
+        }
+    };
         ($t:ident) => {
             {
             use crate::zea::TypeSpecifier;
@@ -1306,26 +1317,26 @@ pub enum TaggedUnionVariant {
 /// - identifier in declaration(-assignments)
 #[derive(PartialEq, Eq, Clone, Hash)]
 pub enum TypeSpecifier {
-    /// Int, Bool, etc.
+    /// An aggregate DataType
     NonScalar(String),
+    /// the type that a statement returns: similar to `void` or `()`
     Unit,
+    /// boolean type
     Bool,
-    Integer {
-        width: usize,
-        signed: bool,
-    },
-    Float {
-        width: usize,
-    },
+    /// Integer type with width and sign
+    Integer { width: usize, signed: bool },
+    /// Floating point type with width
+    Float { width: usize },
 
-    /// `<type>&`
+    /// a pointer to a memory location containing something of the inner type
     Pointer(Box<TypeSpecifier>),
-    /// `[<type>]`
+    /// a pointer+length bundle of items of the inner type
     ArrayOf(Box<TypeSpecifier>),
     // /// `&[<type>]`
     // Slice(Box<Type>),
     // /// `?<type>`
     // Option(Box<Type>),
+    /// The diverging type, i.e. the type that `exit()` and `panic!()` return
     Never,
 }
 

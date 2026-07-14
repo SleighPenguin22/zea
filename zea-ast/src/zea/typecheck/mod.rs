@@ -1,6 +1,8 @@
-use std::{arch::x86_64::_SIDD_MASKED_NEGATIVE_POLARITY, collections::HashMap};
+use std::{
+    arch::x86_64::_SIDD_MASKED_NEGATIVE_POLARITY, collections::HashMap, hash::DefaultHasher,
+};
 
-use indexmap::IndexSet;
+use indexmap::{map::raw_entry_v1::RawEntryBuilderMut, IndexSet};
 use zea_internal_macros::VariantToStr;
 
 use crate::zea::{
@@ -228,16 +230,33 @@ impl From<TypeVariable> for InferenceId {
     }
 }
 
+impl From<InternedTypeId> for InferenceId {
+    fn from(value: InternedTypeId) -> Self {
+        InferenceId::Solved(value)
+    }
+}
+
 impl InferenceId {
     pub fn is_solved(&self) -> bool {
         matches!(self, InferenceId::Solved(_))
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 enum TypeCheckError {
     MissingInternedType(InternedTypeId),
     MissingTypeVariable(TypeVariable),
+    IllegalTypeCoercion(InternedTypeId, InternedTypeId, IllegalTypeCoercionKind),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IllegalTypeCoercionKind {
+    NarrowingConversion,
+    SignLossConversion,
+    InconvertibleTypes,
+    PossibleOverflow,
+    LossOfPrecision,
+    PointerCast,
 }
 
 struct ZeaTypeChecker {
@@ -245,6 +264,17 @@ struct ZeaTypeChecker {
     typevar_interning_table: TypeVariableInterningTable,
     node_types: HashMap<NodeId, InferenceId>,
 }
+
+macro_rules! coercion_rule_widen {
+    ($t_a:ident, $t_b:ident, $width_a:ident, $width_b:ident, $t_res:ident) => {{
+        if $width_a < $width_b {
+            Ok($t_res.into())
+        } else {
+            Err(TypeCheckError::IllegalTypeCoercion($t_a, $t_b))
+        }
+    }};
+}
+
 impl ZeaTypeChecker {
     pub fn new() -> Self {
         Self {
@@ -279,7 +309,7 @@ impl ZeaTypeChecker {
     }
 
     fn introduce_expression(&mut self, expr: &Expression) {
-        let inf_var = self.generate_inference_id(expr.id);
+        let _inf_var = self.generate_inference_id(expr.id);
         match &expr.kind {
             zea::ExpressionKind::Unit => todo!(),
             zea::ExpressionKind::IntegerLiteral(_) => todo!(),
@@ -289,13 +319,13 @@ impl ZeaTypeChecker {
             zea::ExpressionKind::UnScopedIdent(_) => {
                 unreachable!("identifiers should be scoped before type checking")
             }
-            zea::ExpressionKind::ScopedIdent(scoped_identifier) => todo!(),
-            zea::ExpressionKind::FunctionCall(function_call) => todo!(),
-            zea::ExpressionKind::BinOpExpr(bin_op, expression, expression1) => todo!(),
-            zea::ExpressionKind::UnOpExpr(un_op, expression) => todo!(),
-            zea::ExpressionKind::MemberAccess(expression, _) => todo!(),
-            zea::ExpressionKind::IfThenElse(if_then_else) => todo!(),
-            zea::ExpressionKind::Block(block_expression) => todo!(),
+            zea::ExpressionKind::ScopedIdent(_) => todo!(),
+            zea::ExpressionKind::FunctionCall(_) => todo!(),
+            zea::ExpressionKind::BinOpExpr(_, _, _) => todo!(),
+            zea::ExpressionKind::UnOpExpr(_, _) => todo!(),
+            zea::ExpressionKind::MemberAccess(_, _) => todo!(),
+            zea::ExpressionKind::IfThenElse(_) => todo!(),
+            zea::ExpressionKind::Block(_) => todo!(),
         }
     }
 
@@ -306,20 +336,90 @@ impl ZeaTypeChecker {
     ) -> Result<InferenceId, TypeCheckError> {
         match (a, b) {
             (InferenceId::Solved(a_conc), InferenceId::Solved(b_conc)) => {
-                self.try_coerce_types(a_conc, b_conc)
+                self.try_coerce_type_ids(a_conc, b_conc)
             }
             (InferenceId::Solved(a_conc), InferenceId::Unsolved(b_var)) => {
-                self.typevar_interning_table.set_solved(b_var, a_conc);
+                self.typevar_interning_table.set_solved(b_var, a_conc)?;
                 Ok(a)
             }
             (InferenceId::Unsolved(a_var), InferenceId::Solved(b_conc)) => {
-                self.typevar_interning_table.set_solved(a_var, b_conc);
+                self.typevar_interning_table.set_solved(a_var, b_conc)?;
                 Ok(b)
             }
             (InferenceId::Unsolved(a_var), InferenceId::Unsolved(b_var)) => {
                 self.typevar_interning_table.union(a_var, b_var)?;
                 Ok(self.typevar_interning_table.follow_var(a_var).into())
             }
+        }
+    }
+
+    fn try_coerce_type_ids(
+        &mut self,
+        typ: InternedTypeId,
+        to: InternedTypeId,
+    ) -> Result<InferenceId, TypeCheckError> {
+        let t_from = self.type_interning_table.get_specifier_by_id(typ)?;
+        let t_to = self.type_interning_table.get_specifier_by_id(to)?;
+        Self::try_coerce_types(t_from, t_to)
+            .map_err(|kind| TypeCheckError::IllegalTypeCoercion(typ, to, kind))?;
+        Ok(to.into())
+    }
+
+    fn try_coerce_types<'types>(
+        typ: &'types TypeSpecifier,
+        to: &'types TypeSpecifier,
+    ) -> Result<&'types TypeSpecifier, IllegalTypeCoercionKind> {
+        match (typ, to) {
+            (a, b) if a == b => Ok(to),
+
+            (
+                TypeSpecifier::Integer {
+                    width: width_a,
+                    signed: signed_a,
+                },
+                TypeSpecifier::Integer {
+                    width: width_b,
+                    signed: signed_b,
+                },
+            ) => {
+                if width_a > width_b {
+                    Err(IllegalTypeCoercionKind::NarrowingConversion)
+                }
+                // i -> u
+                else if *signed_a && !*signed_b {
+                    if width_a == width_b {
+                        Err(IllegalTypeCoercionKind::SignLossConversion)
+                    } else {
+                        Ok(to)
+                    }
+                } else if !*signed_a && *signed_b {
+                    if width_a == width_b {
+                        Err(IllegalTypeCoercionKind::PossibleOverflow)
+                    } else {
+                        Ok(to)
+                    }
+                } else {
+                    Ok(to)
+                }
+            }
+
+            // floats may be widened
+            (TypeSpecifier::Float { width: width_a }, TypeSpecifier::Float { width: width_b }) => {
+                if width_a > width_b {
+                    Err(IllegalTypeCoercionKind::LossOfPrecision)
+                } else {
+                    Ok(to)
+                }
+            }
+            // booleans may be widened, where false => 0, true => 1
+            (TypeSpecifier::Bool, TypeSpecifier::Integer { .. }) => Ok(to),
+            // the Never type can always be cast, as it will never reach code after it anyway
+            (TypeSpecifier::Never, _) => Ok(to),
+
+            (TypeSpecifier::Pointer(a), TypeSpecifier::Pointer(b)) if a != b => {
+                Err(IllegalTypeCoercionKind::PointerCast)
+            }
+            _ => Err(IllegalTypeCoercionKind::InconvertibleTypes),
         }
     }
 }
@@ -420,5 +520,61 @@ mod tests {
 
         table.compress_paths().unwrap();
         path_compression_invariant(&table);
+    }
+
+    use crate::zea::test_ast_macros::ztyp;
+
+    #[test]
+    fn coercion_rules() {
+        let i64 = TypeSpecifier::t_I64();
+        let i8 = TypeSpecifier::t_I8();
+        let u64 = TypeSpecifier::t_U64();
+        let u8 = TypeSpecifier::t_U8();
+        let bool = TypeSpecifier::t_Bool();
+        let unit = TypeSpecifier::t_Unit();
+        let never = TypeSpecifier::t_Never();
+        let f32 = TypeSpecifier::t_F32();
+        let f64 = TypeSpecifier::t_F64();
+
+        for t in BUILTIN_SCALAR_TYPES.iter() {
+            assert_eq!(ZeaTypeChecker::try_coerce_types(t, t), Ok(t));
+            assert_eq!(ZeaTypeChecker::try_coerce_types(&never, t), Ok(t));
+            if t != &unit {
+                assert_eq!(
+                    ZeaTypeChecker::try_coerce_types(&unit, t),
+                    Err(IllegalTypeCoercionKind::InconvertibleTypes)
+                );
+                assert_eq!(
+                    ZeaTypeChecker::try_coerce_types(t, &unit),
+                    Err(IllegalTypeCoercionKind::InconvertibleTypes)
+                );
+            }
+        }
+
+        let ptr_i8 = ztyp!(*U8);
+        let ptr_u8 = ztyp!(*I8);
+
+        let cases = vec![
+            (&i8, &i64, Ok(&i64)),
+            (&i8, &i64, Ok(&i64)),
+            (&u8, &u64, Ok(&u64)),
+            (&u8, &i64, Ok(&i64)),
+            (&u8, &u64, Ok(&u64)),
+            (&bool, &u64, Ok(&u64)),
+            (
+                &u64,
+                &bool,
+                Err(IllegalTypeCoercionKind::InconvertibleTypes),
+            ),
+            (&f32, &f64, Ok(&f64)),
+            (&f64, &f32, Err(IllegalTypeCoercionKind::LossOfPrecision)),
+            (&i8, &u8, Err(IllegalTypeCoercionKind::SignLossConversion)),
+            (&u8, &i8, Err(IllegalTypeCoercionKind::PossibleOverflow)),
+            (&ptr_u8, &ptr_u8, Ok(&ptr_u8)),
+            (&ptr_u8, &ptr_i8, Err(IllegalTypeCoercionKind::PointerCast)),
+        ];
+        for (from, to, res) in cases {
+            assert_eq!(ZeaTypeChecker::try_coerce_types(from, to), res);
+        }
     }
 }
