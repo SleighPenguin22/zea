@@ -1,3 +1,4 @@
+#![allow(clippy::new_without_default)]
 use crate::helper_impls::StructuralEq;
 use crate::zea::visitors::{
     walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init, Visitor,
@@ -105,8 +106,8 @@ impl ScopeAnnotations {
     pub fn globals(&self) -> IndexSet<ScopedIdentifier> {
         self.identifiers
             .iter()
+            .filter(|&ident| ident.kind == ScopedIdentifierKind::GlobalVar)
             .cloned()
-            .filter(|ident| ident.kind == ScopedIdentifierKind::GlobalVar)
             .collect()
     }
 

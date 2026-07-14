@@ -25,7 +25,7 @@ struct NodeDag {
     block_arena: Vec<ControlFlowItem>,
 }
 
-fn vector_replace_block_ids(vec: &mut Vec<BLockId>, from: BLockId, to: BLockId) {
+fn vector_replace_block_ids(vec: &mut [BLockId], from: BLockId, to: BLockId) {
     for id in vec.iter_mut() {
         if *id == from {
             *id = to;

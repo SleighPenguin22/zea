@@ -202,7 +202,7 @@ pub trait Transfomer: Sized {
     }
 }
 
-fn walk_expr<'v, V: Visitor>(v: &mut V, e: &Expression) -> Result<V::VisitorOk, V::VisitorError> {
+fn walk_expr<V: Visitor>(v: &mut V, e: &Expression) -> Result<V::VisitorOk, V::VisitorError> {
     match &e.kind {
         ExpressionKind::Unit => {}
         ExpressionKind::IntegerLiteral(_) => {}
@@ -236,7 +236,7 @@ fn walk_expr<'v, V: Visitor>(v: &mut V, e: &Expression) -> Result<V::VisitorOk, 
     }
     Ok(V::VisitorOk::default())
 }
-fn walk_stmt<'v, V: Visitor>(v: &mut V, s: &Statement) -> Result<V::VisitorOk, V::VisitorError> {
+fn walk_stmt<V: Visitor>(v: &mut V, s: &Statement) -> Result<V::VisitorOk, V::VisitorError> {
     match &s.kind {
         StatementKind::Initialization(i) => v.visit_initblock(i),
         StatementKind::Reassignment(r) => v.visit_reassignment(r),
@@ -270,7 +270,6 @@ fn walk_call<V: Visitor>(v: &mut V, c: &FunctionCall) -> Result<V::VisitorOk, V:
     }
     Ok(V::VisitorOk::default())
 }
-
 
 fn walk_block<V: Visitor>(
     v: &mut V,
@@ -396,7 +395,7 @@ fn walk_module<V: Visitor>(v: &mut V, module: &Module) -> Result<V::VisitorOk, V
     Ok(V::VisitorOk::default())
 }
 
-fn walk_mut_expr<'v, V: Transfomer>(
+fn walk_mut_expr<V: Transfomer>(
     v: &mut V,
     e: &mut Expression,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -433,7 +432,7 @@ fn walk_mut_expr<'v, V: Transfomer>(
     };
     Ok(V::TransformerOk::default())
 }
-fn walk_mut_stmt<'v, V: Transfomer>(
+fn walk_mut_stmt<V: Transfomer>(
     v: &mut V,
     s: &mut Statement,
 ) -> Result<V::TransformerOk, V::TransformerError> {

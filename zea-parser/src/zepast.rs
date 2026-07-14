@@ -333,7 +333,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// Peek at the next line and check if it is `.name` at `depth`.
     fn peek_field(&self, name: &str, depth: usize) -> bool {
         self.peek()
-            .map_or(false, |(d, c)| d == depth && c == &format!(".{name}"))
+            .is_some_and(|(d, c)| d == depth && c == format!(".{name}"))
     }
 
     /// Expect the current line to be at `depth`. Return its content without
@@ -993,34 +993,29 @@ fn parse_type_string(s: &str) -> TypeSpecifier {
         "Bool" => return TypeSpecifier::Bool,
         _ => {}
     }
-    if s.starts_with('&') {
-        let inner = parse_type_string(&s[1..]);
-        return TypeSpecifier::Pointer(Box::new(inner));
+    if let Some(inner) = s.strip_prefix("&") {
+        return TypeSpecifier::Pointer(Box::new(parse_type_string(inner)));
     }
     if s.starts_with('[') && s.ends_with(']') {
         let inner = parse_type_string(&s[1..s.len() - 1]);
         return TypeSpecifier::ArrayOf(Box::new(inner));
     }
-    if let Some(w) = s.strip_prefix('i') {
-        if let Ok(width) = w.parse::<usize>() {
+    if let Some(w) = s.strip_prefix('i')
+        && let Ok(width) = w.parse::<usize>() {
             return TypeSpecifier::Integer {
                 width,
                 signed: true,
             };
         }
-    }
-    if let Some(w) = s.strip_prefix('u') {
-        if let Ok(width) = w.parse::<usize>() {
+    if let Some(w) = s.strip_prefix('u')
+        && let Ok(width) = w.parse::<usize>() {
             return TypeSpecifier::Integer {
                 width,
                 signed: false,
             };
         }
-    }
-    if let Some(w) = s.strip_prefix('f') {
-        if let Ok(width) = w.parse::<usize>() {
-            return TypeSpecifier::Float { width };
-        }
+    if let Some(w) = s.strip_prefix('f') && let Ok(width) = w.parse::<usize>() {
+        return TypeSpecifier::Float { width };
     }
     TypeSpecifier::NonScalar(s.to_string())
 }

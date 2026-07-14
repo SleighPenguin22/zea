@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_imports)]
+#![allow(dead_code, unused_imports, unused_macro_rules, unused_macros)]
 /// This module contains the AST definition for the Zea language.
 /// Any node that encompasses some structure with meaningful data has an id, this id has the following guarantees:
 /// - the id is unique
@@ -23,7 +23,6 @@
 use crate::helper_impls::StructuralEq;
 
 pub mod typecheck;
-pub use typecheck::ZeaTypeChecker;
 pub mod visitors;
 
 #[cfg(test)]
@@ -1064,29 +1063,29 @@ pub enum BinOp {
 }
 impl StructuralEq for BinOp {
     fn eq_ignore_id(&self, other: &Self) -> bool {
-        match (self, other) {
-            (BinOp::Add, BinOp::Add) => true,
-            (BinOp::Sub, BinOp::Sub) => true,
-            (BinOp::Mul, BinOp::Mul) => true,
-            (BinOp::Div, BinOp::Div) => true,
-            (BinOp::Mod, BinOp::Mod) => true,
-            (BinOp::LogAnd, BinOp::LogAnd) => true,
-            (BinOp::LogOr, BinOp::LogOr) => true,
-            (BinOp::LogXor, BinOp::LogXor) => true,
-            (BinOp::BitAnd, BinOp::BitAnd) => true,
-            (BinOp::BitOr, BinOp::BitOr) => true,
-            (BinOp::BitXor, BinOp::BitXor) => true,
-            (BinOp::Subscript, BinOp::Subscript) => true,
-            (BinOp::Lsh, BinOp::Lsh) => true,
-            (BinOp::Rsh, BinOp::Rsh) => true,
-            (BinOp::Eq, BinOp::Eq) => true,
-            (BinOp::Neq, BinOp::Neq) => true,
-            (BinOp::Geq, BinOp::Geq) => true,
-            (BinOp::Leq, BinOp::Leq) => true,
-            (BinOp::LT, BinOp::LT) => true,
-            (BinOp::GT, BinOp::GT) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (BinOp::Add, BinOp::Add)
+                | (BinOp::Sub, BinOp::Sub)
+                | (BinOp::Mul, BinOp::Mul)
+                | (BinOp::Div, BinOp::Div)
+                | (BinOp::Mod, BinOp::Mod)
+                | (BinOp::LogAnd, BinOp::LogAnd)
+                | (BinOp::LogOr, BinOp::LogOr)
+                | (BinOp::LogXor, BinOp::LogXor)
+                | (BinOp::BitAnd, BinOp::BitAnd)
+                | (BinOp::BitOr, BinOp::BitOr)
+                | (BinOp::BitXor, BinOp::BitXor)
+                | (BinOp::Subscript, BinOp::Subscript)
+                | (BinOp::Lsh, BinOp::Lsh)
+                | (BinOp::Rsh, BinOp::Rsh)
+                | (BinOp::Eq, BinOp::Eq)
+                | (BinOp::Neq, BinOp::Neq)
+                | (BinOp::Geq, BinOp::Geq)
+                | (BinOp::Leq, BinOp::Leq)
+                | (BinOp::LT, BinOp::LT)
+                | (BinOp::GT, BinOp::GT)
+        )
     }
 }
 
@@ -1098,12 +1097,10 @@ pub enum UnOp {
 }
 impl StructuralEq for UnOp {
     fn eq_ignore_id(&self, other: &Self) -> bool {
-        match (self, other) {
-            (UnOp::Neg, UnOp::Neg) => true,
-            (UnOp::LogNot, UnOp::LogNot) => true,
-            (UnOp::BitNot, UnOp::BitNot) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (UnOp::Neg, UnOp::Neg) | (UnOp::LogNot, UnOp::LogNot) | (UnOp::BitNot, UnOp::BitNot)
+        )
     }
 }
 

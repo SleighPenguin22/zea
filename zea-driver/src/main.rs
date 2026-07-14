@@ -21,12 +21,12 @@ fn main() {
     //
     module.simplify_assignments_after(generator);
 
-    let mut type_checker = zea_ast::zea::ZeaTypeChecker::new();
-    match type_checker.check_module(&mut module) {
-        Ok(_) => {}
-        Err(e) => {
-            error!("Type checking error: {e:?}")
-        }
-    };
-    info!("after expansions:\n{}", module.indent_print(0));
+    // let mut type_checker = zea_ast::zea::ZeaTypeChecker::new();
+    // match type_checker.check_module(&mut module) {
+    //     Ok(_) => {}
+    //     Err(e) => {
+    //         error!("Type checking error: {e:?}")
+    //     }
+    // };
+    // info!("after expansions:\n{}", module.indent_print(0));
 }

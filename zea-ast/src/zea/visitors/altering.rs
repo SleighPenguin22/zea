@@ -1,8 +1,9 @@
+#![allow(clippy::new_without_default)]
 use crate::zea::visitors::annotating::ScopedIdentifier;
 use crate::zea::visitors::{
-    walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef, walk_mut_initblock,
-    walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef, walk_mut_unpacked_init,
-    Transfomer,
+    walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef,
+    walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef,
+    walk_mut_unpacked_init, Transfomer,
 };
 use crate::zea::{
     AssignmentPattern, BlockExpression, Expression, ExpressionKind, Function, FunctionCall,
@@ -306,13 +307,10 @@ impl Transfomer for IdentifierScoper {
         &mut self,
         expr: &mut Expression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        match &mut expr.kind {
-            ExpressionKind::UnScopedIdent(i) => {
-                let scoped_ident = self.resolve(i)?.clone();
-                expr.kind = ExpressionKind::ScopedIdent(scoped_ident);
-                return Ok(());
-            }
-            _ => {}
+        if let ExpressionKind::UnScopedIdent(i) = &mut expr.kind {
+            let scoped_ident = self.resolve(i)?.clone();
+            expr.kind = ExpressionKind::ScopedIdent(scoped_ident);
+            return Ok(());
         }
         walk_mut_expr(self, expr)?;
         Ok(())
@@ -446,7 +444,7 @@ impl IdentifierScoper {
         self.get_scope_mut(idx)
     }
     fn exit_scope(&mut self) {
-        assert!(self.scope_stack.len() > 0, "cannot pop module scope");
+        assert!(!self.scope_stack.is_empty(), "cannot pop module scope");
         self.scope_stack.pop();
     }
     fn current_scope(&mut self) -> &mut BlockScope {
