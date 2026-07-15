@@ -21,12 +21,742 @@
 /// The [`visitors::altering::BareNodeLabeler`] visitor
 /// grants a unique ID to node with a sentinel ID.
 use crate::helper_impls::StructuralEq;
+use crate::zea::hir_nodes::HIRASTNode;
+use crate::zea::hir_nodes::HIRModule;
 use crate::zea::visitors::Visitor;
 
 mod typecheck;
 pub use typecheck::typecheck_module;
+mod impls;
+mod mir_nodes;
 pub mod visitors;
+pub mod hir_nodes {
+    use std::{fmt::Debug, fmt::Formatter, hash::Hash, hash::Hasher};
 
+    use zea_internal_macros::{ASTStructuralEq, VariantToStr};
+
+    use crate::{
+        helper_impls::StructuralEq,
+        zea::{BinOp, HIRScopedIdentifier, UnOp},
+    };
+
+    use super::NodeId;
+    pub enum HIRASTNode {
+        Module(HIRModule),
+        Function(HIRFunction),
+        Block(HIRBlockExpression),
+        Branch(HIRBranch),
+        Expression(HIRExpression),
+    }
+
+    macro_rules! variant_to_some {
+        ($selfT:ident, $self:ident, $variantname:ident) => {
+            match $self {
+                $selfT::$variantname(var) => Some(var),
+                _ => None,
+            }
+        };
+    }
+    impl HIRASTNode {
+        pub fn as_module(self) -> Option<HIRModule> {
+            variant_to_some!(Self, self, Module)
+        }
+        pub fn as_block(self) -> Option<HIRBlockExpression> {
+            variant_to_some!(Self, self, Block)
+        }
+        pub fn as_function(self) -> Option<HIRFunction> {
+            variant_to_some!(Self, self, Function)
+        }
+        pub fn as_branch(self) -> Option<HIRBranch> {
+            variant_to_some!(Self, self, Branch)
+        }
+        pub fn as_expr(self) -> Option<HIRExpression> {
+            variant_to_some!(Self, self, Expression)
+        }
+    }
+
+    #[derive(Default, Debug, Clone)]
+    pub struct HIRModule {
+        pub id: NodeId,
+        pub imports: Vec<String>,
+        pub exports: Vec<String>,
+        pub global_vars: Vec<HIRInitializationBlock>,
+        pub functions: Vec<HIRFunction>,
+        pub struct_definitions: Vec<HIRStructDataTypeDefinition>,
+    }
+
+    impl HIRModule {
+        pub fn find_entry_point(&self) -> Option<&HIRFunction> {
+            self.iter_functions().find(|func| func.name == "main")
+        }
+
+        pub fn iter_functions(&self) -> impl Iterator<Item = &HIRFunction> {
+            self.functions.iter()
+        }
+        pub fn iter_global_vars(&self) -> impl Iterator<Item = &HIRInitializationBlock> {
+            self.global_vars.iter()
+        }
+        pub fn iter_structs(&self) -> impl Iterator<Item = &HIRStructDataTypeDefinition> {
+            self.struct_definitions.iter()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct HIRFuncParam {
+        pub id: NodeId,
+        pub typ: HIRTypeSpecifier,
+        pub name: String,
+    }
+
+    /// A top-level function definition
+    ///
+    /// Function may be defined only once within a module.
+    /// Functions may be imported as many times as needed.
+    #[derive(Debug, Clone)]
+    pub struct HIRFunction {
+        pub id: NodeId,
+        pub name: String,
+        pub params: Vec<HIRFuncParam>,
+        pub returns: HIRTypeSpecifier,
+        pub body: HIRBlockExpression,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct HoistedFunctionSignature {
+        pub id: NodeId,
+        pub name: String,
+        pub args: Vec<HIRFuncParam>,
+        pub returns: HIRTypeSpecifier,
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct HIRStatement {
+        pub id: NodeId,
+        pub kind: HIRStatementKind,
+    }
+
+    #[derive(Debug, Clone, VariantToStr)]
+    pub enum HIRStatementKind {
+        // initial pass
+        /// Variable initialization
+        Initialization(HIRInitializationBlock),
+        /// Variable Reassignment
+        Reassignment(HIRReassignment),
+        FunctionCall(HIRFunctionCall),
+        /// Control-flow return
+        Return(HIRExpression),
+        /// A tailing expression in a block
+        BlockTail(HIRExpression),
+
+        // CondMatch(Box<ConditionMatch>),
+
+        // after expansion
+        Block(HIRBlockExpression),
+        IfThenElse(HIRBranch),
+    }
+
+    /// A packed or unpacked initialisation
+    #[derive(Debug, Clone)]
+    pub struct HIRInitializationBlock {
+        pub id: NodeId,
+        pub kind: HIRInitializationKind,
+    }
+    impl StructuralEq for HIRInitializationBlock {
+        fn eq_ignore_id(&self, other: &Self) -> bool {
+            let mut is_eq = true;
+            is_eq &= (self.kind).eq_ignore_id(&other.kind);
+            is_eq
+        }
+    }
+
+    impl HIRInitializationBlock {
+        pub fn packed(
+            typ: Option<HIRTypeSpecifier>,
+            assignee: HIRAssignmentPattern,
+            value: HIRExpression,
+        ) -> Self {
+            Self {
+                id: NodeId::sentinel(),
+                kind: HIRInitializationKind::Packed(HIRPackedInitialization {
+                    typ,
+                    assignee,
+                    value,
+                }),
+            }
+        }
+    }
+    /// An assignment to a pattern
+    /// This node is an intermediate, high level node that gets desugared into a series of assignments
+    ///
+    /// Has one of the forms
+    /// - `var: type? = value`
+    /// - `@(pat1, pat2, ..., patN): type? = value`
+    ///
+    /// NOTE:
+    /// Support for enum destructuring to be added later
+    #[derive(Debug, Clone)]
+    pub struct HIRPackedInitialization {
+        pub typ: Option<HIRTypeSpecifier>,
+        pub assignee: HIRAssignmentPattern,
+        pub value: HIRExpression,
+    }
+
+    impl HIRPackedInitialization {
+        pub fn untyped(assignee: HIRAssignmentPattern, value: HIRExpression) -> Self {
+            Self {
+                typ: None,
+                assignee,
+                value,
+            }
+        }
+    }
+
+    /// An assignment to a simple, totally unpacked variable.
+    ///
+    /// Has one of the forms
+    /// - `var := value`
+    /// - `var: type = value`
+    #[derive(Debug, Clone)]
+    pub struct HIRSimpleInitialization {
+        pub id: NodeId,
+        pub typ: Option<HIRTypeSpecifier>,
+        pub assignee: String,
+        pub value: HIRExpression,
+    }
+
+    impl HIRSimpleInitialization {
+        pub fn untyped(assignee: &str, value: HIRExpression) -> Self {
+            Self {
+                id: NodeId::sentinel(),
+                assignee: assignee.to_string(),
+                value,
+                typ: None,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct HIRPartiallyUnpackedInitialization {
+        pub temporary: HIRSimpleInitialization,
+        pub unpacked_assignments: Vec<HIRInitializationBlock>,
+    }
+
+    #[derive(Debug, Clone)]
+    pub enum HIRInitializationKind {
+        Packed(HIRPackedInitialization),
+        Unpacked(Vec<HIRSimpleInitialization>),
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct HIRReassignment {
+        pub id: NodeId,
+        pub assignee: String,
+        pub value: HIRExpression,
+    }
+
+    impl HIRReassignment {
+        pub fn wrap_in_statement(self) -> HIRStatement {
+            HIRStatement {
+                id: NodeId::sentinel(),
+                kind: HIRStatementKind::Reassignment(self),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct HIRFunctionCall {
+        pub id: NodeId,
+        pub subject: Box<HIRExpression>,
+        pub args: Vec<HIRExpression>,
+    }
+
+    impl HIRFunctionCall {
+        pub fn wrap_in_statement(self) -> HIRStatement {
+            HIRStatement {
+                id: NodeId::sentinel(),
+                kind: HIRStatementKind::FunctionCall(self),
+            }
+        }
+
+        pub fn wrap_in_expression(self) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::FunctionCall(self),
+            }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct HIRBlockExpression {
+        /// The label that the block expression has its value assigned to
+        /// i.e. `__block0`, `__block1` etc.
+        /// This label must be unique to the scope of the function in which it exists
+        pub id: NodeId,
+        pub statements: Vec<HIRStatement>,
+        pub last: HIRExpression,
+    }
+
+    impl HIRBlockExpression {
+        pub fn wrap_in_statement(self) -> HIRStatement {
+            HIRStatement {
+                id: NodeId::sentinel(),
+                kind: HIRStatementKind::Block(self),
+            }
+        }
+        pub fn wrap_in_expression(self) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::Block(Box::new(self)),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct HIRExpression {
+        pub id: NodeId,
+        pub kind: HIRExpressionKind,
+    }
+
+    impl HIRExpression {
+        pub fn with_id(mut self, id: NodeId) -> Self {
+            self.id = id;
+            self
+        }
+    }
+
+    impl HIRExpression {
+        pub fn tuple_member_access(e: HIRExpression, field: usize) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::MemberAccess(Box::new(e), format!("_{field}")),
+            }
+        }
+
+        pub fn ident(ident: String) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::UnScopedIdent(ident),
+            }
+        }
+        pub fn scoped_local(ident: String, origin: NodeId) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::ScopedIdent(HIRScopedIdentifier::local(origin, ident)),
+            }
+        }
+
+        pub fn wrap_in_return_statement(self) -> HIRStatement {
+            HIRStatement {
+                id: NodeId::sentinel(),
+                kind: HIRStatementKind::Return(self),
+            }
+        }
+
+        pub fn wrap_in_block_tail_statement(self) -> HIRStatement {
+            HIRStatement {
+                id: NodeId::sentinel(),
+                kind: HIRStatementKind::BlockTail(self),
+            }
+        }
+
+        pub fn wrap_lit_int(i: usize) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::IntegerLiteral(i),
+            }
+        }
+        pub fn wrap_lit_float(f: f64) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::FloatLiteral(f),
+            }
+        }
+
+        pub fn wrap_lit_bool(b: bool) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::BoolLiteral(b),
+            }
+        }
+
+        pub fn wrap_ident(ident: String) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::UnScopedIdent(ident),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, VariantToStr)]
+    pub enum HIRExpressionKind {
+        // initial pass
+        Unit,
+        IntegerLiteral(usize),
+        BoolLiteral(bool),
+        FloatLiteral(f64),
+        StringLiteral(String),
+        UnScopedIdent(String),
+        ScopedIdent(HIRScopedIdentifier),
+        FunctionCall(HIRFunctionCall),
+        BinOpExpr(BinOp, Box<HIRExpression>, Box<HIRExpression>),
+        UnOpExpr(UnOp, Box<HIRExpression>),
+        MemberAccess(Box<HIRExpression>, String),
+        IfThenElse(HIRBranch),
+
+        // PatternMatch(PatternMatch),
+        // ConditionMatch(ConditionMatch),
+        // IfThenElse(IfThenElse),
+
+        // after expansion
+        Block(Box<HIRBlockExpression>),
+    }
+
+    impl HIRExpression {
+        pub const fn unit() -> Self {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::Unit,
+            }
+        }
+
+        pub fn binop(op: BinOp, l: HIRExpression, r: HIRExpression) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),
+            }
+        }
+        pub fn unop(op: UnOp, e: HIRExpression) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::UnOpExpr(op, Box::new(e)),
+            }
+        }
+
+        pub fn member_access(data: HIRExpression, member: String) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::MemberAccess(Box::new(data), member),
+            }
+        }
+    }
+
+    #[derive(Clone, Debug, ASTStructuralEq)]
+    pub struct ConditionMatch {
+        pub id: NodeId,
+        conditions: Vec<HIRConditionMatchArm>,
+    }
+
+    #[derive(Clone, Debug, ASTStructuralEq)]
+    pub struct PatternMatch {
+        pub id: NodeId,
+        patterns: Vec<HIRPatternMatchArm>,
+        subject: Box<HIRExpression>,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct HIRBranch {
+        pub id: NodeId,
+        pub condition: Box<HIRExpression>,
+        pub true_case: Box<HIRExpression>,
+        pub false_case: Option<Box<HIRExpression>>,
+    }
+
+    impl Eq for HIRBranch {}
+    impl Hash for HIRBranch {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            self.id.hash(state)
+        }
+    }
+    impl StructuralEq for HIRBranch {
+        fn eq_ignore_id(&self, other: &Self) -> bool {
+            let mut is_eq = true;
+            is_eq &= (self.condition).eq_ignore_id(&other.condition);
+            is_eq &= (self.true_case).eq_ignore_id(&other.true_case);
+            is_eq &= (self.false_case).eq_ignore_id(&other.false_case);
+            is_eq
+        }
+    }
+
+    impl HIRBranch {
+        pub fn if_block(condition: HIRExpression, then: HIRExpression) -> Self {
+            HIRBranch {
+                id: NodeId::sentinel(),
+                condition: Box::new(condition),
+                true_case: Box::new(then),
+                false_case: None,
+            }
+        }
+        pub fn if_else_block(
+            condition: HIRExpression,
+            then: HIRExpression,
+            otherwise: HIRExpression,
+        ) -> Self {
+            HIRBranch {
+                id: NodeId::sentinel(),
+                condition: Box::new(condition),
+                true_case: Box::new(then),
+                false_case: Some(Box::new(otherwise)),
+            }
+        }
+        pub fn wrap_in_expression(self) -> HIRExpression {
+            HIRExpression {
+                id: NodeId::sentinel(),
+                kind: HIRExpressionKind::IfThenElse(self),
+            }
+        }
+        pub fn wrap_in_statement(self) -> HIRStatement {
+            HIRStatement {
+                id: NodeId::sentinel(),
+                kind: HIRStatementKind::IfThenElse(self),
+            }
+        }
+    }
+    #[derive(Clone, Debug, ASTStructuralEq)]
+    pub struct HIRPatternMatchArm {
+        pub id: NodeId,
+        pat: HIRAssignmentPattern,
+        value: Box<HIRExpression>,
+    }
+    #[derive(Clone, Debug, ASTStructuralEq)]
+    pub struct HIRConditionMatchArm {
+        pub id: NodeId,
+        case: Box<HIRExpression>,
+        value: Box<HIRExpression>,
+    }
+    /// the left hand side of an assignment
+    ///
+    /// The simplest is a basic identifier
+    #[derive(Debug, PartialEq, Clone, Eq, Hash)]
+    pub enum HIRAssignmentPattern {
+        /// the pattern
+        ///
+        /// `var a: ...`
+        ///
+        /// or
+        ///
+        /// `a := ...`
+        Identifier(String),
+        /// the pattern
+        ///
+        /// `(<pat>, <pat>, <pat>) := ...`
+        ///
+        /// or
+        ///
+        /// `var (a,b,c) := ...`
+        Tuple(Vec<HIRAssignmentPattern>),
+    }
+    #[derive(Debug, PartialEq, Clone, Eq, Hash)]
+    pub enum HIRMatchPattern {
+        /// the pattern `a => ...`
+        Identifier(String),
+        /// the pattern `(<pat>, <pat>, ...) => ...`
+        Tuple(Vec<HIRAssignmentPattern>),
+
+        UnionVariant(String, String, Box<HIRAssignmentPattern>),
+    }
+
+    impl std::fmt::Display for HIRAssignmentPattern {
+        fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+            let s = match self {
+                HIRAssignmentPattern::Identifier(s) => s.clone(),
+                HIRAssignmentPattern::Tuple(tups) => {
+                    let s: Vec<String> = tups.iter().map(|pat| pat.to_string()).collect();
+                    format!("({})", s.join(", "))
+                }
+            };
+            write!(f, "{}", s)
+        }
+    }
+
+    /// The Zea named Struct type / product type
+    #[derive(Debug, Clone)]
+    pub struct HIRStructDataTypeDefinition {
+        pub id: NodeId,
+        pub name: String,
+        pub members: Vec<HIRTypedIdentifier>,
+        pub reorder_fields: Option<bool>,
+        pub alignment: Option<usize>,
+    }
+    impl HIRStructDataTypeDefinition {
+        pub(crate) fn should_reorder_fields(&self) -> bool {
+            self.reorder_fields.is_none_or(|b| b)
+        }
+    }
+
+    pub struct HIRTaggedUnionDataTypeDefinition {
+        pub name: String,
+        pub members: Vec<HIRTaggedUnionVariant>,
+    }
+
+    pub enum HIRTaggedUnionVariant {
+        TagVariant(String),
+        DataVariant(HIRTypedIdentifier),
+    }
+
+    /// The Type that is bundled with a:
+    /// - function parameter
+    /// - identifier in declaration(-assignments)
+    #[derive(PartialEq, Eq, Clone, Hash)]
+    pub enum HIRTypeSpecifier {
+        /// An aggregate DataType
+        NonScalar(String),
+        /// the type that a statement returns: similar to `void` or `()`
+        Unit,
+        /// boolean type
+        Bool,
+        /// Integer type with width and sign
+        Integer { width: usize, signed: bool },
+        /// Floating point type with width
+        Float { width: usize },
+
+        /// a pointer to a memory location containing something of the inner type
+        Pointer(Box<HIRTypeSpecifier>),
+        /// a pointer+length bundle of items of the inner type
+        ArrayOf(Box<HIRTypeSpecifier>),
+        // /// `&[<type>]`
+        // Slice(Box<Type>),
+        // /// `?<type>`
+        // Option(Box<Type>),
+        /// The diverging type, i.e. the type that `exit()` and `panic!()` return
+        Never,
+    }
+
+    impl Debug for HIRTypeSpecifier {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            let str = match self {
+                HIRTypeSpecifier::NonScalar(typ) => typ,
+                HIRTypeSpecifier::Float { width } => &format!("f{width}"),
+                HIRTypeSpecifier::Integer { width, signed } => {
+                    &format!("{}{width}", if *signed { 'i' } else { 'u' })
+                }
+                HIRTypeSpecifier::Bool => "Bool",
+                HIRTypeSpecifier::ArrayOf(arr) => &format!("[{arr:?}]"),
+                // Type::Option(opt) => &format!("?{opt:?}"),
+                HIRTypeSpecifier::Pointer(ptr) => &format!("&{ptr:?}"),
+                // Type::Slice(slice) => &format!("&[{slice:?}]"),
+                HIRTypeSpecifier::Unit => "()",
+                HIRTypeSpecifier::Never => "!",
+            };
+
+            write!(f, "{}", str)
+        }
+    }
+
+    #[allow(non_snake_case)]
+    impl HIRTypeSpecifier {
+        pub const fn t_U8() -> HIRTypeSpecifier {
+            Self::Integer {
+                width: 8,
+                signed: false,
+            }
+        }
+        pub const fn t_U16() -> HIRTypeSpecifier {
+            Self::Integer {
+                width: 16,
+                signed: false,
+            }
+        }
+        pub const fn t_U32() -> HIRTypeSpecifier {
+            Self::Integer {
+                width: 32,
+                signed: false,
+            }
+        }
+        pub const fn t_U64() -> HIRTypeSpecifier {
+            Self::Integer {
+                width: 64,
+                signed: false,
+            }
+        }
+        pub const fn t_I8() -> HIRTypeSpecifier {
+            Self::Integer {
+                width: 8,
+                signed: true,
+            }
+        }
+        pub const fn t_I16() -> HIRTypeSpecifier {
+            Self::Integer {
+                width: 16,
+                signed: true,
+            }
+        }
+        pub const fn t_I32() -> HIRTypeSpecifier {
+            Self::Integer {
+                width: 32,
+                signed: true,
+            }
+        }
+        pub const fn t_I64() -> HIRTypeSpecifier {
+            Self::Integer {
+                width: 64,
+                signed: true,
+            }
+        }
+
+        pub const fn t_F32() -> HIRTypeSpecifier {
+            Self::Float { width: 32 }
+        }
+        pub const fn t_F64() -> HIRTypeSpecifier {
+            Self::Float { width: 64 }
+        }
+
+        pub const fn t_Bool() -> Self {
+            Self::Bool
+        }
+        pub const fn t_Unit() -> Self {
+            HIRTypeSpecifier::Unit
+        }
+
+        pub const fn t_Never() -> Self {
+            HIRTypeSpecifier::Never
+        }
+    }
+    #[derive(Debug, Eq, PartialEq, Hash, Clone, ASTStructuralEq)]
+    pub struct HIRTypedIdentifier {
+        pub name: String,
+        pub typ: HIRTypeSpecifier,
+    }
+
+    impl HIRTypedIdentifier {
+        pub fn new(typ: HIRTypeSpecifier, name: impl Into<String>) -> Self {
+            Self {
+                typ,
+                name: name.into(),
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr)]
+pub enum BinOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    LogAnd,
+    LogOr,
+    LogXor,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Subscript,
+    Lsh,
+    Rsh,
+    Eq,
+    Neq,
+    Geq,
+    Leq,
+    LT,
+    GT,
+}
+
+#[derive(Clone, Debug)]
+pub enum UnOp {
+    Neg,
+    LogNot,
+    BitNot,
+}
 #[cfg(test)]
 pub(crate) mod test_ast_macros {
     macro_rules! label_ast {
@@ -301,31 +1031,31 @@ pub(crate) mod test_ast_macros {
     macro_rules! ztyp {
         (U8) => {
             {
-            use crate::zea::TypeSpecifier;
-            TypeSpecifier::t_U8()
+            use crate::zea::hir_nodes::HIRTypeSpecifier;
+            HIRTypeSpecifier::t_U8()
         }
     };
-        (I8) => {
-            {use crate::zea::TypeSpecifier;
-            TypeSpecifier::t_I8()
+        (I8) => {{
+            use crate::zea::hir_nodes::HIRTypeSpecifier;
+            HIRTypeSpecifier::t_I8()
         }
     };
         ($t:ident) => {
             {
-            use crate::zea::TypeSpecifier;
-                TypeSpecifier::NonScalar(String::from(stringify!($t)))
+            use crate::zea::hir_nodes::HIRTypeSpecifier;
+                HIRTypeSpecifier::NonScalar(String::from(stringify!($t)))
             }
         };
         (*$($t:tt)+) => {
             {
-            use crate::zea::TypeSpecifier;
-                TypeSpecifier::Pointer(Box::new(ztyp!($($t)+)))
+            use crate::zea::hir_nodes::HIRTypeSpecifier;
+                HIRTypeSpecifier::Pointer(Box::new(ztyp!($($t)+)))
             }
         };
         ([ ]$($t:tt)+) => {
             {
-            use crate::zea::TypeSpecifier;
-                TypeSpecifier::ArrayOf(Box::new(ztyp!($($t)+)))
+            use crate::zea::hir_nodes::HIRTypeSpecifier;
+                HIRTypeSpecifier::ArrayOf(Box::new(ztyp!($($t)+)))
             }
         };
     }
@@ -333,7 +1063,7 @@ pub(crate) mod test_ast_macros {
 }
 
 pub use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
-pub use crate::zea::visitors::annotating::ScopedIdentifier;
+pub use crate::zea::visitors::annotating::HIRScopedIdentifier;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_internal_macros::{ASTStructuralEq, VariantToStr};
@@ -356,19 +1086,11 @@ impl Display for NodeId {
     }
 }
 
-pub enum ZeaASTNode {
-    Module(Module),
-    Function(Function),
-    Block(BlockExpression),
-    Branch(IfThenElse),
-    Expression(Expression),
-}
-
 struct ZeaNodeQuery {
     id: NodeId,
 }
 impl ZeaNodeQuery {
-    pub fn query_node_with_id(id: NodeId, module: &Module) -> Option<ZeaASTNode> {
+    pub fn query_hir_node_with_id(id: NodeId, module: &HIRModule) -> Option<HIRASTNode> {
         let mut s = Self { id };
         match s.visit_module(module) {
             Ok(Some(n)) => Some(n),
@@ -377,1509 +1099,10 @@ impl ZeaNodeQuery {
     }
 }
 
-macro_rules! variant_to_some {
-    ($selfT:ident, $self:ident, $variantname:ident) => {
-        match $self {
-            $selfT::$variantname(var) => Some(var),
-            _ => None,
-        }
-    };
-}
-impl ZeaASTNode {
-    pub fn as_module(self) -> Option<Module> {
-        variant_to_some!(Self, self, Module)
-    }
-    pub fn as_block(self) -> Option<BlockExpression> {
-        variant_to_some!(Self, self, Block)
-    }
-    pub fn as_function(self) -> Option<Function> {
-        variant_to_some!(Self, self, Function)
-    }
-    pub fn as_branch(self) -> Option<IfThenElse> {
-        variant_to_some!(Self, self, Branch)
-    }
-    pub fn as_expr(self) -> Option<Expression> {
-        variant_to_some!(Self, self, Expression)
-    }
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct Module {
-    pub id: NodeId,
-    pub imports: Vec<String>,
-    pub exports: Vec<String>,
-    pub global_vars: Vec<InitializationBlock>,
-    pub functions: Vec<Function>,
-    pub struct_definitions: Vec<StructDataTypeDefinition>,
-}
-impl StructuralEq for Module {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.imports).eq_ignore_id(&other.imports);
-        is_eq &= (self.exports).eq_ignore_id(&other.exports);
-        is_eq &= (self.global_vars).eq_ignore_id(&other.global_vars);
-        is_eq &= (self.functions).eq_ignore_id(&other.functions);
-        is_eq &= (self.struct_definitions).eq_ignore_id(&other.struct_definitions);
-        is_eq
-    }
-}
-
-impl Module {
-    pub fn find_entry_point(&self) -> Option<&Function> {
-        self.iter_functions().find(|func| func.name == "main")
-    }
-
-    pub fn iter_functions(&self) -> impl Iterator<Item = &Function> {
-        self.functions.iter()
-    }
-    pub fn iter_global_vars(&self) -> impl Iterator<Item = &InitializationBlock> {
-        self.global_vars.iter()
-    }
-    pub fn iter_structs(&self) -> impl Iterator<Item = &StructDataTypeDefinition> {
-        self.struct_definitions.iter()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct FuncParam {
-    pub id: NodeId,
-    pub typ: TypeSpecifier,
-    pub name: String,
-}
-impl StructuralEq for FuncParam {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.typ).eq_ignore_id(&other.typ);
-        is_eq &= (self.name).eq_ignore_id(&other.name);
-        is_eq
-    }
-}
-impl From<TypedIdentifier> for FuncParam {
-    fn from(value: TypedIdentifier) -> Self {
-        Self {
-            id: NodeId::sentinel(),
-            typ: value.typ,
-            name: value.name,
-        }
-    }
-}
-
-/// A top-level function definition
-///
-/// Function may be defined only once within a module.
-/// Functions may be imported as many times as needed.
-#[derive(Debug, Clone)]
-pub struct Function {
-    pub id: NodeId,
-    pub name: String,
-    pub params: Vec<FuncParam>,
-    pub returns: TypeSpecifier,
-    pub body: BlockExpression,
-}
-impl StructuralEq for Function {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.name).eq_ignore_id(&other.name);
-        is_eq &= (self.params).eq_ignore_id(&other.params);
-        is_eq &= (self.returns).eq_ignore_id(&other.returns);
-        is_eq &= (self.body).eq_ignore_id(&other.body);
-        is_eq
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct HoistedFunctionSignature {
-    pub id: NodeId,
-    pub name: String,
-    pub args: Vec<FuncParam>,
-    pub returns: TypeSpecifier,
-}
-impl StructuralEq for HoistedFunctionSignature {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.name).eq_ignore_id(&other.name);
-        is_eq &= (self.args).eq_ignore_id(&other.args);
-        is_eq &= (self.returns).eq_ignore_id(&other.returns);
-        is_eq
-    }
-}
-
-impl From<Function> for HoistedFunctionSignature {
-    fn from(value: Function) -> Self {
-        HoistedFunctionSignature {
-            id: value.id,
-            name: value.name,
-            args: value.params,
-            returns: value.returns,
-        }
-    }
-}
-#[derive(Debug, Clone)]
-pub struct Statement {
-    pub id: NodeId,
-    pub kind: StatementKind,
-}
-impl StructuralEq for Statement {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.kind).eq_ignore_id(&other.kind);
-        is_eq
-    }
-}
-#[derive(Debug, Clone, VariantToStr)]
-pub enum StatementKind {
-    // initial pass
-    /// Variable initialization
-    Initialization(InitializationBlock),
-    /// Variable Reassignment
-    Reassignment(Reassignment),
-    FunctionCall(FunctionCall),
-    /// Control-flow return
-    Return(Expression),
-    /// A tailing expression in a block
-    BlockTail(Expression),
-
-    // CondMatch(Box<ConditionMatch>),
-
-    // after expansion
-    Block(BlockExpression),
-    IfThenElse(IfThenElse),
-}
-
-impl StructuralEq for StatementKind {
-    // initial pass
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        match (self, other) {
-            (StatementKind::Initialization(sf0), StatementKind::Initialization(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (StatementKind::Reassignment(sf0), StatementKind::Reassignment(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (StatementKind::FunctionCall(sf0), StatementKind::FunctionCall(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (StatementKind::Return(sf0), StatementKind::Return(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (StatementKind::BlockTail(sf0), StatementKind::BlockTail(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (StatementKind::Block(sf0), StatementKind::Block(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (StatementKind::IfThenElse(sf0), StatementKind::IfThenElse(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            _ => false,
-        }
-    }
-}
-/// A packed or unpacked initialisation
-#[derive(Debug, Clone)]
-pub struct InitializationBlock {
-    pub id: NodeId,
-    pub kind: InitializationKind,
-}
-impl StructuralEq for InitializationBlock {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.kind).eq_ignore_id(&other.kind);
-        is_eq
-    }
-}
-
-impl InitializationBlock {
-    pub fn packed(
-        typ: Option<TypeSpecifier>,
-        assignee: AssignmentPattern,
-        value: Expression,
-    ) -> Self {
-        Self {
-            id: NodeId::sentinel(),
-            kind: InitializationKind::Packed(PackedInitialization {
-                typ,
-                assignee,
-                value,
-            }),
-        }
-    }
-}
-/// An assignment to a pattern
-/// This node is an intermediate, high level node that gets desugared into a series of assignments
-///
-/// Has one of the forms
-/// - `var: type? = value`
-/// - `@(pat1, pat2, ..., patN): type? = value`
-///
-/// NOTE:
-/// Support for enum destructuring to be added later
-#[derive(Debug, Clone)]
-pub struct PackedInitialization {
-    pub typ: Option<TypeSpecifier>,
-    pub assignee: AssignmentPattern,
-    pub value: Expression,
-}
-
-impl PackedInitialization {
-    pub fn untyped(assignee: AssignmentPattern, value: Expression) -> Self {
-        Self {
-            typ: None,
-            assignee,
-            value,
-        }
-    }
-}
-
-impl StructuralEq for PackedInitialization {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.typ).eq_ignore_id(&other.typ);
-        is_eq &= (self.assignee).eq_ignore_id(&other.assignee);
-        is_eq &= (self.value).eq_ignore_id(&other.value);
-        is_eq
-    }
-}
-
-/// An assignment to a simple, totally unpacked variable.
-///
-/// Has one of the forms
-/// - `var := value`
-/// - `var: type = value`
-#[derive(Debug, Clone)]
-pub struct SimpleInitialization {
-    pub id: NodeId,
-    pub typ: Option<TypeSpecifier>,
-    pub assignee: String,
-    pub value: Expression,
-}
-impl StructuralEq for SimpleInitialization {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.typ).eq_ignore_id(&other.typ);
-        is_eq &= (self.assignee).eq_ignore_id(&other.assignee);
-        is_eq &= (self.value).eq_ignore_id(&other.value);
-        is_eq
-    }
-}
-impl SimpleInitialization {
-    pub fn untyped(assignee: &str, value: Expression) -> Self {
-        Self {
-            id: NodeId::sentinel(),
-            assignee: assignee.to_string(),
-            value,
-            typ: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct PartiallyUnpackedInitialization {
-    pub temporary: SimpleInitialization,
-    pub unpacked_assignments: Vec<InitializationBlock>,
-}
-impl StructuralEq for PartiallyUnpackedInitialization {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.temporary).eq_ignore_id(&other.temporary);
-        is_eq &= (self.unpacked_assignments).eq_ignore_id(&other.unpacked_assignments);
-        is_eq
-    }
-}
-#[derive(Debug, Clone)]
-pub enum InitializationKind {
-    Packed(PackedInitialization),
-    Unpacked(Vec<SimpleInitialization>),
-}
-impl StructuralEq for InitializationKind {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        match (self, other) {
-            (InitializationKind::Packed(sf0), InitializationKind::Packed(of0)) => {
-                sf0.eq_ignore_id(of0)
-            }
-
-            (InitializationKind::Unpacked(sf0), InitializationKind::Unpacked(of0)) => {
-                sf0.eq_ignore_id(of0)
-            }
-
-            _ => false,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Reassignment {
-    pub id: NodeId,
-    pub assignee: String,
-    pub value: Expression,
-}
-impl StructuralEq for Reassignment {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.assignee).eq_ignore_id(&other.assignee);
-        is_eq &= (self.value).eq_ignore_id(&other.value);
-        is_eq
-    }
-}
-impl Reassignment {
-    pub fn wrap_in_statement(self) -> Statement {
-        Statement {
-            id: NodeId::sentinel(),
-            kind: StatementKind::Reassignment(self),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct FunctionCall {
-    pub id: NodeId,
-    pub subject: Box<Expression>,
-    pub args: Vec<Expression>,
-}
-impl StructuralEq for FunctionCall {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.subject).eq_ignore_id(&other.subject);
-        is_eq &= (self.args).eq_ignore_id(&other.args);
-        is_eq
-    }
-}
-
-impl FunctionCall {
-    pub fn wrap_in_statement(self) -> Statement {
-        Statement {
-            id: NodeId::sentinel(),
-            kind: StatementKind::FunctionCall(self),
-        }
-    }
-
-    pub fn wrap_in_expression(self) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::FunctionCall(self),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct BlockExpression {
-    /// The label that the block expression has its value assigned to
-    /// i.e. `__block0`, `__block1` etc.
-    /// This label must be unique to the scope of the function in which it exists
-    pub id: NodeId,
-    pub statements: Vec<Statement>,
-    pub last: Expression,
-}
-
-impl BlockExpression {
-    pub fn wrap_in_statement(self) -> Statement {
-        Statement {
-            id: NodeId::sentinel(),
-            kind: StatementKind::Block(self),
-        }
-    }
-    pub fn wrap_in_expression(self) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::Block(Box::new(self)),
-        }
-    }
-}
-
-impl StructuralEq for BlockExpression {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.statements).eq_ignore_id(&other.statements);
-        is_eq &= (self.last).eq_ignore_id(&other.last);
-        is_eq
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Expression {
-    pub id: NodeId,
-    pub kind: ExpressionKind,
-}
-
-impl Expression {
-    pub fn with_id(mut self, id: NodeId) -> Self {
-        self.id = id;
-        self
-    }
-}
-
-impl StructuralEq for Expression {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.kind).eq_ignore_id(&other.kind);
-        is_eq
-    }
-}
-
-impl Expression {
-    pub fn tuple_member_access(e: Expression, field: usize) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::MemberAccess(Box::new(e), format!("_{field}")),
-        }
-    }
-
-    pub fn ident(ident: String) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::UnScopedIdent(ident),
-        }
-    }
-    pub fn scoped_local(ident: String, origin: NodeId) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::ScopedIdent(ScopedIdentifier::local(origin, ident)),
-        }
-    }
-
-    pub fn wrap_in_return_statement(self) -> Statement {
-        Statement {
-            id: NodeId::sentinel(),
-            kind: StatementKind::Return(self),
-        }
-    }
-
-    pub fn wrap_in_block_tail_statement(self) -> Statement {
-        Statement {
-            id: NodeId::sentinel(),
-            kind: StatementKind::BlockTail(self),
-        }
-    }
-
-    pub fn wrap_lit_int(i: usize) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::IntegerLiteral(i),
-        }
-    }
-    pub fn wrap_lit_float(f: f64) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::FloatLiteral(f),
-        }
-    }
-
-    pub fn wrap_lit_bool(b: bool) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::BoolLiteral(b),
-        }
-    }
-
-    pub fn wrap_ident(ident: String) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::UnScopedIdent(ident),
-        }
-    }
-}
-
-#[derive(Debug, Clone, VariantToStr)]
-pub enum ExpressionKind {
-    // initial pass
-    Unit,
-    IntegerLiteral(usize),
-    BoolLiteral(bool),
-    FloatLiteral(f64),
-    StringLiteral(String),
-    UnScopedIdent(String),
-    ScopedIdent(ScopedIdentifier),
-    FunctionCall(FunctionCall),
-    BinOpExpr(BinOp, Box<Expression>, Box<Expression>),
-    UnOpExpr(UnOp, Box<Expression>),
-    MemberAccess(Box<Expression>, String),
-    IfThenElse(IfThenElse),
-
-    // PatternMatch(PatternMatch),
-    // ConditionMatch(ConditionMatch),
-    // IfThenElse(IfThenElse),
-
-    // after expansion
-    Block(Box<BlockExpression>),
-}
-impl StructuralEq for ExpressionKind {
-    // initial pass
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        match (self, other) {
-            (ExpressionKind::Unit, ExpressionKind::Unit) => true,
-            (ExpressionKind::IntegerLiteral(sf0), ExpressionKind::IntegerLiteral(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::BoolLiteral(sf0), ExpressionKind::BoolLiteral(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::FloatLiteral(sf0), ExpressionKind::FloatLiteral(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::StringLiteral(sf0), ExpressionKind::StringLiteral(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::UnScopedIdent(sf0), ExpressionKind::UnScopedIdent(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::ScopedIdent(sf0), ExpressionKind::ScopedIdent(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::FunctionCall(sf0), ExpressionKind::FunctionCall(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (
-                ExpressionKind::BinOpExpr(sf0, sf1, sf2),
-                ExpressionKind::BinOpExpr(of0, of1, of2),
-            ) if {
-                let mut sub_items_eq = true;
-                sub_items_eq &= sf0.eq_ignore_id(of0);
-                sub_items_eq &= sf1.eq_ignore_id(of1);
-                sub_items_eq &= sf2.eq_ignore_id(of2);
-                sub_items_eq
-            } =>
-            {
-                true
-            }
-            (ExpressionKind::UnOpExpr(sf0, sf1), ExpressionKind::UnOpExpr(of0, of1))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq &= sf1.eq_ignore_id(of1);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::MemberAccess(sf0, sf1), ExpressionKind::MemberAccess(of0, of1))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq &= sf1.eq_ignore_id(of1);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (ExpressionKind::IfThenElse(sf0), ExpressionKind::IfThenElse(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-
-            (ExpressionKind::Block(sf0), ExpressionKind::Block(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            _ => false,
-        }
-    }
-}
-
-impl Expression {
-    pub const fn unit() -> Self {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::Unit,
-        }
-    }
-
-    pub fn binop(op: BinOp, l: Expression, r: Expression) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),
-        }
-    }
-    pub fn unop(op: UnOp, e: Expression) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::UnOpExpr(op, Box::new(e)),
-        }
-    }
-
-    pub fn member_access(data: Expression, member: String) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::MemberAccess(Box::new(data), member),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr)]
-pub enum BinOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    LogAnd,
-    LogOr,
-    LogXor,
-    BitAnd,
-    BitOr,
-    BitXor,
-    Subscript,
-    Lsh,
-    Rsh,
-    Eq,
-    Neq,
-    Geq,
-    Leq,
-    LT,
-    GT,
-}
-impl StructuralEq for BinOp {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        matches!(
-            (self, other),
-            (BinOp::Add, BinOp::Add)
-                | (BinOp::Sub, BinOp::Sub)
-                | (BinOp::Mul, BinOp::Mul)
-                | (BinOp::Div, BinOp::Div)
-                | (BinOp::Mod, BinOp::Mod)
-                | (BinOp::LogAnd, BinOp::LogAnd)
-                | (BinOp::LogOr, BinOp::LogOr)
-                | (BinOp::LogXor, BinOp::LogXor)
-                | (BinOp::BitAnd, BinOp::BitAnd)
-                | (BinOp::BitOr, BinOp::BitOr)
-                | (BinOp::BitXor, BinOp::BitXor)
-                | (BinOp::Subscript, BinOp::Subscript)
-                | (BinOp::Lsh, BinOp::Lsh)
-                | (BinOp::Rsh, BinOp::Rsh)
-                | (BinOp::Eq, BinOp::Eq)
-                | (BinOp::Neq, BinOp::Neq)
-                | (BinOp::Geq, BinOp::Geq)
-                | (BinOp::Leq, BinOp::Leq)
-                | (BinOp::LT, BinOp::LT)
-                | (BinOp::GT, BinOp::GT)
-        )
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum UnOp {
-    Neg,
-    LogNot,
-    BitNot,
-}
-impl StructuralEq for UnOp {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        matches!(
-            (self, other),
-            (UnOp::Neg, UnOp::Neg) | (UnOp::LogNot, UnOp::LogNot) | (UnOp::BitNot, UnOp::BitNot)
-        )
-    }
-}
-
-#[derive(Clone, Debug, ASTStructuralEq)]
-pub struct ConditionMatch {
-    pub id: NodeId,
-    conditions: Vec<ConditionMatchArm>,
-}
-
-#[derive(Clone, Debug, ASTStructuralEq)]
-pub struct PatternMatch {
-    pub id: NodeId,
-    subject: Box<Expression>,
-    patterns: Vec<PatternMatchArm>,
-}
-
-#[derive(Clone, Debug)]
-pub struct IfThenElse {
-    pub id: NodeId,
-    pub condition: Box<Expression>,
-    pub true_case: Box<Expression>,
-    pub false_case: Option<Box<Expression>>,
-}
-impl PartialEq for IfThenElse {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-impl Eq for IfThenElse {}
-impl Hash for IfThenElse {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state)
-    }
-}
-impl StructuralEq for IfThenElse {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.condition).eq_ignore_id(&other.condition);
-        is_eq &= (self.true_case).eq_ignore_id(&other.true_case);
-        is_eq &= (self.false_case).eq_ignore_id(&other.false_case);
-        is_eq
-    }
-}
-
-impl IfThenElse {
-    pub fn if_block(condition: Expression, then: Expression) -> Self {
-        IfThenElse {
-            id: NodeId::sentinel(),
-            condition: Box::new(condition),
-            true_case: Box::new(then),
-            false_case: None,
-        }
-    }
-    pub fn if_else_block(condition: Expression, then: Expression, otherwise: Expression) -> Self {
-        IfThenElse {
-            id: NodeId::sentinel(),
-            condition: Box::new(condition),
-            true_case: Box::new(then),
-            false_case: Some(Box::new(otherwise)),
-        }
-    }
-    pub fn wrap_in_expression(self) -> Expression {
-        Expression {
-            id: NodeId::sentinel(),
-            kind: ExpressionKind::IfThenElse(self),
-        }
-    }
-    pub fn wrap_in_statement(self) -> Statement {
-        Statement {
-            id: NodeId::sentinel(),
-            kind: StatementKind::IfThenElse(self),
-        }
-    }
-}
-#[derive(Clone, Debug, ASTStructuralEq)]
-pub struct PatternMatchArm {
-    pub id: NodeId,
-    pat: AssignmentPattern,
-    value: Box<Expression>,
-}
-#[derive(Clone, Debug, ASTStructuralEq)]
-pub struct ConditionMatchArm {
-    pub id: NodeId,
-    case: Box<Expression>,
-    value: Box<Expression>,
-}
-/// the left hand side of an assignment
-///
-/// The simplest is a basic identifier
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
-pub enum AssignmentPattern {
-    /// the pattern
-    ///
-    /// `var a: ...`
-    ///
-    /// or
-    ///
-    /// `a := ...`
-    Identifier(String),
-    /// the pattern
-    ///
-    /// `(<pat>, <pat>, <pat>) := ...`
-    ///
-    /// or
-    ///
-    /// `var (a,b,c) := ...`
-    Tuple(Vec<AssignmentPattern>),
-}
-
-// This manual impl exists because deriving it
-// causes the compiler to say that the bound `&Vec<AssignmentPattern>: StructuralEq`
-// is not satisfied, even though it is???
-impl StructuralEq for AssignmentPattern {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        match (self, other) {
-            (AssignmentPattern::Identifier(_), AssignmentPattern::Identifier(_)) => true,
-            (AssignmentPattern::Tuple(t1), AssignmentPattern::Tuple(t2)) => {
-                t1.iter().zip(t2).all(|(a, b)| a.eq_ignore_id(b))
-            }
-            _ => false,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
-pub enum MatchPattern {
-    /// the pattern `a => ...`
-    Identifier(String),
-    /// the pattern `(<pat>, <pat>, ...) => ...`
-    Tuple(Vec<AssignmentPattern>),
-
-    UnionVariant(String, String, Box<AssignmentPattern>),
-}
-
-impl StructuralEq for MatchPattern {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        match (self, other) {
-            (MatchPattern::Identifier(_), MatchPattern::Identifier(_)) => true,
-            (MatchPattern::Tuple(t1), MatchPattern::Tuple(t2)) => t1
-                .iter()
-                .zip(t2)
-                .all(|(a, b)| StructuralEq::eq_ignore_id(a, b)),
-            (MatchPattern::UnionVariant(_, _, s3), MatchPattern::UnionVariant(_, _, o3)) => {
-                StructuralEq::eq_ignore_id(s3.as_ref(), o3.as_ref())
-            }
-            _ => false,
-        }
-    }
-}
-
-impl std::fmt::Display for AssignmentPattern {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        let s = match self {
-            AssignmentPattern::Identifier(s) => s.clone(),
-            AssignmentPattern::Tuple(tups) => {
-                let s: Vec<String> = tups.iter().map(|pat| pat.to_string()).collect();
-                format!("({})", s.join(", "))
-            }
-        };
-        write!(f, "{}", s)
-    }
-}
-
-/// The Zea named Struct type / product type
-#[derive(Debug, Clone)]
-pub struct StructDataTypeDefinition {
-    pub id: NodeId,
-    pub name: String,
-    pub members: Vec<TypedIdentifier>,
-}
-impl PartialEq for StructDataTypeDefinition {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-impl Eq for StructDataTypeDefinition {}
-impl Hash for StructDataTypeDefinition {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state)
-    }
-}
-impl StructuralEq for StructDataTypeDefinition {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.name).eq_ignore_id(&other.name);
-        is_eq &= (self.members).eq_ignore_id(&other.members);
-        is_eq
-    }
-}
-
-pub struct TaggedUnionDataTypeDefinition {
-    pub name: String,
-    pub members: Vec<TaggedUnionVariant>,
-}
-
-pub enum TaggedUnionVariant {
-    TagVariant(String),
-    DataVariant(TypedIdentifier),
-}
-
-/// The Type that is bundled with a:
-/// - function parameter
-/// - identifier in declaration(-assignments)
-#[derive(PartialEq, Eq, Clone, Hash)]
-pub enum TypeSpecifier {
-    /// An aggregate DataType
-    NonScalar(String),
-    /// the type that a statement returns: similar to `void` or `()`
-    Unit,
-    /// boolean type
-    Bool,
-    /// Integer type with width and sign
-    Integer { width: usize, signed: bool },
-    /// Floating point type with width
-    Float { width: usize },
-
-    /// a pointer to a memory location containing something of the inner type
-    Pointer(Box<TypeSpecifier>),
-    /// a pointer+length bundle of items of the inner type
-    ArrayOf(Box<TypeSpecifier>),
-    // /// `&[<type>]`
-    // Slice(Box<Type>),
-    // /// `?<type>`
-    // Option(Box<Type>),
-    /// The diverging type, i.e. the type that `exit()` and `panic!()` return
-    Never,
-}
-
-impl StructuralEq for TypeSpecifier {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        match (self, other) {
-            (TypeSpecifier::NonScalar(sf0), TypeSpecifier::NonScalar(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (TypeSpecifier::Unit, TypeSpecifier::Unit) => true,
-            (TypeSpecifier::Bool, TypeSpecifier::Bool) => true,
-            (TypeSpecifier::Integer { .. }, TypeSpecifier::Integer { .. }) => true,
-            (TypeSpecifier::Float { .. }, TypeSpecifier::Float { .. }) => true,
-            (TypeSpecifier::Pointer(sf0), TypeSpecifier::Pointer(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (TypeSpecifier::ArrayOf(sf0), TypeSpecifier::ArrayOf(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
-            (TypeSpecifier::Never, TypeSpecifier::Never) => true,
-            _ => false,
-        }
-    }
-}
-
-impl Debug for TypeSpecifier {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let str = match self {
-            TypeSpecifier::NonScalar(typ) => typ,
-            TypeSpecifier::Float { width } => &format!("f{width}"),
-            TypeSpecifier::Integer { width, signed } => {
-                &format!("{}{width}", if *signed { 'i' } else { 'u' })
-            }
-            TypeSpecifier::Bool => "Bool",
-            TypeSpecifier::ArrayOf(arr) => &format!("[{arr:?}]"),
-            // Type::Option(opt) => &format!("?{opt:?}"),
-            TypeSpecifier::Pointer(ptr) => &format!("&{ptr:?}"),
-            // Type::Slice(slice) => &format!("&[{slice:?}]"),
-            TypeSpecifier::Unit => "()",
-            TypeSpecifier::Never => "!",
-        };
-
-        write!(f, "{}", str)
-    }
-}
-
-impl From<&str> for TypeSpecifier {
-    fn from(val: &str) -> Self {
-        TypeSpecifier::NonScalar(val.into())
-    }
-}
-
-impl From<String> for TypeSpecifier {
-    fn from(val: String) -> Self {
-        TypeSpecifier::NonScalar(val)
-    }
-}
-
-#[allow(non_snake_case)]
-impl TypeSpecifier {
-    /// determine the minimal width a given literal needs to fit.
-    /// is always one of 8, 16, 32, 64
-    pub const fn narrowest_int_type_from_literal(literal: usize) -> TypeSpecifier {
-        let width = Self::determine_int_literal_width(literal);
-        Self::Integer {
-            width,
-            signed: false,
-        }
-    }
-    pub const fn determine_int_literal_width(literal: usize) -> usize {
-        const U8_MAX: usize = u8::MAX as usize;
-        const U16_MAX: usize = u16::MAX as usize;
-        const U32_MAX: usize = u32::MAX as usize;
-        const U64_MAX: usize = u64::MAX as usize;
-        match literal {
-            0..U8_MAX => 8,
-            U8_MAX..U16_MAX => 16,
-            U16_MAX..U32_MAX => 32,
-            U32_MAX.. => 64,
-        }
-    }
-
-    pub const fn t_U8() -> TypeSpecifier {
-        Self::Integer {
-            width: 8,
-            signed: false,
-        }
-    }
-    pub const fn t_U16() -> TypeSpecifier {
-        Self::Integer {
-            width: 16,
-            signed: false,
-        }
-    }
-    pub const fn t_U32() -> TypeSpecifier {
-        Self::Integer {
-            width: 32,
-            signed: false,
-        }
-    }
-    pub const fn t_U64() -> TypeSpecifier {
-        Self::Integer {
-            width: 64,
-            signed: false,
-        }
-    }
-    pub const fn t_I8() -> TypeSpecifier {
-        Self::Integer {
-            width: 8,
-            signed: true,
-        }
-    }
-    pub const fn t_I16() -> TypeSpecifier {
-        Self::Integer {
-            width: 16,
-            signed: true,
-        }
-    }
-    pub const fn t_I32() -> TypeSpecifier {
-        Self::Integer {
-            width: 32,
-            signed: true,
-        }
-    }
-    pub const fn t_I64() -> TypeSpecifier {
-        Self::Integer {
-            width: 64,
-            signed: true,
-        }
-    }
-
-    pub const fn t_F32() -> TypeSpecifier {
-        Self::Float { width: 32 }
-    }
-    pub const fn t_F64() -> TypeSpecifier {
-        Self::Float { width: 64 }
-    }
-
-    pub const fn t_Bool() -> Self {
-        Self::Bool
-    }
-    pub const fn t_Unit() -> Self {
-        TypeSpecifier::Unit
-    }
-
-    pub const fn t_Never() -> Self {
-        TypeSpecifier::Never
-    }
-}
-#[derive(Debug, Eq, PartialEq, Hash, Clone, ASTStructuralEq)]
-pub struct TypedIdentifier {
-    pub name: String,
-    pub typ: TypeSpecifier,
-}
-
-impl TypedIdentifier {
-    pub fn new(typ: TypeSpecifier, name: impl Into<String>) -> Self {
-        Self {
-            typ,
-            name: name.into(),
-        }
-    }
-}
-
-#[derive(Debug, ASTStructuralEq)]
-pub enum ASTNode {
-    Expression(Expression),
-    Statement(Statement),
-    IfThenElse(IfThenElse),
-    FunctionCall(FunctionCall),
-    FuncDef(Function),
-    ExpandedBlockExpr(BlockExpression),
-    Initialization(InitializationBlock),
-    Reassignment(Reassignment),
-    Module(Module),
-    StructDataTypeDefinition(StructDataTypeDefinition),
-}
-impl ASTNode {
-    pub const fn as_expr(&self) -> Option<&Expression> {
-        match self {
-            Self::Expression(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub const fn as_stmt(&self) -> Option<&Statement> {
-        match self {
-            Self::Statement(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub const fn as_branch(&self) -> Option<&IfThenElse> {
-        match self {
-            Self::IfThenElse(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub const fn as_block(&self) -> Option<&BlockExpression> {
-        match self {
-            Self::ExpandedBlockExpr(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub const fn as_call(&self) -> Option<&FunctionCall> {
-        match self {
-            Self::FunctionCall(v) => Some(v),
-            _ => None,
-        }
-    }
-    pub const fn as_funcdef(&self) -> Option<&Function> {
-        match self {
-            Self::FuncDef(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub const fn as_init(&self) -> Option<&InitializationBlock> {
-        match self {
-            Self::Initialization(v) => Some(v),
-            _ => None,
-        }
-    }
-    pub const fn as_struct(&self) -> Option<&StructDataTypeDefinition> {
-        match self {
-            Self::StructDataTypeDefinition(v) => Some(v),
-            _ => None,
-        }
-    }
-    pub const fn as_reinit(&self) -> Option<&Reassignment> {
-        match self {
-            Self::Reassignment(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub const fn as_module(&self) -> Option<&Module> {
-        match self {
-            Self::Module(v) => Some(v),
-            _ => None,
-        }
-    }
-    pub fn id(&self) -> NodeId {
-        match self {
-            ASTNode::Expression(e) => e.id,
-            ASTNode::Statement(s) => s.id,
-            ASTNode::IfThenElse(b) => b.id,
-            ASTNode::FunctionCall(c) => c.id,
-            ASTNode::FuncDef(f) => f.id,
-            ASTNode::ExpandedBlockExpr(b) => b.id,
-            ASTNode::Initialization(i) => i.id,
-            ASTNode::Reassignment(r) => r.id,
-            ASTNode::Module(m) => m.id,
-            ASTNode::StructDataTypeDefinition(s) => s.id,
-        }
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct ASTNodeArena {
-    arena: Vec<ASTNode>,
-}
-
-impl ASTNodeArena {
-    pub fn new() -> ASTNodeArena {
-        Self {
-            arena: Vec::with_capacity(128),
-        }
-    }
-
-    pub fn push(&mut self, node: ASTNode) {
-        self.arena.push(node)
-    }
-
-    pub fn follow(&self, id: NodeId) -> Option<&ASTNode> {
-        self.arena.iter().find(|n| n.id() == id)
-    }
-    pub fn find(&self, p: impl FnMut(&&ASTNode) -> bool) -> Option<&ASTNode> {
-        self.arena.iter().find(p)
-    }
-
-    pub fn filter(&self, p: impl FnMut(&&ASTNode) -> bool) -> impl Iterator<Item = &ASTNode> {
-        self.arena.iter().filter(p)
-    }
-
-    pub fn filter_map<'a, T: 'a>(
-        &'a self,
-        p: impl FnMut(&'a ASTNode) -> Option<&'a T>,
-    ) -> impl Iterator<Item = &'a T> {
-        self.arena.iter().filter_map(p)
-    }
-
-    pub fn filter_expressions(&self) -> Vec<&Expression> {
-        self.filter_map(|n| n.as_expr()).collect()
-    }
-    pub fn filter_statements(&self) -> Vec<&Statement> {
-        self.filter_map(|n| n.as_stmt()).collect()
+fn float_total_cmp(a: f64, b: f64) -> bool {
+    if a.is_nan() && b.is_nan() {
+        true
+    } else {
+        a == b
     }
 }
-
-// mod mir {
-//     use crate::zea::typecheck::{ModuleInferenceContext, TypeConcreteId, TypeInterningTable};
-//     use crate::zea::visitors::annotating::ScopedIdentifierKind;
-//     use crate::zea::{BareNodeLabeler, BinOp, Expression, ExpressionKind, Module, NodeId, NodeLabeler, UnOp};
-//
-//     pub struct MIRAST {
-//         bare_node_labeler: BareNodeLabeler,
-//         arena: Vec<MIRASTNode>,
-//         types: ModuleInferenceContext,
-//     }
-//
-//     impl MIRAST {
-//         pub fn from_hir(ast: Module, types: ModuleInferenceContext) -> Self {
-//             let mut new = Self {
-//                 arena: vec![],
-//                 types: types.intering_table
-//             };
-//             new.walk_module_build_hir_nodes(ast);
-//             new
-//         }
-//         pub fn next_id(&mut self) -> NodeId {
-//             NodeId(self.bare_node_labeler.next_label())
-//         }
-//
-//         pub fn build_expr(&mut self, expr: Expression) -> NodeId {
-//             let mut node = MIRExpression {
-//                 typ:
-//                 id: self.next_id(),
-//                 kind: MIRExpressionKind::Unit,
-//             };
-//             let id self.next_id();
-//             let kind = match expr.kind {
-//                 ExpressionKind::Unit => MIRExpressionKind::Unit,
-//                 ExpressionKind::IntegerLiteral(i) => MIRExpressionKind::IntegerLiteral(i),
-//                 ExpressionKind::BoolLiteral(b) => MIRExpressionKind::BoolLiteral(b),
-//                 ExpressionKind::FloatLiteral(f) => MIRExpressionKind::FloatLiteral(f),
-//                 ExpressionKind::StringLiteral(s) => MIRExpressionKind::StringLiteral(s),
-//                 ExpressionKind::ScopedIdent(s) => {
-//                     todo!()
-//                 }
-//                 ExpressionKind::FunctionCall(call) => {
-//                     let id = self.build_call(call);
-//                 }
-//                 ExpressionKind::BinOpExpr(_, _, _) => {}
-//                 ExpressionKind::UnOpExpr(_, _) => {}
-//                 ExpressionKind::MemberAccess(_, _) => {}
-//                 ExpressionKind::IfThenElse(_) => {}
-//                 ExpressionKind::ExpandedBlock(_) => {}
-//
-//                 ExpressionKind::Block(_) => {}
-//                 ExpressionKind::UnScopedIdent(_) => {}
-//             }
-//             id
-//         }
-//     }
-//
-//     pub enum MIRASTNode {
-//         Mod(MIRModule),
-//         Branch(MIRIfThenElse),
-//         Function(MIRFuncdef),
-//         Call(MIRFunctionCall),
-//         Expr(MIRExpression),
-//         Stmt(MIRStatement),
-//         BLock(MIRBLock),
-//         Init(MirInit),
-//         Reinit(MirReinit),
-//         Ident(MIRScopedIdentifier),
-//         Struct(MIRStructdef),
-//     }
-//
-//     pub struct MIRExpression {
-//         pub id: NodeId,
-//         pub typ: TypeConcreteId,
-//         pub kind: MIRExpressionKind,
-//     }
-//     pub enum MIRExpressionKind {
-//         Unit,
-//         IntegerLiteral(usize),
-//         BoolLiteral(bool),
-//         FloatLiteral(f64),
-//         StringLiteral(String),
-//         ScopedIdent(NodeId),
-//         FunctionCall(NodeId),
-//         BinOpExpr(BinOp, NodeId, NodeId),
-//         UnOpExpr(UnOp, NodeId),
-//         MemberAccess(NodeId, String),
-//         IfThenElse(NodeId),
-//         Block(NodeId),
-//     }
-//
-//     pub struct MIRStatement {
-//         pub id: NodeId,
-//         pub data: NodeId,
-//         pub kind: MIRStatementKind,
-//     }
-//
-//     pub enum MIRStatementKind {
-//         Initialization,
-//         /// Variable Reassignment
-//         Reassignment,
-//         FunctionCall,
-//         /// Control-flow return
-//         Return,
-//         /// A tailing expression in a block
-//         BlockTail,
-//         /// A Block of statements
-//         Block,
-//         // CondMatch(Box<ConditionMatch>),
-//
-//         // after expansion
-//         IfThenElse,
-//     }
-//
-//     pub struct MIRIfThenElse {
-//         pub id: NodeId,
-//         pub condition: NodeId,
-//         pub then: NodeId,
-//         pub otherwise: NodeId,
-//     }
-//
-//     pub struct MIRScopedIdentifier {
-//         pub id: NodeId,
-//         pub origin: NodeId,
-//         pub kind: ScopedIdentifierKind,
-//         pub ident: String,
-//     }
-//     pub struct MIRFunctionCall {
-//         pub id: NodeId,
-//         pub callee: NodeId,
-//         pub args: Vec<NodeId>,
-//     }
-//     pub struct MIRBLock {
-//         pub id: NodeId,
-//         pub statements: Vec<NodeId>,
-//         pub last: NodeId,
-//     }
-//     pub struct MIRFuncdef {
-//         pub id: NodeId,
-//         pub name: String,
-//         pub params: Vec<NodeId>,
-//         pub body: NodeId,
-//         pub returns: TypeConcreteId,
-//     }
-//     pub struct MirInit {
-//         pub id: NodeId,
-//         pub assignee: String,
-//         pub typ: TypeConcreteId,
-//         pub value: NodeId,
-//     }
-//
-//     pub struct MirReinit {
-//         pub id: NodeId,
-//         pub reassignee: String,
-//         pub value: NodeId,
-//     }
-//
-//     pub struct MIRModule {
-//         pub id: NodeId,
-//         pub imports: Vec<String>,
-//         pub exports: Vec<String>,
-//         pub globals: Vec<NodeId>,
-//         pub functions: Vec<NodeId>,
-//         pub structs: Vec<NodeId>,
-//     }
-//
-//     pub struct MIRStructdef {
-//         pub id: NodeId,
-//         pub name: String,
-//         pub fields: Vec<MIRStructField>,
-//     }
-//
-//     pub struct MIRStructField {
-//         pub id: NodeId,
-//         pub typ: TypeConcreteId,
-//         pub field_name: String,
-//     }
-// }

@@ -25,6 +25,10 @@ Version 0.1
 
 # Compiler options
 
+## flags
+- `--print-mir`, `--print-mir=file`: print the AST after all static analysis is performed, to stdout, stderr or a specified file.
+- `--loglevel=LEVEL`: specify the logging level, where `LEVEL` is one of `[ERROR, WARN, INFO, DEBUG, TRACE]` (from least- to most-verbose)
+
 ## EXTENSION: Compiler subcommands
 The compiler can also setup a project skeleton for you 
 
@@ -40,7 +44,6 @@ To change the defaults within a module, you may supply them above the module dec
 ```
 @ layout-reorder = false
 module main
-
 ...
 ```
 
@@ -73,7 +76,7 @@ These directives instruct the compiler to do something at compile-time, such as:
 - `@ inline` for inlining
 - `@ hot` and/or `@ cold` for hinting hot- or cold branches
 - `@ unreachable` for specifying unreachable code branching code that must otherwise be exhaustive
-- `@ memory-location = static|dynamic` for specifying if a global variable may or may not be optimized out, even if it is considered dead-code (default = dynamic)
+- `@ eliminate-dead-code = false` for specifying if code may or may not be optimized out, even if it never called (default = true)
 
 Supplying an non-existent directive, or supplying a directives with an invalid value such as `@ alignment = shimmadingle` will result in a compilation failure.
 
@@ -135,7 +138,7 @@ which will be populated at compile-time with function that bit-cast between type
 
 ## Struct size and field ordering
 Struct will have an alighment equal to their widest field.
-The size `S` of a struct `S` is calculated as follows:
+The size `S` of a struct is calculated as follows:
 - call the alignment of the Struct `A`
 - call the sum of the size of the fields `Sumf`
 - find the smallest `n`in `n * A` such that `S >= Sumf`
@@ -148,7 +151,7 @@ The developer may specify if layout-reordering should be applied by directing th
 whereas the default is `@ layout-reorder = true`. The directive subcommand option `layout-reorder=(true|false)` may be set to change the default. 
 
 
-## Breaking the rules
+## stupid C shit you could do
 What happens if you where to do the stupid shit you could do in C?
 - unreachable code
     - reaching code marked `@ unreachable` when `@ crash-unreachable = true` (the default) will immediatly crash the program with an error,

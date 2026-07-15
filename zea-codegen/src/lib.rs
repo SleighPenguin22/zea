@@ -10,7 +10,7 @@ use zea_ast::zea::visitors::annotating::ScopedIdentifierKind;
 
 pub mod node_c_conversion;
 
-pub fn canoncalize_zea_identifier(identifier: zea_ast::zea::ScopedIdentifier) -> String {
+pub fn canoncalize_zea_identifier(identifier: zea_ast::zea::HIRScopedIdentifier) -> String {
     // match identifier.kind {
     //     ScopedIdentifierKind::LocalVar => {}
     //     ScopedIdentifierKind::GlobalVar => {}
@@ -178,7 +178,7 @@ macro_rules! set {
 
 #[cfg(test)]
 mod tests {
-    use crate::{EmitC, fold_str};
+    use crate::{fold_str, EmitC};
     use zea_ast::c;
     use zea_ast::c::{TypeQualifier, TypeSpecifier};
 

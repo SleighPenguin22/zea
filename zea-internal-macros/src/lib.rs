@@ -198,3 +198,56 @@ pub fn derive_ast_structural_eq(input: TokenStream) -> TokenStream {
         Data::Union(_) => panic!("structural equality on Unions is not supported"),
     }
 }
+#[proc_macro_derive(InternKey)]
+pub fn derive_internkey(input: TokenStream) -> TokenStream {
+    let parsed = syn::parse_macro_input!(input as DeriveInput);
+    let ident = parsed.ident.clone();
+    let generics = parsed.generics.clone();
+    match parsed.data {
+        Data::Struct(s) => internkey_derive_impl_struct(s, ident, generics),
+        Data::Enum(_) | Data::Union(_) => panic!("structural equality on Unions is not supported"),
+    }
+}
+
+fn internkey_derive_impl_struct(s: DataStruct, ident: Ident, generics: Generics) -> TokenStream {
+    TokenStream::from(match s.fields.iter().next() {
+        // named field
+        Some(f) if f.ident.is_some() => {
+            let fident = f.ident.clone();
+            let fty = f.ty.clone();
+            quote! {
+                impl #generics From<usize> for #ident #generics {
+                    fn from(value: usize) -> Self {
+                        Self {
+                            #fident : value as #fty
+                        }
+                    }
+                }
+                impl #generics Into<usize> for #ident #generics {
+                    fn into(self) -> usize {
+                        self.#fident as usize
+                    }
+                }
+
+            }
+        }
+        // tuple struct
+        Some(f) if f.ident.is_none() => {
+            let fty = f.ty.clone();
+            quote! {
+                impl #generics From<usize> for #ident #generics {
+                    fn from(value: usize) -> Self {
+                        Self(value as #fty)
+                    }
+                }
+                impl #generics Into<usize> for #ident #generics {
+                    fn into(self) -> usize {
+                        self.0 as usize
+                    }
+                }
+
+            }
+        }
+        _ => panic!("An interning key must have exactly one field that is a usize"),
+    })
+}

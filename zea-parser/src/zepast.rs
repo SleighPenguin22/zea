@@ -29,12 +29,7 @@
 //! All parsed nodes receive `NodeId::sentinel()`; the labeler is run afterward.
 
 use std::fmt;
-use zea_ast::zea::{
-    AssignmentPattern, BinOp, BlockExpression, Expression, ExpressionKind, FuncParam, Function,
-    FunctionCall, IfThenElse, InitializationBlock, InitializationKind, Module, NodeId,
-    PackedInitialization, SimpleInitialization, Statement, StatementKind, TypeSpecifier, UnOp,
-};
-
+use zea_ast::zea::{BinOp, NodeId, UnOp, hir_nodes::*};
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
@@ -71,84 +66,84 @@ impl fmt::Display for ParseError {
 // Free helpers — node construction (all use NodeId::sentinel())
 // ---------------------------------------------------------------------------
 
-fn expr_binop(op: BinOp, left: Expression, right: Expression) -> Expression {
-    Expression {
+fn expr_binop(op: BinOp, left: HIRExpression, right: HIRExpression) -> HIRExpression {
+    HIRExpression {
         id: NodeId::sentinel(),
-        kind: ExpressionKind::BinOpExpr(op, Box::new(left), Box::new(right)),
+        kind: HIRExpressionKind::BinOpExpr(op, Box::new(left), Box::new(right)),
     }
 }
-fn expr_unop(op: UnOp, arg: Expression) -> Expression {
-    Expression {
+fn expr_unop(op: UnOp, arg: HIRExpression) -> HIRExpression {
+    HIRExpression {
         id: NodeId::sentinel(),
-        kind: ExpressionKind::UnOpExpr(op, Box::new(arg)),
+        kind: HIRExpressionKind::UnOpExpr(op, Box::new(arg)),
     }
 }
-fn expr_member_access(subject: Expression, field: String) -> Expression {
-    Expression {
+fn expr_member_access(subject: HIRExpression, field: String) -> HIRExpression {
+    HIRExpression {
         id: NodeId::sentinel(),
-        kind: ExpressionKind::MemberAccess(Box::new(subject), field),
+        kind: HIRExpressionKind::MemberAccess(Box::new(subject), field),
     }
 }
-fn expr_block(block: BlockExpression) -> Expression {
-    Expression {
+fn expr_block(block: HIRBlockExpression) -> HIRExpression {
+    HIRExpression {
         id: NodeId::sentinel(),
-        kind: ExpressionKind::Block(Box::new(block)),
-    }
-}
-
-fn stmt_ret(expr: Expression) -> Statement {
-    Statement {
-        id: NodeId::sentinel(),
-        kind: StatementKind::Return(expr),
-    }
-}
-fn stmt_tail(expr: Expression) -> Statement {
-    Statement {
-        id: NodeId::sentinel(),
-        kind: StatementKind::BlockTail(expr),
-    }
-}
-fn stmt_block(block: BlockExpression) -> Statement {
-    Statement {
-        id: NodeId::sentinel(),
-        kind: StatementKind::Block(block),
-    }
-}
-fn stmt_call(call: FunctionCall) -> Statement {
-    Statement {
-        id: NodeId::sentinel(),
-        kind: StatementKind::FunctionCall(call),
-    }
-}
-fn stmt_init_packed(packed: PackedInitialization) -> Statement {
-    Statement {
-        id: NodeId::sentinel(),
-        kind: StatementKind::Initialization(init_packed(packed)),
-    }
-}
-fn stmt_init_unpacked(inits: Vec<SimpleInitialization>) -> Statement {
-    Statement {
-        id: NodeId::sentinel(),
-        kind: StatementKind::Initialization(init_unpacked(inits)),
-    }
-}
-fn stmt_if_then_else(ite: IfThenElse) -> Statement {
-    Statement {
-        id: NodeId::sentinel(),
-        kind: StatementKind::IfThenElse(ite),
+        kind: HIRExpressionKind::Block(Box::new(block)),
     }
 }
 
-fn init_packed(packed: PackedInitialization) -> InitializationBlock {
-    InitializationBlock {
+fn stmt_ret(expr: HIRExpression) -> HIRStatement {
+    HIRStatement {
         id: NodeId::sentinel(),
-        kind: InitializationKind::Packed(packed),
+        kind: HIRStatementKind::Return(expr),
     }
 }
-fn init_unpacked(inits: Vec<SimpleInitialization>) -> InitializationBlock {
-    InitializationBlock {
+fn stmt_tail(expr: HIRExpression) -> HIRStatement {
+    HIRStatement {
         id: NodeId::sentinel(),
-        kind: InitializationKind::Unpacked(inits),
+        kind: HIRStatementKind::BlockTail(expr),
+    }
+}
+fn stmt_block(block: HIRBlockExpression) -> HIRStatement {
+    HIRStatement {
+        id: NodeId::sentinel(),
+        kind: HIRStatementKind::Block(block),
+    }
+}
+fn stmt_call(call: HIRFunctionCall) -> HIRStatement {
+    HIRStatement {
+        id: NodeId::sentinel(),
+        kind: HIRStatementKind::FunctionCall(call),
+    }
+}
+fn stmt_init_packed(packed: HIRPackedInitialization) -> HIRStatement {
+    HIRStatement {
+        id: NodeId::sentinel(),
+        kind: HIRStatementKind::Initialization(init_packed(packed)),
+    }
+}
+fn stmt_init_unpacked(inits: Vec<HIRSimpleInitialization>) -> HIRStatement {
+    HIRStatement {
+        id: NodeId::sentinel(),
+        kind: HIRStatementKind::Initialization(init_unpacked(inits)),
+    }
+}
+fn stmt_if_then_else(ite: HIRBranch) -> HIRStatement {
+    HIRStatement {
+        id: NodeId::sentinel(),
+        kind: HIRStatementKind::IfThenElse(ite),
+    }
+}
+
+fn init_packed(packed: HIRPackedInitialization) -> HIRInitializationBlock {
+    HIRInitializationBlock {
+        id: NodeId::sentinel(),
+        kind: HIRInitializationKind::Packed(packed),
+    }
+}
+fn init_unpacked(inits: Vec<HIRSimpleInitialization>) -> HIRInitializationBlock {
+    HIRInitializationBlock {
+        id: NodeId::sentinel(),
+        kind: HIRInitializationKind::Unpacked(inits),
     }
 }
 
@@ -176,10 +171,10 @@ struct ZeaPrettyAstParser<'a> {
 }
 
 /// Parse a full `Module` from the pretty-printed source string.
-pub fn parse_module(src: &str) -> Module {
+pub fn parse_module(src: &str) -> HIRModule {
     _parse_module(src).unwrap_or_else(|e| panic!("{e}"))
 }
-fn _parse_module(src: &str) -> Result<Module, ParseError> {
+fn _parse_module(src: &str) -> Result<HIRModule, ParseError> {
     let mut p = ZeaPrettyAstParser::new(src);
     let m = p.parse_module_inner()?;
     p.expect_end()?;
@@ -199,10 +194,10 @@ fn _parse_module(src: &str) -> Result<Module, ParseError> {
 ///     lit_int(1)
 ///   @unit
 /// ```
-pub fn parse_expression(src: &str) -> Expression {
+pub fn parse_expression(src: &str) -> HIRExpression {
     _parse_expression(src).unwrap_or_else(|e| panic!("{e}"))
 }
-fn _parse_expression(src: &str) -> Result<Expression, ParseError> {
+fn _parse_expression(src: &str) -> Result<HIRExpression, ParseError> {
     let mut p = ZeaPrettyAstParser::new(src);
     let expr = p.parse_expr(0)?;
     p.expect_end()?;
@@ -217,11 +212,11 @@ fn _parse_expression(src: &str) -> Result<Expression, ParseError> {
 ///     lit_int(1)
 ///   @unit
 /// ```
-pub fn parse_block(src: &str) -> BlockExpression {
+pub fn parse_block(src: &str) -> HIRBlockExpression {
     _parse_block(src).unwrap_or_else(|e| panic!("{e}"))
 }
 
-fn _parse_block(src: &str) -> Result<BlockExpression, ParseError> {
+fn _parse_block(src: &str) -> Result<HIRBlockExpression, ParseError> {
     let mut p = ZeaPrettyAstParser::new(src);
     p.expect_line(0, "block")?;
     let block = p.parse_block_expr(0)?;
@@ -235,11 +230,11 @@ fn _parse_block(src: &str) -> Result<BlockExpression, ParseError> {
 /// - return
 ///   lit_int(42)
 /// ```
-pub fn parse_statement(src: &str) -> Statement {
+pub fn parse_statement(src: &str) -> HIRStatement {
     _parse_statement(src).unwrap_or_else(|e| panic!("{e}"))
 }
 
-fn _parse_statement(src: &str) -> Result<Statement, ParseError> {
+fn _parse_statement(src: &str) -> Result<HIRStatement, ParseError> {
     let mut p = ZeaPrettyAstParser::new(src);
     let (d, c) = p.peek().ok_or(ParseError::UnexpectedEndOfInput {
         expected: "statement starting with `- `".into(),
@@ -373,13 +368,13 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .globs            -- depth 1
     ///   .funcs            -- depth 1
     /// ```
-    fn parse_module_inner(&mut self) -> Result<Module, ParseError> {
+    fn parse_module_inner(&mut self) -> Result<HIRModule, ParseError> {
         self.expect_line(0, "module")?;
         let imports = self.parse_field_list("imports", |p, c, _d| Ok(c.to_string()))?;
         let exports = self.parse_field_list("exports", |p, c, _d| Ok(c.to_string()))?;
         let globs = self.parse_field_list("globs", |p, c, d| p.parse_init_from_content(c, d))?;
         let funcs = self.parse_field_list("funcs", |p, c, d| p.parse_func_from_content(c, d))?;
-        Ok(Module {
+        Ok(HIRModule {
             id: NodeId::sentinel(),
             imports,
             exports,
@@ -423,7 +418,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         &mut self,
         kind: &str,
         depth: usize,
-    ) -> Result<InitializationBlock, ParseError> {
+    ) -> Result<HIRInitializationBlock, ParseError> {
         match kind {
             "init_packed" => Ok(init_packed(self.parse_packed_init(depth)?)),
             "init_unpacked_block" => Ok(init_unpacked(self.parse_init_unpacked_list(depth)?)),
@@ -448,14 +443,14 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .value            -- depth + 1
     ///     <expr>          -- depth + 2
     /// ```
-    fn parse_packed_init(&mut self, depth: usize) -> Result<PackedInitialization, ParseError> {
+    fn parse_packed_init(&mut self, depth: usize) -> Result<HIRPackedInitialization, ParseError> {
         self.expect_line(depth + 1, ".pattern")?;
         let assignee = self.parse_assign_pattern(depth + 2)?;
         self.expect_line(depth + 1, ".type")?;
         let typ = self.parse_type_opt(depth + 2)?;
         self.expect_line(depth + 1, ".value")?;
         let value = self.parse_expr(depth + 2)?;
-        Ok(PackedInitialization {
+        Ok(HIRPackedInitialization {
             assignee,
             typ,
             value,
@@ -475,7 +470,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     fn parse_init_unpacked_list(
         &mut self,
         depth: usize,
-    ) -> Result<Vec<SimpleInitialization>, ParseError> {
+    ) -> Result<Vec<HIRSimpleInitialization>, ParseError> {
         let mut items = Vec::new();
         loop {
             match self.peek() {
@@ -500,14 +495,14 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .value            -- depth + 1
     ///     <expr>          -- depth + 2
     /// ```
-    fn parse_simple_init(&mut self, depth: usize) -> Result<SimpleInitialization, ParseError> {
+    fn parse_simple_init(&mut self, depth: usize) -> Result<HIRSimpleInitialization, ParseError> {
         self.expect_line(depth + 1, ".assignee")?;
         let assignee = self.parse_string_at(depth + 2)?;
         self.expect_line(depth + 1, ".type")?;
         let typ = self.parse_type_opt(depth + 2)?;
         self.expect_line(depth + 1, ".value")?;
         let value = self.parse_expr(depth + 2)?;
-        Ok(SimpleInitialization {
+        Ok(HIRSimpleInitialization {
             id: NodeId::sentinel(),
             assignee,
             typ,
@@ -528,7 +523,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   <pat>             -- depth + 1
     /// )                   -- depth
     /// ```
-    fn parse_assign_pattern(&mut self, depth: usize) -> Result<AssignmentPattern, ParseError> {
+    fn parse_assign_pattern(&mut self, depth: usize) -> Result<HIRAssignmentPattern, ParseError> {
         let content = self.expect_at_depth(depth, "assignment pattern")?;
         if content == "(" {
             self.advance();
@@ -538,7 +533,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
                     // Closing paren is at the same depth as the opening one.
                     Some((dd, cc)) if dd == depth && cc == ")" => {
                         self.advance();
-                        return Ok(AssignmentPattern::Tuple(pats));
+                        return Ok(HIRAssignmentPattern::Tuple(pats));
                     }
                     // Sub-patterns are one level deeper.
                     Some((dd, _)) if dd == depth + 1 => {
@@ -560,7 +555,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
             }
         } else {
             self.advance();
-            Ok(AssignmentPattern::Identifier(content.to_string()))
+            Ok(HIRAssignmentPattern::Identifier(content.to_string()))
         }
     }
 
@@ -572,7 +567,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///
     /// The special string `@unknown` represents `None`.
     /// Everything else is delegated to `parse_type_string`.
-    fn parse_type_opt(&mut self, depth: usize) -> Result<Option<TypeSpecifier>, ParseError> {
+    fn parse_type_opt(&mut self, depth: usize) -> Result<Option<HIRTypeSpecifier>, ParseError> {
         let content = self.expect_at_depth(depth, "type")?;
         if content == "@unknown" {
             self.advance();
@@ -591,7 +586,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         &mut self,
         kind: &str,
         depth: usize,
-    ) -> Result<Function, ParseError> {
+    ) -> Result<HIRFunction, ParseError> {
         let name = kind
             .strip_prefix("func `")
             .and_then(|s| s.strip_suffix('`'))
@@ -613,11 +608,11 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///     block           -- depth + 2
     ///       ...           -- depth + 3
     /// ```
-    fn parse_func_body(&mut self, name: String, depth: usize) -> Result<Function, ParseError> {
+    fn parse_func_body(&mut self, name: String, depth: usize) -> Result<HIRFunction, ParseError> {
         self.expect_line(depth + 1, ".returns")?;
         let returns = self
             .parse_type_opt(depth + 2)?
-            .unwrap_or(TypeSpecifier::Unit);
+            .unwrap_or(HIRTypeSpecifier::Unit);
 
         self.expect_line(depth + 1, ".params")?;
         let params = self.parse_param_list(depth + 2)?;
@@ -626,7 +621,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         self.expect_line(depth + 2, "block")?;
         let body = self.parse_block_expr(depth + 2)?;
 
-        Ok(Function {
+        Ok(HIRFunction {
             id: NodeId::sentinel(),
             name,
             params,
@@ -638,7 +633,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// Parse the parameter list of a function.
     ///
     /// Each parameter is introduced by `- .param` at the given `depth`.
-    fn parse_param_list(&mut self, depth: usize) -> Result<Vec<FuncParam>, ParseError> {
+    fn parse_param_list(&mut self, depth: usize) -> Result<Vec<HIRFuncParam>, ParseError> {
         let mut items = Vec::new();
         loop {
             match self.peek() {
@@ -663,13 +658,13 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   <name>            -- depth + 1
     ///   <type>            -- depth + 1
     /// ```
-    fn parse_func_param(&mut self, depth: usize) -> Result<FuncParam, ParseError> {
+    fn parse_func_param(&mut self, depth: usize) -> Result<HIRFuncParam, ParseError> {
         let name = self.parse_string_at(depth + 1)?;
         let typ = self.parse_type_opt(depth + 1)?;
-        Ok(FuncParam {
+        Ok(HIRFuncParam {
             id: NodeId::sentinel(),
             name,
-            typ: typ.unwrap_or(TypeSpecifier::Unit),
+            typ: typ.unwrap_or(HIRTypeSpecifier::Unit),
         })
     }
 
@@ -680,7 +675,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// Parse a statement given its kind string (the content after `- `).
     ///
     /// `depth` is the depth of the `- <kind>` line itself.
-    fn parse_stmt_content(&mut self, kind: &str, depth: usize) -> Result<Statement, ParseError> {
+    fn parse_stmt_content(&mut self, kind: &str, depth: usize) -> Result<HIRStatement, ParseError> {
         match kind {
             "return" => Ok(stmt_ret(self.parse_expr(depth + 1)?)),
             "tail" => Ok(stmt_tail(self.parse_expr(depth + 1)?)),
@@ -704,7 +699,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// Parse any expression at the given depth.
     ///
     /// Consumes the current line, then delegates to [`parse_expr_content`].
-    fn parse_expr(&mut self, depth: usize) -> Result<Expression, ParseError> {
+    fn parse_expr(&mut self, depth: usize) -> Result<HIRExpression, ParseError> {
         let content = self.expect_at_depth(depth, "expression")?;
         let line = self.cursor;
         self.advance();
@@ -724,13 +719,13 @@ impl<'a> ZeaPrettyAstParser<'a> {
         content: &str,
         depth: usize,
         line: usize,
-    ) -> Result<Expression, ParseError> {
+    ) -> Result<HIRExpression, ParseError> {
         // ident("name")
         if let Some(name) = content.strip_prefix("ident(") {
             let ident = name
                 .strip_suffix(')')
                 .ok_or_else(|| err_unexpected("ident(name)", content, line))?;
-            return Ok(Expression::ident(ident.to_string()));
+            return Ok(HIRExpression::ident(ident.to_string()));
         }
 
         // lit_int(123)
@@ -741,7 +736,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
             let val: usize = n
                 .parse()
                 .map_err(|_| err_unexpected("integer literal", content, line))?;
-            return Ok(Expression::wrap_lit_int(val));
+            return Ok(HIRExpression::wrap_lit_int(val));
         }
 
         // lit_float(3.14)
@@ -752,12 +747,12 @@ impl<'a> ZeaPrettyAstParser<'a> {
             let val: f64 = n
                 .parse()
                 .map_err(|_| err_unexpected("float literal", content, line))?;
-            return Ok(Expression::wrap_lit_float(val));
+            return Ok(HIRExpression::wrap_lit_float(val));
         }
 
         // Keywords / compound expressions
         match content {
-            "@unit" => return Ok(Expression::unit()),
+            "@unit" => return Ok(HIRExpression::unit()),
             "block" => {
                 let block = self.parse_block_expr(depth)?;
                 return Ok(expr_block(block));
@@ -802,7 +797,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// operator`Neg`        -- depth (already consumed)
     ///   <arg>              -- depth + 1
     /// ```
-    fn parse_operator_expr(&mut self, op: &str, depth: usize) -> Result<Expression, ParseError> {
+    fn parse_operator_expr(&mut self, op: &str, depth: usize) -> Result<HIRExpression, ParseError> {
         if is_binop(op) {
             let binop = parse_binop(op)?;
             let left = self.parse_expr(depth + 1)?;
@@ -824,7 +819,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .member            -- depth + 1
     ///     <field_name>     -- depth + 2
     /// ```
-    fn parse_expr_member(&mut self, depth: usize) -> Result<Expression, ParseError> {
+    fn parse_expr_member(&mut self, depth: usize) -> Result<HIRExpression, ParseError> {
         let expr = self.parse_expr(depth + 1)?;
         self.expect_line(depth + 1, ".member")?;
         let member = self.parse_string_at(depth + 2)?;
@@ -842,7 +837,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// - Lines starting with `- ` are statements.
     /// - A line without `- ` is the block's last expression.
     /// - A line at a shallower depth signals an implicit `()` last expression.
-    fn parse_block_expr(&mut self, depth: usize) -> Result<BlockExpression, ParseError> {
+    fn parse_block_expr(&mut self, depth: usize) -> Result<HIRBlockExpression, ParseError> {
         let mut statements = Vec::new();
         loop {
             match self.peek() {
@@ -855,7 +850,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
                 // Last expression (no `- ` prefix)
                 Some((d, _)) if d == depth + 1 => {
                     let expr = self.parse_expr(depth + 1)?;
-                    return Ok(BlockExpression {
+                    return Ok(HIRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
                         last: expr,
@@ -863,10 +858,10 @@ impl<'a> ZeaPrettyAstParser<'a> {
                 }
                 // Content ended (shallower depth or EOF) → implicit unit
                 Some((d, _)) if d < depth + 1 => {
-                    return Ok(BlockExpression {
+                    return Ok(HIRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
-                        last: Expression::unit(),
+                        last: HIRExpression::unit(),
                     });
                 }
                 Some(_) => {
@@ -878,10 +873,10 @@ impl<'a> ZeaPrettyAstParser<'a> {
                     ));
                 }
                 None => {
-                    return Ok(BlockExpression {
+                    return Ok(HIRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
-                        last: Expression::unit(),
+                        last: HIRExpression::unit(),
                     });
                 }
             }
@@ -903,7 +898,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .otherwise         -- depth + 1  (optional)
     ///     <false_case>     -- depth + 2
     /// ```
-    fn parse_branch(&mut self, depth: usize) -> Result<IfThenElse, ParseError> {
+    fn parse_branch(&mut self, depth: usize) -> Result<HIRBranch, ParseError> {
         self.expect_line(depth + 1, ".cond")?;
         let condition = self.parse_expr(depth + 2)?;
         self.expect_line(depth + 1, ".then")?;
@@ -914,7 +909,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         } else {
             None
         };
-        Ok(IfThenElse {
+        Ok(HIRBranch {
             id: NodeId::sentinel(),
             condition: Box::new(condition),
             true_case: Box::new(true_case),
@@ -936,7 +931,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///     - <arg>          -- depth + 2
     ///     - <arg>          -- depth + 2
     /// ```
-    fn parse_call(&mut self, depth: usize) -> Result<FunctionCall, ParseError> {
+    fn parse_call(&mut self, depth: usize) -> Result<HIRFunctionCall, ParseError> {
         self.expect_line(depth + 1, ".subject")?;
         let subject = self.parse_expr(depth + 2)?;
         let args = if self.peek_field("args", depth + 1) {
@@ -945,7 +940,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         } else {
             Vec::new()
         };
-        Ok(FunctionCall {
+        Ok(HIRFunctionCall {
             id: NodeId::sentinel(),
             subject: Box::new(subject),
             args,
@@ -953,7 +948,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     }
 
     /// Parse a list of `- <expr>` items at the given depth.
-    fn parse_expr_list(&mut self, depth: usize) -> Result<Vec<Expression>, ParseError> {
+    fn parse_expr_list(&mut self, depth: usize) -> Result<Vec<HIRExpression>, ParseError> {
         let mut items = Vec::new();
         loop {
             match self.peek() {
@@ -986,38 +981,38 @@ impl<'a> ZeaPrettyAstParser<'a> {
 /// - `u<width>` → `Integer { width, signed: false }`
 /// - `f<width>` → `Float { width }`
 /// - Everything else → `Basic(name)`
-fn parse_type_string(s: &str) -> TypeSpecifier {
+fn parse_type_string(s: &str) -> HIRTypeSpecifier {
     match s {
-        "()" => return TypeSpecifier::Unit,
-        "!" => return TypeSpecifier::Never,
-        "Bool" => return TypeSpecifier::Bool,
+        "()" => return HIRTypeSpecifier::Unit,
+        "!" => return HIRTypeSpecifier::Never,
+        "Bool" => return HIRTypeSpecifier::Bool,
         _ => {}
     }
     if let Some(inner) = s.strip_prefix("&") {
-        return TypeSpecifier::Pointer(Box::new(parse_type_string(inner)));
+        return HIRTypeSpecifier::Pointer(Box::new(parse_type_string(inner)));
     }
     if s.starts_with('[') && s.ends_with(']') {
         let inner = parse_type_string(&s[1..s.len() - 1]);
-        return TypeSpecifier::ArrayOf(Box::new(inner));
+        return HIRTypeSpecifier::ArrayOf(Box::new(inner));
     }
     if let Some(w) = s.strip_prefix('i')
         && let Ok(width) = w.parse::<usize>() {
-            return TypeSpecifier::Integer {
+            return HIRTypeSpecifier::Integer {
                 width,
                 signed: true,
             };
         }
     if let Some(w) = s.strip_prefix('u')
         && let Ok(width) = w.parse::<usize>() {
-            return TypeSpecifier::Integer {
+            return HIRTypeSpecifier::Integer {
                 width,
                 signed: false,
             };
         }
     if let Some(w) = s.strip_prefix('f') && let Ok(width) = w.parse::<usize>() {
-        return TypeSpecifier::Float { width };
+        return HIRTypeSpecifier::Float { width };
     }
-    TypeSpecifier::NonScalar(s.to_string())
+    HIRTypeSpecifier::NonScalar(s.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -1100,8 +1095,8 @@ mod tests {
 
     // ---- test builder helpers ------------------------------------------------
 
-    fn module_(funcs: Vec<Function>) -> Module {
-        Module {
+    fn module_(funcs: Vec<HIRFunction>) -> HIRModule {
+        HIRModule {
             id: NodeId::sentinel(),
             imports: vec![],
             exports: vec![],
@@ -1113,11 +1108,11 @@ mod tests {
 
     fn function(
         name: &str,
-        params: Vec<FuncParam>,
-        returns: TypeSpecifier,
-        body: BlockExpression,
-    ) -> Function {
-        Function {
+        params: Vec<HIRFuncParam>,
+        returns: HIRTypeSpecifier,
+        body: HIRBlockExpression,
+    ) -> HIRFunction {
+        HIRFunction {
             id: NodeId::sentinel(),
             name: name.into(),
             params,
@@ -1126,48 +1121,48 @@ mod tests {
         }
     }
 
-    fn param(name: &str, typ: TypeSpecifier) -> FuncParam {
-        FuncParam {
+    fn param(name: &str, typ: HIRTypeSpecifier) -> HIRFuncParam {
+        HIRFuncParam {
             id: NodeId::sentinel(),
             name: name.into(),
             typ,
         }
     }
 
-    fn block(stmts: Vec<Statement>, last: Expression) -> BlockExpression {
-        BlockExpression {
+    fn block(stmts: Vec<HIRStatement>, last: HIRExpression) -> HIRBlockExpression {
+        HIRBlockExpression {
             id: NodeId::sentinel(),
             statements: stmts,
             last,
         }
     }
 
-    fn expr_ident(name: &str) -> Expression {
-        Expression::ident(name.to_owned())
+    fn expr_ident(name: &str) -> HIRExpression {
+        HIRExpression::ident(name.to_owned())
     }
-    fn expr_int(n: usize) -> Expression {
-        Expression::wrap_lit_int(n)
+    fn expr_int(n: usize) -> HIRExpression {
+        HIRExpression::wrap_lit_int(n)
     }
-    fn expr_float(f: f64) -> Expression {
-        Expression::wrap_lit_float(f)
+    fn expr_float(f: f64) -> HIRExpression {
+        HIRExpression::wrap_lit_float(f)
     }
-    fn expr_unit() -> Expression {
-        Expression::unit()
+    fn expr_unit() -> HIRExpression {
+        HIRExpression::unit()
     }
-    fn expr_binop(op: BinOp, left: Expression, right: Expression) -> Expression {
-        Expression {
+    fn expr_binop(op: BinOp, left: HIRExpression, right: HIRExpression) -> HIRExpression {
+        HIRExpression {
             id: NodeId::sentinel(),
-            kind: ExpressionKind::BinOpExpr(op, Box::new(left), Box::new(right)),
+            kind: HIRExpressionKind::BinOpExpr(op, Box::new(left), Box::new(right)),
         }
     }
-    fn expr_member(subject: Expression, field: &str) -> Expression {
-        Expression {
+    fn expr_member(subject: HIRExpression, field: &str) -> HIRExpression {
+        HIRExpression {
             id: NodeId::sentinel(),
-            kind: ExpressionKind::MemberAccess(Box::new(subject), field.to_owned()),
+            kind: HIRExpressionKind::MemberAccess(Box::new(subject), field.to_owned()),
         }
     }
-    fn expr_call(subject: Expression, args: Vec<Expression>) -> Expression {
-        FunctionCall {
+    fn expr_call(subject: HIRExpression, args: Vec<HIRExpression>) -> HIRExpression {
+        HIRFunctionCall {
             id: NodeId::sentinel(),
             subject: Box::new(subject),
             args,
@@ -1175,8 +1170,8 @@ mod tests {
         .wrap_in_expression()
     }
 
-    fn call_stmt(subject: Expression, args: Vec<Expression>) -> Statement {
-        FunctionCall {
+    fn call_stmt(subject: HIRExpression, args: Vec<HIRExpression>) -> HIRStatement {
+        HIRFunctionCall {
             id: NodeId::sentinel(),
             subject: Box::new(subject),
             args,
@@ -1184,20 +1179,20 @@ mod tests {
         .wrap_in_statement()
     }
 
-    fn t_i32() -> TypeSpecifier {
-        TypeSpecifier::Integer {
+    fn t_i32() -> HIRTypeSpecifier {
+        HIRTypeSpecifier::Integer {
             width: 32,
             signed: true,
         }
     }
-    fn t_unit() -> TypeSpecifier {
-        TypeSpecifier::Unit
+    fn t_unit() -> HIRTypeSpecifier {
+        HIRTypeSpecifier::Unit
     }
-    fn t_f64() -> TypeSpecifier {
-        TypeSpecifier::Float { width: 64 }
+    fn t_f64() -> HIRTypeSpecifier {
+        HIRTypeSpecifier::Float { width: 64 }
     }
-    fn t_ptr(inner: TypeSpecifier) -> TypeSpecifier {
-        TypeSpecifier::Pointer(Box::new(inner))
+    fn t_ptr(inner: HIRTypeSpecifier) -> HIRTypeSpecifier {
+        HIRTypeSpecifier::Pointer(Box::new(inner))
     }
 
     // ---- roundtrip test infrastructure ---------------------------------------
@@ -1206,7 +1201,7 @@ mod tests {
     /// 1. Structural equality (ignoring `NodeId`).
     /// 2. Pretty-print idempotency (re-printing the parsed AST
     ///    produces identical text).
-    fn roundtrip(ast: Module) {
+    fn roundtrip(ast: HIRModule) {
         let printed = ast.indent_print(0);
         eprintln!("=== PRINTED ===\n{}", printed);
         let parsed = parse_module(&printed);
@@ -1227,7 +1222,7 @@ mod tests {
 
     #[test]
     fn module_with_imports_exports() {
-        roundtrip(Module {
+        roundtrip(HIRModule {
             id: NodeId::sentinel(),
             imports: vec!["std.io".into(), "std.math".into()],
             exports: vec!["main".into()],
@@ -1281,7 +1276,7 @@ mod tests {
             t_i32(),
             block(
                 vec![],
-                IfThenElse::if_else_block(expr_ident("cond"), expr_int(1), expr_int(0))
+                HIRBranch::if_else_block(expr_ident("cond"), expr_int(1), expr_int(0))
                     .wrap_in_expression(),
             ),
         )]));
@@ -1294,10 +1289,10 @@ mod tests {
             vec![],
             t_unit(),
             block(
-                vec![stmt_init_packed(PackedInitialization::untyped(
-                    AssignmentPattern::Tuple(vec![
-                        AssignmentPattern::Identifier("a".into()),
-                        AssignmentPattern::Identifier("b".into()),
+                vec![stmt_init_packed(HIRPackedInitialization::untyped(
+                    HIRAssignmentPattern::Tuple(vec![
+                        HIRAssignmentPattern::Identifier("a".into()),
+                        HIRAssignmentPattern::Identifier("b".into()),
                     ]),
                     expr_call(expr_ident("f"), vec![]),
                 ))],
@@ -1364,7 +1359,7 @@ mod tests {
         roundtrip(module_(vec![function(
             "main",
             vec![],
-            t_ptr(TypeSpecifier::NonScalar("Int".into())),
+            t_ptr(HIRTypeSpecifier::NonScalar("Int".into())),
             block(vec![], expr_unit()),
         )]));
     }
@@ -1383,19 +1378,19 @@ mod tests {
     #[test]
     fn parse_bare_expression() {
         let expr = parse_expression("lit_int(42)\n");
-        assert!(matches!(expr.kind, ExpressionKind::IntegerLiteral(42)));
+        assert!(matches!(expr.kind, HIRExpressionKind::IntegerLiteral(42)));
     }
 
     #[test]
     fn parse_bare_block() {
         let block = parse_block("block\n  - return\n    lit_int(1)\n  @unit\n");
         assert_eq!(block.statements.len(), 1);
-        assert!(matches!(block.last.kind, ExpressionKind::Unit));
+        assert!(matches!(block.last.kind, HIRExpressionKind::Unit));
     }
 
     #[test]
     fn parse_bare_statement() {
         let stmt = parse_statement("- return\n  lit_int(42)\n");
-        assert!(matches!(stmt.kind, StatementKind::Return(_)));
+        assert!(matches!(stmt.kind, HIRStatementKind::Return(_)));
     }
 }

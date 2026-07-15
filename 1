@@ -1,0 +1,27 @@
+warning: type `TypeVariableInterningTable` is more private than the item `InternedTypeId::as_typevar`
+  --> zea-ast/src/zea/typecheck/mod.rs:54:5
+   |
+54 |     pub fn as_typevar(self, table: &mut TypeVariableInterningTable) -> TypeVariable {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `InternedTypeId::as_typevar` is reachable at visibility `pub(in crate::zea)`
+   |
+note: but type `TypeVariableInterningTable` is only usable at visibility `pub(self)`
+  --> zea-ast/src/zea/typecheck/mod.rs:77:1
+   |
+77 | struct TypeVariableInterningTable {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `TypeVariable` is more private than the item `InternedTypeId::as_typevar`
+  --> zea-ast/src/zea/typecheck/mod.rs:54:5
+   |
+54 |     pub fn as_typevar(self, table: &mut TypeVariableInterningTable) -> TypeVariable {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `InternedTypeId::as_typevar` is reachable at visibility `pub(in crate::zea)`
+   |
+note: but type `TypeVariable` is only usable at visibility `pub(self)`
+  --> zea-ast/src/zea/typecheck/mod.rs:67:1
+   |
+67 | struct TypeVariable {
+   | ^^^^^^^^^^^^^^^^^^^
+
+warning: `zea-ast` (lib) generated 2 warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.05s

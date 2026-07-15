@@ -5,11 +5,7 @@ use crate::helper_impls::StructuralEq;
 use crate::zea::visitors::{
     walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init, Visitor,
 };
-use crate::zea::{
-    BlockExpression, Expression, ExpressionKind, FuncParam, Function, FunctionCall, IfThenElse,
-    InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
-    SimpleInitialization, Statement, StatementKind, ZeaASTNode, ZeaNodeQuery,
-};
+use crate::zea::{hir_nodes::*, NodeId, ZeaNodeQuery};
 use indexmap::{IndexMap, IndexSet};
 
 type NodeIdMap<T> = IndexMap<NodeId, T>;
@@ -24,18 +20,18 @@ pub enum ScopedIdentifierKind {
     ImportItem,
 }
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub struct ScopedIdentifier {
+pub struct HIRScopedIdentifier {
     pub ident: String,
     pub origin: NodeId,
     pub kind: ScopedIdentifierKind,
 }
-impl StructuralEq for ScopedIdentifier {
+impl StructuralEq for HIRScopedIdentifier {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         self.ident == other.ident && self.kind == other.kind
     }
 }
 
-impl ScopedIdentifier {
+impl HIRScopedIdentifier {
     pub fn local(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
@@ -64,17 +60,17 @@ impl ScopedIdentifier {
             kind: ScopedIdentifierKind::FunctionParam,
         }
     }
-    pub fn from_func_param(func_param: &FuncParam) -> Self {
-        ScopedIdentifier::func_param(func_param.id, func_param.name.clone())
+    pub fn from_func_param(func_param: &HIRFuncParam) -> Self {
+        HIRScopedIdentifier::func_param(func_param.id, func_param.name.clone())
     }
-    pub fn from_funcdef(funcdef: &Function) -> Self {
-        ScopedIdentifier::func_param(funcdef.id, funcdef.name.clone())
+    pub fn from_funcdef(funcdef: &HIRFunction) -> Self {
+        HIRScopedIdentifier::func_param(funcdef.id, funcdef.name.clone())
     }
-    pub fn from_local_init(init: &SimpleInitialization) -> Self {
-        ScopedIdentifier::local(init.id, init.assignee.clone())
+    pub fn from_local_init(init: &HIRSimpleInitialization) -> Self {
+        HIRScopedIdentifier::local(init.id, init.assignee.clone())
     }
-    pub fn from_global_init(init: &SimpleInitialization) -> Self {
-        ScopedIdentifier::global(init.id, init.assignee.clone())
+    pub fn from_global_init(init: &HIRSimpleInitialization) -> Self {
+        HIRScopedIdentifier::global(init.id, init.assignee.clone())
     }
 
     pub fn import_item(origin: NodeId, ident: String) -> Self {
@@ -96,7 +92,7 @@ impl ScopedIdentifier {
 #[derive(Debug)]
 pub struct ScopeAnnotations {
     // Map some node id to its ScopedIdentifier counterpart.
-    identifiers: IndexSet<ScopedIdentifier>,
+    identifiers: IndexSet<HIRScopedIdentifier>,
 }
 
 impl ScopeAnnotations {
@@ -105,7 +101,7 @@ impl ScopeAnnotations {
             identifiers: IndexSet::new(),
         }
     }
-    pub fn globals(&self) -> IndexSet<ScopedIdentifier> {
+    pub fn globals(&self) -> IndexSet<HIRScopedIdentifier> {
         self.identifiers
             .iter()
             .filter(|&ident| ident.kind == ScopedIdentifierKind::GlobalVar)
@@ -113,7 +109,7 @@ impl ScopeAnnotations {
             .collect()
     }
 
-    pub fn gather_idents_module(&mut self, module: &Module) {
+    pub fn gather_idents_module(&mut self, module: &HIRModule) {
         for glob in module.global_vars.iter() {
             self.gather_idents_global_init(glob);
         }
@@ -122,78 +118,78 @@ impl ScopeAnnotations {
         }
     }
 
-    fn gather_idents_local_stmt(&mut self, init: &InitializationBlock) {
-        let InitializationKind::Unpacked(u) = &init.kind else {
+    fn gather_idents_local_stmt(&mut self, init: &HIRInitializationBlock) {
+        let HIRInitializationKind::Unpacked(u) = &init.kind else {
             unreachable!()
         };
         for init in u.iter() {
             self.identifiers
-                .insert(ScopedIdentifier::from_local_init(init));
+                .insert(HIRScopedIdentifier::from_local_init(init));
         }
     }
 
-    fn gather_idents_global_init(&mut self, init: &InitializationBlock) {
-        let InitializationKind::Unpacked(u) = &init.kind else {
+    fn gather_idents_global_init(&mut self, init: &HIRInitializationBlock) {
+        let HIRInitializationKind::Unpacked(u) = &init.kind else {
             unreachable!()
         };
         for init in u.iter() {
             self.identifiers
-                .insert(ScopedIdentifier::from_global_init(init));
+                .insert(HIRScopedIdentifier::from_global_init(init));
         }
     }
 
-    fn gather_idents_func_def(&mut self, func_def: &Function) {
-        self.identifiers.insert(ScopedIdentifier::func_name(
+    fn gather_idents_func_def(&mut self, func_def: &HIRFunction) {
+        self.identifiers.insert(HIRScopedIdentifier::func_name(
             func_def.id,
             func_def.name.clone(),
         ));
         for param in func_def.params.iter() {
             self.identifiers
-                .insert(ScopedIdentifier::from_func_param(param));
+                .insert(HIRScopedIdentifier::from_func_param(param));
         }
         for stmt in func_def.body.statements.iter() {
             self.gather_idents_stmt(stmt);
         }
     }
-    fn gather_idents_stmt(&mut self, stmt: &Statement) {
+    fn gather_idents_stmt(&mut self, stmt: &HIRStatement) {
         match &stmt.kind {
-            StatementKind::Initialization(init) => self.gather_idents_local_stmt(init),
-            StatementKind::Reassignment(reinit) => self.gather_idents_expr(&reinit.value),
-            StatementKind::FunctionCall(call) => self.gather_idents_call(call),
-            StatementKind::Return(e) => self.gather_idents_expr(e),
-            StatementKind::BlockTail(e) => self.gather_idents_expr(e),
-            StatementKind::Block(eb) => self.gather_idents_block(eb),
-            StatementKind::IfThenElse(ite) => self.gather_idents_branch(ite),
+            HIRStatementKind::Initialization(init) => self.gather_idents_local_stmt(init),
+            HIRStatementKind::Reassignment(reinit) => self.gather_idents_expr(&reinit.value),
+            HIRStatementKind::FunctionCall(call) => self.gather_idents_call(call),
+            HIRStatementKind::Return(e) => self.gather_idents_expr(e),
+            HIRStatementKind::BlockTail(e) => self.gather_idents_expr(e),
+            HIRStatementKind::Block(eb) => self.gather_idents_block(eb),
+            HIRStatementKind::IfThenElse(ite) => self.gather_idents_branch(ite),
         }
     }
 
-    fn gather_idents_expr(&mut self, expr: &Expression) {
+    fn gather_idents_expr(&mut self, expr: &HIRExpression) {
         match &expr.kind {
-            ExpressionKind::Unit => {}
-            ExpressionKind::IntegerLiteral(_) => {}
-            ExpressionKind::BoolLiteral(_) => {}
-            ExpressionKind::FloatLiteral(_) => {}
-            ExpressionKind::StringLiteral(_) => {}
-            ExpressionKind::UnScopedIdent(_) => {}
+            HIRExpressionKind::Unit => {}
+            HIRExpressionKind::IntegerLiteral(_) => {}
+            HIRExpressionKind::BoolLiteral(_) => {}
+            HIRExpressionKind::FloatLiteral(_) => {}
+            HIRExpressionKind::StringLiteral(_) => {}
+            HIRExpressionKind::UnScopedIdent(_) => {}
 
-            ExpressionKind::FunctionCall(call) => self.gather_idents_call(call),
-            ExpressionKind::BinOpExpr(_, lhs, rhs) => {
+            HIRExpressionKind::FunctionCall(call) => self.gather_idents_call(call),
+            HIRExpressionKind::BinOpExpr(_, lhs, rhs) => {
                 self.gather_idents_expr(lhs);
                 self.gather_idents_expr(rhs);
             }
-            ExpressionKind::UnOpExpr(_, arg) => self.gather_idents_expr(arg),
-            ExpressionKind::MemberAccess(data, _) => self.gather_idents_expr(data),
-            ExpressionKind::IfThenElse(ite) => self.gather_idents_branch(ite),
-            ExpressionKind::Block(eb) => self.gather_idents_block(eb),
-            ExpressionKind::ScopedIdent(_) => {}
+            HIRExpressionKind::UnOpExpr(_, arg) => self.gather_idents_expr(arg),
+            HIRExpressionKind::MemberAccess(data, _) => self.gather_idents_expr(data),
+            HIRExpressionKind::IfThenElse(ite) => self.gather_idents_branch(ite),
+            HIRExpressionKind::Block(eb) => self.gather_idents_block(eb),
+            HIRExpressionKind::ScopedIdent(_) => {}
         }
     }
-    fn gather_idents_call(&mut self, call: &FunctionCall) {
+    fn gather_idents_call(&mut self, call: &HIRFunctionCall) {
         for arg in call.args.iter() {
             self.gather_idents_expr(arg);
         }
     }
-    fn gather_idents_branch(&mut self, branch: &IfThenElse) {
+    fn gather_idents_branch(&mut self, branch: &HIRBranch) {
         self.gather_idents_expr(&branch.condition);
         self.gather_idents_expr(&branch.true_case);
         if let Some(false_case) = &branch.false_case {
@@ -201,7 +197,7 @@ impl ScopeAnnotations {
         }
     }
 
-    fn gather_idents_block(&mut self, block: &BlockExpression) {
+    fn gather_idents_block(&mut self, block: &HIRBlockExpression) {
         for stmt in block.statements.iter() {
             self.gather_idents_stmt(stmt);
         }
@@ -213,12 +209,12 @@ impl ScopeAnnotations {
 /// to ensure a correct AST before moving on to static analysis.
 pub struct ASTValidator {}
 pub enum SemanticASTViolation<'ast> {
-    UntypedGlobalVar(&'ast InitializationBlock),
-    UnexpandedBlock(&'ast Statement),
-    StrayPackedAssignment(&'ast PackedInitialization),
+    UntypedGlobalVar(&'ast HIRInitializationBlock),
+    UnexpandedBlock(&'ast HIRStatement),
+    StrayPackedAssignment(&'ast HIRPackedInitialization),
 }
 impl ASTValidator {
-    pub fn blocks_expanded_in_module(module: &Module) -> Result<(), NodeId> {
+    pub fn blocks_expanded_in_module(module: &HIRModule) -> Result<(), NodeId> {
         let mut validator = Self {};
         validator.visit_module(module)
     }
@@ -229,24 +225,24 @@ impl Visitor for ASTValidator {
     type VisitorError = NodeId;
     fn visit_block(
         &mut self,
-        block: &BlockExpression,
+        block: &HIRBlockExpression,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_block(self, block)
     }
 }
 
 pub struct ExpressionCollector {
-    expressions: Vec<Expression>,
+    expressions: Vec<HIRExpression>,
 }
 impl ExpressionCollector {
-    pub fn over(ast: &Module) -> Self {
+    pub fn over(ast: &HIRModule) -> Self {
         let mut s = Self {
             expressions: vec![],
         };
         let _ = s.visit_module(ast);
         s
     }
-    pub fn collect(self) -> Vec<Expression> {
+    pub fn collect(self) -> Vec<HIRExpression> {
         self.expressions
     }
 }
@@ -254,32 +250,29 @@ impl ExpressionCollector {
 impl Visitor for ExpressionCollector {
     type VisitorError = ();
     type VisitorOk = ();
-    fn visit_expr(&mut self, expr: &Expression) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_expr(&mut self, expr: &HIRExpression) -> Result<Self::VisitorOk, Self::VisitorError> {
         self.expressions.push(expr.clone());
         walk_expr(self, expr)
     }
     fn visit_init(
         &mut self,
-        init: &SimpleInitialization,
+        init: &HIRSimpleInitialization,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         self.expressions.push(init.value.clone());
         walk_unpacked_init(self, init)
     }
 
-    fn visit_branch(
-        &mut self,
-        _branch: &IfThenElse,
-    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_branch(&mut self, _branch: &HIRBranch) -> Result<Self::VisitorOk, Self::VisitorError> {
         todo!("cannot yet collect expressions in branches")
     }
 }
 
 impl Visitor for ZeaNodeQuery {
     type VisitorError = ();
-    type VisitorOk = Option<ZeaASTNode>;
-    fn visit_branch(&mut self, branch: &IfThenElse) -> Result<Self::VisitorOk, Self::VisitorError> {
+    type VisitorOk = Option<HIRASTNode>;
+    fn visit_branch(&mut self, branch: &HIRBranch) -> Result<Self::VisitorOk, Self::VisitorError> {
         (self.id == branch.id)
-            .then_some(Some(ZeaASTNode::Branch(branch.clone())))
+            .then_some(Some(HIRASTNode::Branch(branch.clone())))
             .or_else(|| self.visit_expr(&branch.condition).ok())
             .or_else(|| self.visit_expr(&branch.true_case).ok())
             .or_else(|| {
@@ -293,10 +286,10 @@ impl Visitor for ZeaNodeQuery {
     }
     fn visit_block(
         &mut self,
-        block: &BlockExpression,
+        block: &HIRBlockExpression,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         (self.id == block.id)
-            .then_some(Some(ZeaASTNode::Block(block.clone())))
+            .then_some(Some(HIRASTNode::Block(block.clone())))
             .or_else(|| {
                 block
                     .statements
@@ -306,9 +299,9 @@ impl Visitor for ZeaNodeQuery {
             .or_else(|| self.visit_expr(&block.last).ok())
             .ok_or(())
     }
-    fn visit_module(&mut self, module: &Module) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_module(&mut self, module: &HIRModule) -> Result<Self::VisitorOk, Self::VisitorError> {
         (self.id == module.id)
-            .then_some(Some(ZeaASTNode::Module(module.clone())))
+            .then_some(Some(HIRASTNode::Module(module.clone())))
             .or_else(|| {
                 module
                     .global_vars
@@ -329,28 +322,28 @@ impl Visitor for ZeaNodeQuery {
             })
             .ok_or(())
     }
-    fn visit_expr(&mut self, expr: &Expression) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_expr(&mut self, expr: &HIRExpression) -> Result<Self::VisitorOk, Self::VisitorError> {
         if self.id == expr.id {
-            Ok(Some(ZeaASTNode::Expression(expr.clone())))
+            Ok(Some(HIRASTNode::Expression(expr.clone())))
         } else {
             match &expr.kind {
-                ExpressionKind::Unit
-                | ExpressionKind::IntegerLiteral(_)
-                | ExpressionKind::BoolLiteral(_)
-                | ExpressionKind::FloatLiteral(_)
-                | ExpressionKind::StringLiteral(_)
-                | ExpressionKind::UnScopedIdent(_) => Ok(None),
-                ExpressionKind::ScopedIdent(_) => Ok(None),
-                ExpressionKind::FunctionCall(function_call) => self.visit_call(function_call),
-                ExpressionKind::BinOpExpr(_, expression, expression1) => self
+                HIRExpressionKind::Unit
+                | HIRExpressionKind::IntegerLiteral(_)
+                | HIRExpressionKind::BoolLiteral(_)
+                | HIRExpressionKind::FloatLiteral(_)
+                | HIRExpressionKind::StringLiteral(_)
+                | HIRExpressionKind::UnScopedIdent(_) => Ok(None),
+                HIRExpressionKind::ScopedIdent(_) => Ok(None),
+                HIRExpressionKind::FunctionCall(function_call) => self.visit_call(function_call),
+                HIRExpressionKind::BinOpExpr(_, expression, expression1) => self
                     .visit_expr(expression)
                     .ok()
                     .or_else(|| self.visit_expr(expression1).ok())
                     .ok_or(()),
-                ExpressionKind::UnOpExpr(_, expression) => self.visit_expr(expression),
-                ExpressionKind::MemberAccess(expression, _) => self.visit_expr(expression),
-                ExpressionKind::IfThenElse(if_then_else) => self.visit_branch(if_then_else),
-                ExpressionKind::Block(block_expression) => self.visit_block(block_expression),
+                HIRExpressionKind::UnOpExpr(_, expression) => self.visit_expr(expression),
+                HIRExpressionKind::MemberAccess(expression, _) => self.visit_expr(expression),
+                HIRExpressionKind::IfThenElse(if_then_else) => self.visit_branch(if_then_else),
+                HIRExpressionKind::Block(block_expression) => self.visit_block(block_expression),
             }
         }
     }

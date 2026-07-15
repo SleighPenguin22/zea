@@ -1,0 +1,101 @@
+   Compiling memchr v2.8.3
+   Compiling regex-syntax v0.8.11
+   Compiling version_check v0.9.5
+   Compiling proc-macro2 v1.0.106
+   Compiling utf8parse v0.2.2
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling typenum v1.20.1
+   Compiling libc v0.2.186
+   Compiling anstyle-parse v1.0.0
+   Compiling anstyle v1.0.14
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling parking_lot_core v0.9.12
+   Compiling log v0.4.33
+   Compiling cfg-if v1.0.4
+   Compiling scopeguard v1.2.0
+   Compiling smallvec v1.15.2
+   Compiling siphasher v1.0.3
+   Compiling anstream v1.0.0
+   Compiling lock_api v0.4.14
+   Compiling lalrpop-util v0.23.1
+   Compiling generic-array v0.14.7
+   Compiling clap_lex v1.1.0
+   Compiling foldhash v0.1.5
+   Compiling heck v0.5.0
+   Compiling strsim v0.11.1
+   Compiling hashbrown v0.15.5
+   Compiling phf_shared v0.13.1
+   Compiling aho-corasick v1.1.4
+   Compiling keccak v0.1.6
+   Compiling clap_builder v4.6.2
+   Compiling indexmap v2.14.0
+   Compiling term v1.2.1
+   Compiling same-file v1.0.6
+   Compiling syn v2.0.118
+   Compiling bit-vec v0.9.1
+   Compiling either v1.16.0
+   Compiling new_debug_unreachable v1.0.6
+   Compiling precomputed-hash v0.1.1
+   Compiling fixedbitset v0.5.7
+   Compiling bit-set v0.9.1
+   Compiling itertools v0.14.0
+   Compiling ascii-canvas v4.0.0
+   Compiling ena v0.14.4
+   Compiling walkdir v2.5.0
+   Compiling unicode-xid v0.2.6
+   Compiling pico-args v0.5.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling petgraph v0.8.3
+   Compiling jiff v0.2.32
+   Compiling parking_lot v0.12.5
+   Compiling colored v3.1.1
+   Compiling digest v0.10.7
+   Compiling sha3 v0.10.9
+   Compiling string_cache v0.9.0
+   Compiling regex-automata v0.4.15
+   Compiling regex v1.13.0
+   Compiling clap_derive v4.6.1
+   Compiling zea-internal-macros v0.1.0 (/home/wannie/Desktop/zea/zea-internal-macros)
+   Compiling lalrpop v0.23.1
+   Compiling env_filter v2.0.0
+   Compiling env_logger v0.11.11
+   Compiling colog v1.4.0
+   Compiling clap v4.6.2
+   Compiling zea-config v0.1.0 (/home/wannie/Desktop/zea/zea-config)
+   Compiling zea-ast v0.1.0 (/home/wannie/Desktop/zea/zea-ast)
+warning: type `TypeVariableInterningTable` is more private than the item `InternedTypeId::as_typevar`
+  --> zea-ast/src/zea/typecheck/mod.rs:54:5
+   |
+54 |     pub fn as_typevar(self, table: &mut TypeVariableInterningTable) -> TypeVariable {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `InternedTypeId::as_typevar` is reachable at visibility `pub(in crate::zea)`
+   |
+note: but type `TypeVariableInterningTable` is only usable at visibility `pub(self)`
+  --> zea-ast/src/zea/typecheck/mod.rs:77:1
+   |
+77 | struct TypeVariableInterningTable {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `TypeVariable` is more private than the item `InternedTypeId::as_typevar`
+  --> zea-ast/src/zea/typecheck/mod.rs:54:5
+   |
+54 |     pub fn as_typevar(self, table: &mut TypeVariableInterningTable) -> TypeVariable {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `InternedTypeId::as_typevar` is reachable at visibility `pub(in crate::zea)`
+   |
+note: but type `TypeVariable` is only usable at visibility `pub(self)`
+  --> zea-ast/src/zea/typecheck/mod.rs:67:1
+   |
+67 | struct TypeVariable {
+   | ^^^^^^^^^^^^^^^^^^^
+
+   Compiling zea-codegen v0.1.0 (/home/wannie/Desktop/zea/zea-codegen)
+warning: `zea-ast` (lib) generated 2 warnings
+   Compiling zea-parser v0.1.0 (/home/wannie/Desktop/zea/zea-parser)
+   Compiling zea-driver v0.1.0 (/home/wannie/Desktop/zea/zea-driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.37s

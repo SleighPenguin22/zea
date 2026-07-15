@@ -1,5 +1,5 @@
-use crate::zea;
-use crate::zea::{FuncParam, Function, InitializationBlock};
+use crate::zea::hir_nodes::*;
+use crate::zea::HIRScopedIdentifier;
 use std::fmt::Debug;
 
 pub trait IndentPrint: Debug {
@@ -39,7 +39,7 @@ fn fmt_list<T: IndentPrint>(items: &[T], depth: usize) -> String {
     result
 }
 
-impl IndentPrint for FuncParam {
+impl IndentPrint for HIRFuncParam {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = ".param".indent_print(depth);
         buffer += &self.name.indent_print(depth + 1);
@@ -63,19 +63,19 @@ fn module_exports(imports: &[String], depth: usize) -> String {
     result
 }
 
-fn module_globs(globs: &[InitializationBlock], depth: usize) -> String {
+fn module_globs(globs: &[HIRInitializationBlock], depth: usize) -> String {
     let mut result = ".globs".indent_print(depth);
     result += &fmt_list(globs, depth + 1);
     result
 }
 
-fn module_funcs(funcs: &[Function], depth: usize) -> String {
+fn module_funcs(funcs: &[HIRFunction], depth: usize) -> String {
     let mut result = ".funcs".indent_print(depth);
     result += &fmt_list(funcs, depth + 1);
     result
 }
 
-impl IndentPrint for zea::Module {
+impl IndentPrint for HIRModule {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "module".indent_print(depth);
         buffer += &module_imports(&self.imports, depth + 1);
@@ -86,13 +86,13 @@ impl IndentPrint for zea::Module {
     }
 }
 
-fn func_params(params: &[FuncParam], depth: usize) -> String {
+fn func_params(params: &[HIRFuncParam], depth: usize) -> String {
     let mut buffer = ".params".indent_print(depth);
     buffer += &fmt_list(params, depth + 1);
     buffer
 }
 
-impl IndentPrint for zea::Function {
+impl IndentPrint for HIRFunction {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = format!("func `{}`", self.name).indent_print(depth);
         buffer += &".returns".indent_print(depth + 1);
@@ -105,7 +105,7 @@ impl IndentPrint for zea::Function {
     }
 }
 
-impl IndentPrint for zea::TypedIdentifier {
+impl IndentPrint for HIRTypedIdentifier {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = self.name.indent_print(depth);
         buffer += &".type".indent_print(depth + 1);
@@ -114,7 +114,7 @@ impl IndentPrint for zea::TypedIdentifier {
     }
 }
 
-impl IndentPrint for zea::BlockExpression {
+impl IndentPrint for HIRBlockExpression {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "block".indent_print(depth);
 
@@ -128,27 +128,31 @@ impl IndentPrint for zea::BlockExpression {
     }
 }
 
-impl IndentPrint for zea::Statement {
+impl IndentPrint for HIRStatement {
     fn indent_print(&self, depth: usize) -> String {
-        use zea::StatementKind;
+        use HIRStatementKind;
         match &self.kind {
-            StatementKind::Return(e) => "return".indent_print(depth) + &e.indent_print(depth + 1),
-            StatementKind::Initialization(i) => i.indent_print(depth),
-            StatementKind::BlockTail(e) => "tail".indent_print(depth) + &e.indent_print(depth + 1),
-            StatementKind::IfThenElse(b) => b.indent_print(depth),
-            StatementKind::Block(eb) => eb.indent_print(depth),
-            StatementKind::FunctionCall(c) => c.indent_print(depth),
+            HIRStatementKind::Return(e) => {
+                "return".indent_print(depth) + &e.indent_print(depth + 1)
+            }
+            HIRStatementKind::Initialization(i) => i.indent_print(depth),
+            HIRStatementKind::BlockTail(e) => {
+                "tail".indent_print(depth) + &e.indent_print(depth + 1)
+            }
+            HIRStatementKind::IfThenElse(b) => b.indent_print(depth),
+            HIRStatementKind::Block(eb) => eb.indent_print(depth),
+            HIRStatementKind::FunctionCall(c) => c.indent_print(depth),
             _ => todo!("pretty print statement with kind {:?}", self.kind),
         }
     }
 }
-impl IndentPrint for zea::InitializationBlock {
+impl IndentPrint for HIRInitializationBlock {
     fn indent_print(&self, depth: usize) -> String {
-        use zea::InitializationKind;
+        use HIRInitializationKind;
         match &self.kind {
-            InitializationKind::Packed(p) => p.indent_print(depth),
+            HIRInitializationKind::Packed(p) => p.indent_print(depth),
 
-            InitializationKind::Unpacked(p) => {
+            HIRInitializationKind::Unpacked(p) => {
                 let mut buffer = "init_unpacked_block".indent_print(depth);
                 for init in p.iter() {
                     let init_str = init.indent_print(depth + 2);
@@ -160,7 +164,7 @@ impl IndentPrint for zea::InitializationBlock {
     }
 }
 
-impl IndentPrint for zea::PackedInitialization {
+impl IndentPrint for HIRPackedInitialization {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "init_packed".indent_print(depth);
         buffer += &".pattern".indent_print(depth + 1);
@@ -190,13 +194,13 @@ impl IndentPrint for bool {
     }
 }
 
-impl IndentPrint for zea::TypeSpecifier {
+impl IndentPrint for HIRTypeSpecifier {
     fn indent_print(&self, depth: usize) -> String {
         format!("{:?}", self).indent_print(depth)
     }
 }
 
-impl IndentPrint for Option<zea::TypeSpecifier> {
+impl IndentPrint for Option<HIRTypeSpecifier> {
     fn indent_print(&self, depth: usize) -> String {
         match self {
             None => String::from("@unknown").indent_print(depth),
@@ -205,7 +209,7 @@ impl IndentPrint for Option<zea::TypeSpecifier> {
     }
 }
 
-impl IndentPrint for zea::SimpleInitialization {
+impl IndentPrint for HIRSimpleInitialization {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "init".indent_print(depth);
         buffer += &".assignee".indent_print(depth + 1);
@@ -218,11 +222,11 @@ impl IndentPrint for zea::SimpleInitialization {
     }
 }
 
-impl IndentPrint for zea::AssignmentPattern {
+impl IndentPrint for HIRAssignmentPattern {
     fn indent_print(&self, depth: usize) -> String {
         match self {
-            zea::AssignmentPattern::Identifier(i) => i.indent_print(depth),
-            zea::AssignmentPattern::Tuple(tup) => {
+            HIRAssignmentPattern::Identifier(i) => i.indent_print(depth),
+            HIRAssignmentPattern::Tuple(tup) => {
                 let mut buffer = "(".indent_print(depth);
                 for pat in tup {
                     buffer += &pat.indent_print(depth + 1);
@@ -234,7 +238,7 @@ impl IndentPrint for zea::AssignmentPattern {
     }
 }
 
-impl IndentPrint for zea::IfThenElse {
+impl IndentPrint for HIRBranch {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "branch".indent_print(depth);
 
@@ -253,43 +257,43 @@ impl IndentPrint for zea::IfThenElse {
     }
 }
 
-impl IndentPrint for zea::Expression {
+impl IndentPrint for HIRExpression {
     fn indent_print(&self, depth: usize) -> String {
-        use zea::ExpressionKind;
+        use HIRExpressionKind;
         match &self.kind {
-            ExpressionKind::UnScopedIdent(i) => format!("ident({i})").indent_print(depth),
-            ExpressionKind::IntegerLiteral(i) => format!("lit_int({i})").indent_print(depth),
-            ExpressionKind::FloatLiteral(i) => format!("lit_float({i})").indent_print(depth),
-            ExpressionKind::BinOpExpr(op, l, r) => {
+            HIRExpressionKind::UnScopedIdent(i) => format!("ident({i})").indent_print(depth),
+            HIRExpressionKind::IntegerLiteral(i) => format!("lit_int({i})").indent_print(depth),
+            HIRExpressionKind::FloatLiteral(i) => format!("lit_float({i})").indent_print(depth),
+            HIRExpressionKind::BinOpExpr(op, l, r) => {
                 let mut buffer = format!("operator`{op:?}`").indent_print(depth);
                 buffer += &l.indent_print(depth + 1);
                 buffer += &r.indent_print(depth + 1);
                 buffer
             }
-            ExpressionKind::UnOpExpr(op, arg) => {
+            HIRExpressionKind::UnOpExpr(op, arg) => {
                 let mut buffer = format!("operator`{op:?}`").indent_print(depth);
                 buffer += &arg.indent_print(depth + 1);
                 buffer
             }
-            ExpressionKind::MemberAccess(e, m) => {
+            HIRExpressionKind::MemberAccess(e, m) => {
                 let mut buffer = "expr_member".indent_print(depth);
                 buffer += &e.indent_print(depth + 1);
                 buffer += &".member".indent_print(depth + 1);
                 buffer += &m.indent_print(depth + 2);
                 buffer
             }
-            ExpressionKind::IfThenElse(b) => b.indent_print(depth),
+            HIRExpressionKind::IfThenElse(b) => b.indent_print(depth),
 
-            ExpressionKind::Block(eb) => eb.indent_print(depth),
-            ExpressionKind::FunctionCall(c) => c.indent_print(depth),
-            ExpressionKind::Unit => "@unit".indent_print(depth),
-            ExpressionKind::ScopedIdent(si) => si.indent_print(depth),
-            ExpressionKind::BoolLiteral(b) => format!("bool_lit({b})").indent_print(depth),
+            HIRExpressionKind::Block(eb) => eb.indent_print(depth),
+            HIRExpressionKind::FunctionCall(c) => c.indent_print(depth),
+            HIRExpressionKind::Unit => "@unit".indent_print(depth),
+            HIRExpressionKind::ScopedIdent(si) => si.indent_print(depth),
+            HIRExpressionKind::BoolLiteral(b) => format!("bool_lit({b})").indent_print(depth),
             _ => todo!("pretty print expression of kind {:?}", self.kind),
         }
     }
 }
-impl IndentPrint for zea::ScopedIdentifier {
+impl IndentPrint for HIRScopedIdentifier {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = format!("{:?}", self.kind).indent_print(depth);
         buffer += &format!(".ident {}", self.ident).indent_print(depth + 1);
@@ -299,7 +303,7 @@ impl IndentPrint for zea::ScopedIdentifier {
     }
 }
 
-impl IndentPrint for zea::FunctionCall {
+impl IndentPrint for HIRFunctionCall {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "call".indent_print(depth);
 
