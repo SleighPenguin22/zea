@@ -1098,7 +1098,7 @@ impl Expression {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr)]
 pub enum BinOp {
     Add,
     Sub,

@@ -7,3 +7,6 @@ members = ["zea-ast", "zea-driver", "zea-parser", "zea-codegen", "zea-internal-m
 dead_code = "allow"
 unsafe_code = "forbid"
 unused_imports = "allow"
+
+[profile.release]
+debug = true

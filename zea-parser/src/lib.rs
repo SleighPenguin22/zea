@@ -26,6 +26,7 @@ use zea_ast::zea::{
 #[cfg(feature = "lalrpop_parser")]
 pub fn parse_module(src: &'_ str) -> (Module, BareNodeLabeler) {
     let p = ModuleParser::new();
+    info!("parsing source file...");
     let mut module = match p.parse(src) {
         Ok(module) => module,
         Err(e) => {
@@ -33,11 +34,11 @@ pub fn parse_module(src: &'_ str) -> (Module, BareNodeLabeler) {
             exit(1);
         }
     };
-    info!("parsed succesfully");
+    info!("\tparsed source file succesfully");
     let mut labeler = BareNodeLabeler::new();
-    info!("starting node-labeling");
+    info!("starting node-labeling...");
     labeler.visit_module(&mut module);
-    info!("node-labeling successful");
+    info!("\tnode-labeling successful");
     (module, labeler)
 }
 

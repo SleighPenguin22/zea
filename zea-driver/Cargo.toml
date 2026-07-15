@@ -8,3 +8,4 @@ zea-parser = {path = "../zea-parser"}
 zea-ast = {path = "../zea-ast", features = ["visualisation"]}
 log = "0.4.33"
 colog = "1.4.0"
+clap = { version = "4.6.1", features = ["derive"] }

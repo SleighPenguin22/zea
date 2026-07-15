@@ -1,17 +1,19 @@
 use std::{
     arch::x86_64::_SIDD_MASKED_NEGATIVE_POLARITY, collections::HashMap, hash::DefaultHasher,
+    ops::ControlFlow, process::exit,
 };
 
 use indexmap::{map::raw_entry_v1::RawEntryBuilderMut, Equivalent, IndexMap, IndexSet};
-use log::trace;
+use log::{error, info, trace};
 use zea_internal_macros::VariantToStr;
 
 use crate::{
     visualisation::IndentPrint,
     zea::{
-        self, Expression, InitializationBlock, InitializationKind, Module, NodeId,
+        self, BinOp, Expression, InitializationBlock, InitializationKind, Module, NodeId,
         SimpleInitialization, TypeSpecifier,
     },
+    ZeaError,
 };
 
 const BUILTIN_SCALAR_TYPES: [zea::TypeSpecifier; 9] = [
@@ -282,6 +284,7 @@ enum TypeCheckError {
     MissingTypeVariable(TypeVariable),
     IllegalTypeCoercion(InternedTypeId, InternedTypeId, IllegalTypeCoercionKind),
     ExpectedSolvedTypeVariable(TypeVariable),
+    InvalidOperands(NodeId, BinOp),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -319,6 +322,26 @@ pub fn typecheck_module(module: &mut Module) {
     }
 }
 
+impl ZeaError for TypeCheckError {
+    type ErrContext = ZeaTypeChecker;
+    fn zea_error_format(&self, ctx: &Self::ErrContext) -> String {
+        match self {
+            Self::IllegalTypeCoercion(a, b, kind) => {
+                let t_a = ctx.type_interning_table.get_specifier_by_id(*a).unwrap();
+                let t_b = ctx.type_interning_table.get_specifier_by_id(*b).unwrap();
+                format!("illegal type coercion of types {t_a:?} and {t_b:?}: {kind:?}")
+            }
+            Self::InvalidOperands(id, op) => {
+                format!(
+                    "illegal operands for operator {} in {id:?}",
+                    op.variant_as_str()
+                )
+            }
+            _ => todo!(),
+        }
+    }
+}
+
 impl ZeaTypeChecker {
     pub fn new() -> Self {
         Self {
@@ -330,27 +353,45 @@ impl ZeaTypeChecker {
     }
     pub fn check_module(&mut self, module: &mut zea::Module) -> Result<(), TypeCheckError> {
         self.introduce_module(module)?;
-
-        'inner: for glob in module.global_vars.iter_mut() {
+        let (_solved, frac, vars_solved, vars_total) = self.all_vars_solved();
+        info!("\tinitially solved {frac}% ({vars_solved} of {vars_total}) of typevars");
+        while self.check_module_once(module).is_ok() {
+            let (_solved, frac, vars_solved, vars_total) = self.all_vars_solved();
+            info!("\tsolved {frac}% ({vars_solved} of {vars_total}) of typevars");
+            if _solved {
+                self.check_module_once(module)?;
+                break;
+            }
+        }
+        Ok(())
+    }
+    fn check_module_once(&mut self, module: &mut zea::Module) -> Result<(), TypeCheckError> {
+        for glob in module.global_vars.iter_mut() {
             match self.check_assignment(glob) {
                 Ok(_) => {}
                 Err(TypeCheckError::ExpectedSolvedTypeVariable(t)) => {
-                    trace!("TYPECHCEKER: insufficient information to solve type variable {t:?}, moving on...");
+                    trace!("\tinsufficient information to solve type variable {t:?}, moving on...");
                 }
-                other => return other,
+                Err(other) => {
+                    error!("{}", other.zea_error_format(self));
+                    return Err(other);
+                }
             }
-            trace!(
-                "TYPECHECKER: all type variables solved: {}",
-                self.all_vars_solved()
-            );
         }
         Ok(())
     }
 
-    fn all_vars_solved(&self) -> bool {
-        dbg!(self.typevar_interning_table.disjoint_typevars())
-            .iter()
-            .all(|t| self.typevar_interning_table.get_solved(*t).is_some())
+    fn all_vars_solved(&self) -> (bool, f64, usize, usize) {
+        let disj_typevars = self.typevar_interning_table.disjoint_typevars();
+        let mut vars_solved = 0;
+        let vars_total = disj_typevars.len();
+        for t in disj_typevars.iter() {
+            if self.typevar_interning_table.get_solved(*t).is_some() {
+                vars_solved += 1;
+            }
+        }
+        let frac = (vars_solved as f64 / vars_total as f64) * 100.0;
+        (vars_solved == vars_total, frac, vars_solved, vars_total)
     }
 
     /// Get the type variable associated with some expression node,
@@ -366,7 +407,7 @@ impl ZeaTypeChecker {
         typ: &TypeSpecifier,
     ) -> Result<(), TypeCheckError> {
         let t_id = self.type_interning_table.introduce(typ);
-        trace!("TYPECHCKER: solving type variable {inf_var:?} of literal to type {typ:?}");
+        trace!("\tsolving type variable {inf_var:?} of literal to type {typ:?}");
         let _ = self.typevar_interning_table.set_solved(inf_var, t_id);
         Ok(())
     }
@@ -447,14 +488,14 @@ impl ZeaTypeChecker {
             (Some(_), None) => self.hindley_milner_unify(b, a),
             (None, Some(b_conc)) => {
                 trace!(
-                    "TYPECHECKER: setting variable {a:?} to solved {:?}",
+                    "\tsetting variable {a:?} to solved {:?}",
                     self.type_interning_table.get_specifier_by_id(b_conc)
                 );
                 self.typevar_interning_table.set_solved(a, b_conc)?;
                 Ok(b)
             }
             (None, None) => {
-                trace!("TYPECHECKER: unifying variables {a:?} and {b:?}",);
+                trace!("\tunifying variables {a:?} and {b:?}",);
                 self.typevar_interning_table.union(a, b)?;
                 Ok(self.typevar_interning_table.follow_var(a))
             }
@@ -544,10 +585,7 @@ impl ZeaTypeChecker {
             unreachable!("inits should be unpacked before type checking");
         };
         for init in inits.iter_mut() {
-            trace!(
-                "TYPECHEKER: checking simple assigment for symbol `{}`",
-                init.assignee
-            );
+            trace!("\tchecking simple assigment for symbol `{}`", init.assignee);
             self.check_simple_assignment(init)?;
         }
         Ok(())
@@ -557,6 +595,11 @@ impl ZeaTypeChecker {
         &mut self,
         assign: &mut SimpleInitialization,
     ) -> Result<(), TypeCheckError> {
+        if self.symbol_types.contains_key(&assign.id) {
+            trace!("\t\tskipping annotated initialization");
+            return Ok(());
+        }
+
         let t_inferred = self.infer_expression(&assign.value)?;
         if let Some(t_actual) = &assign.typ {
             let t_actual_id = self.type_interning_table.introduce(t_actual);
@@ -573,7 +616,7 @@ impl ZeaTypeChecker {
                 .get_specifier_by_id(t_conc_id)?
                 .clone();
             trace!(
-                "TYPECHECKER: annotating symbol `{:?}` with type {:?}",
+                "\tannotating symbol `{:?}` with type {:?}",
                 assign.assignee,
                 t_conc
             );
@@ -584,26 +627,42 @@ impl ZeaTypeChecker {
     }
 
     fn infer_expression(&mut self, expr: &Expression) -> Result<TypeVariable, TypeCheckError> {
-        match &expr.kind {
+        let t_var = *self.get_inference_id(expr.id);
+        if self.get_solved(t_var).is_ok() {
+            trace!("\tskipping solved expression");
+            return Ok(t_var);
+        }
+        let res = match &expr.kind {
             zea::ExpressionKind::IntegerLiteral(_)
             | zea::ExpressionKind::BoolLiteral(_)
             | zea::ExpressionKind::FloatLiteral(_)
             | zea::ExpressionKind::Unit => {
                 let id = *self.get_inference_id(expr.id);
-                trace!("TYPECHECKER: inferring literal yields existing type variable");
+                trace!("\tinferring literal yields existing type variable");
                 Ok(id)
             }
 
+            zea::ExpressionKind::BinOpExpr(op, l, r) => {
+                trace!("\tinferring binop");
+                self.infer_expr_binop(expr.id, *op, l.as_ref(), r.as_ref())
+            }
             zea::ExpressionKind::StringLiteral(_)
             | zea::ExpressionKind::ScopedIdent(_)
             | zea::ExpressionKind::FunctionCall(_)
-            | zea::ExpressionKind::BinOpExpr(_, _, _)
             | zea::ExpressionKind::UnOpExpr(_, _)
             | zea::ExpressionKind::MemberAccess(_, _)
             | zea::ExpressionKind::IfThenElse(_)
             | zea::ExpressionKind::Block(_)
             | zea::ExpressionKind::UnScopedIdent(_) => todo!(),
-        }
+        }?;
+
+        trace!(
+            "\t\tinferred expression\n{}\nto be: {:?}",
+            expr.indent_print(0),
+            self.get_solved(res)
+        );
+        self.node_types.insert(expr.id, res);
+        Ok(res)
     }
 
     fn get_solved(&self, inf_var: TypeVariable) -> Result<&TypeSpecifier, TypeCheckError> {
@@ -612,6 +671,77 @@ impl ZeaTypeChecker {
             .get_solved(inf_var)
             .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(inf_var))?;
         self.type_interning_table.get_specifier_by_id(solved)
+    }
+
+    fn infer_expr_binop(
+        &mut self,
+        id: NodeId,
+        op: zea::BinOp,
+        l: &Expression,
+        r: &Expression,
+    ) -> Result<TypeVariable, TypeCheckError> {
+        let var = *self.get_inference_id(id);
+        let l_var = self.infer_expression(l)?;
+        let r_var = self.infer_expression(r)?;
+        let _l_t = self.get_solved(l_var)?.clone();
+        let r_t = self.get_solved(r_var)?.clone();
+        let bool_t = self.bool_t();
+        let u64_t = self.u64_t();
+        match op {
+            BinOp::Add
+            | BinOp::Sub
+            | BinOp::Mul
+            | BinOp::Div
+            | BinOp::Mod
+            | BinOp::BitAnd
+            | BinOp::BitOr
+            | BinOp::BitXor
+            | BinOp::Lsh
+            | BinOp::Rsh => {
+                self.hindley_milner_unify(l_var, r_var)?;
+                match r_t {
+                    TypeSpecifier::Integer { .. } => {
+                        self.hindley_milner_unify(var, r_var)?;
+                        Ok(r_var)
+                    }
+                    TypeSpecifier::Bool => {
+                        self.hindley_milner_unify(var, u64_t)?;
+                        Ok(u64_t)
+                    }
+                    _ => Err(TypeCheckError::InvalidOperands(id, op)),
+                }
+            }
+            BinOp::Subscript => todo!(),
+            BinOp::LT | BinOp::GT => {
+                self.hindley_milner_unify(l_var, r_var)?;
+                self.hindley_milner_unify(var, bool_t)?;
+                Ok(bool_t)
+            }
+            BinOp::Eq
+            | BinOp::Neq
+            | BinOp::Geq
+            | BinOp::Leq
+            | BinOp::LogAnd
+            | BinOp::LogOr
+            | BinOp::LogXor => {
+                self.hindley_milner_unify(r_var, bool_t)?;
+                self.hindley_milner_unify(l_var, r_var)?;
+                self.hindley_milner_unify(var, bool_t)?;
+                Ok(bool_t)
+            }
+        }
+    }
+
+    fn bool_t(&mut self) -> TypeVariable {
+        self.type_interning_table
+            .introduce(&TypeSpecifier::Bool)
+            .as_typevar(&mut self.typevar_interning_table)
+    }
+
+    fn u64_t(&mut self) -> TypeVariable {
+        self.type_interning_table
+            .introduce(&TypeSpecifier::t_U64())
+            .as_typevar(&mut self.typevar_interning_table)
     }
 }
 
