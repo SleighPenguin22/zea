@@ -140,7 +140,8 @@ The size of a union is that of its largest variant, the above example would have
 Unions can be used to cast pointers,
 thereby allowing you to interpret data as if it were of a different datatype. This is called *type-punning*
 
-See the below example, where the famous [Fast Inverse Square Root from Quake](en.wikipedia.org/wiki/Fast_inverse_square_root) is implemented using type-punning.
+See the below example, where the famous [Fast Inverse Square Root from Quake](en.wikipedia.org/wiki/Fast_inverse_square_root)
+is implemented using type-punning.
 
 ```
 union Helper {
@@ -165,7 +166,7 @@ fn Q-rsqrt(f: F64) -> F64 {
 
 #### Tagged unions
 As of right now, tagged unions are a construct developers must build themselves, leading to lots of boilerplate.
-We plan to implement tagged unions in a fshion similar to Rust somewhere in the future.
+We plan to implement tagged unions in a fashion similar to Rust somewhere in the future. Probably using some sort of syntax sugar.
 
 ### Namespaces
 A file may declare a module, which contains imports, exports, datatypes, functions and globally-scoped identifiers.
@@ -219,13 +220,13 @@ fn main(argv: [String]) -> U8 {
 } 
 ```
 
-The `:` operator has two uses, as a namespace-accessor, and as an instance-accessor.
-The language knows which one to use as Modules and Types always start with a capital letter,
-and identifiers always start with a lowercase letter.
+The `:` operator has two uses, as a namespace-accessor, or alternatively as an instance-accessor.
+It is always known from context which one is meant, as Modules and Types always start with a capital letter,
+while identifiers always start with a lowercase letter.
 `Foo:bar()` (module-call) calls the `bar()` function defined in the `Foo` module.
 
 `foo:bar()` (instance-call), in the case that `foo` is of type `Foo`,
-calls this same function, passing the variable `foo` as the first argument.
+this calls the same function, passing the variable `foo` as the first argument.
 
 In the case of an instance-call, Zea will infer which function to call by infering the type of the instance variable.
 You may then notice there are now two ways to operate on instances of types:
@@ -248,13 +249,14 @@ Foo:bar(foo);
 the use of instance-calls is encouraged.
 
 ## The Type System
-Zea approaches types in a manner more similar to functional Rust, where types have no modifiers,
+Zea approaches specifying types in a manner more similar to functional Rust, where types have no modifiers,
 instead a 'modified' type is considered a separate type.
 
 Take for instance the `unsigned` modifier in C, compared to the `I32` vs. `U32` types in Rust.
-This is done to make both the grammar of the language less ambiguous, and the code easier to understand in a glance.
+This is done to make both the grammar of the language less ambiguous, and to make the code easier to parse for humans.
 
 Zea uses the `var: Type = value` syntax instead of the `Type var = value` syntax. This makes omitting types more pretty: `var := value`,
 and makes the grammar rule for declarations simpler.
 
-As you might have inferred (hah, get it) from the above, Zea features type inference by a simplified Hindley Milner type system.
+As you might have inferred (hah, get it) from the above, Zea features type inference by a simplified Hindley Milner type system, Zea features inference without generics (yet?),
+which makes the type-checker simple (thank god).
