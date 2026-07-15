@@ -1,3 +1,5 @@
 module main
 
 b := false;
+a := true;
+c := 67;

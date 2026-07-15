@@ -181,6 +181,7 @@ impl TypeVariableInterningTable {
     }
 
     pub fn interned_type_as_variable(&mut self, interned_type: InternedTypeId) -> TypeVariable {
+        trace!("creating type variable for interned type {interned_type:?}");
         self.solved_variables
             .iter()
             // if some typevar has the given type, return that
@@ -190,6 +191,7 @@ impl TypeVariableInterningTable {
             .unwrap_or_else(|| self.generate_dummy_variable_with_type(interned_type))
     }
     fn generate_dummy_variable_with_type(&mut self, interned_type: InternedTypeId) -> TypeVariable {
+        trace!("\tsynthesizing type variable for interned type {interned_type:?}");
         let t_var = self.fresh_var();
         let _ = self.set_solved(t_var, interned_type);
         t_var
@@ -331,22 +333,24 @@ impl ZeaTypeChecker {
 
         'inner: for glob in module.global_vars.iter_mut() {
             match self.check_assignment(glob) {
-                Ok(_) | Err(TypeCheckError::ExpectedSolvedTypeVariable(_)) => continue 'inner,
+                Ok(_) => {}
+                Err(TypeCheckError::ExpectedSolvedTypeVariable(t)) => {
+                    trace!("TYPECHCEKER: insufficient information to solve type variable {t:?}, moving on...");
+                }
                 other => return other,
             }
+            trace!(
+                "TYPECHECKER: all type variables solved: {}",
+                self.all_vars_solved()
+            );
         }
         Ok(())
     }
 
     fn all_vars_solved(&self) -> bool {
-        self.typevar_interning_table
-            .disjoint_typevars()
+        dbg!(self.typevar_interning_table.disjoint_typevars())
             .iter()
-            .all(|t| {
-                self.typevar_interning_table
-                    .solved_variables
-                    .contains_key(t)
-            })
+            .all(|t| self.typevar_interning_table.get_solved(*t).is_some())
     }
 
     /// Get the type variable associated with some expression node,
@@ -354,7 +358,7 @@ impl ZeaTypeChecker {
     fn get_inference_id(&mut self, id: NodeId) -> &mut TypeVariable {
         self.node_types
             .entry(id)
-            .or_insert(self.typevar_interning_table.fresh_var())
+            .or_insert_with(|| self.typevar_interning_table.fresh_var())
     }
     fn solve_to_type(
         &mut self,
@@ -362,6 +366,7 @@ impl ZeaTypeChecker {
         typ: &TypeSpecifier,
     ) -> Result<(), TypeCheckError> {
         let t_id = self.type_interning_table.introduce(typ);
+        trace!("TYPECHCKER: solving type variable {inf_var:?} of literal to type {typ:?}");
         let _ = self.typevar_interning_table.set_solved(inf_var, t_id);
         Ok(())
     }
@@ -419,7 +424,6 @@ impl ZeaTypeChecker {
 
     fn introduce_module(&mut self, module: &Module) -> Result<(), TypeCheckError> {
         for glob in module.global_vars.iter() {
-            trace!("entering assignment:\n{}", glob.indent_print(0));
             self.introduce_assignment(glob);
         }
 
@@ -440,15 +444,17 @@ impl ZeaTypeChecker {
                         interned_type_id.as_typevar(&mut self.typevar_interning_table)
                     })
             }
-            (Some(a_conc), None) => {
-                self.typevar_interning_table.set_solved(b, a_conc)?;
-                Ok(a)
-            }
+            (Some(_), None) => self.hindley_milner_unify(b, a),
             (None, Some(b_conc)) => {
+                trace!(
+                    "TYPECHECKER: setting variable {a:?} to solved {:?}",
+                    self.type_interning_table.get_specifier_by_id(b_conc)
+                );
                 self.typevar_interning_table.set_solved(a, b_conc)?;
                 Ok(b)
             }
             (None, None) => {
+                trace!("TYPECHECKER: unifying variables {a:?} and {b:?}",);
                 self.typevar_interning_table.union(a, b)?;
                 Ok(self.typevar_interning_table.follow_var(a))
             }
@@ -538,6 +544,10 @@ impl ZeaTypeChecker {
             unreachable!("inits should be unpacked before type checking");
         };
         for init in inits.iter_mut() {
+            trace!(
+                "TYPECHEKER: checking simple assigment for symbol `{}`",
+                init.assignee
+            );
             self.check_simple_assignment(init)?;
         }
         Ok(())
@@ -562,6 +572,11 @@ impl ZeaTypeChecker {
                 .type_interning_table
                 .get_specifier_by_id(t_conc_id)?
                 .clone();
+            trace!(
+                "TYPECHECKER: annotating symbol `{:?}` with type {:?}",
+                assign.assignee,
+                t_conc
+            );
             assign.typ = Some(t_conc);
             self.symbol_types.insert(assign.id, t_conc_id);
         }
@@ -573,7 +588,11 @@ impl ZeaTypeChecker {
             zea::ExpressionKind::IntegerLiteral(_)
             | zea::ExpressionKind::BoolLiteral(_)
             | zea::ExpressionKind::FloatLiteral(_)
-            | zea::ExpressionKind::Unit => Ok(*self.get_inference_id(expr.id)),
+            | zea::ExpressionKind::Unit => {
+                let id = *self.get_inference_id(expr.id);
+                trace!("TYPECHECKER: inferring literal yields existing type variable");
+                Ok(id)
+            }
 
             zea::ExpressionKind::StringLiteral(_)
             | zea::ExpressionKind::ScopedIdent(_)
