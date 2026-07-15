@@ -21,6 +21,7 @@
 /// The [`visitors::altering::BareNodeLabeler`] visitor
 /// grants a unique ID to node with a sentinel ID.
 use crate::helper_impls::StructuralEq;
+use crate::zea::visitors::Visitor;
 
 mod typecheck;
 pub use typecheck::typecheck_module;
@@ -355,7 +356,54 @@ impl Display for NodeId {
     }
 }
 
-#[derive(Default, Debug)]
+pub enum ZeaASTNode {
+    Module(Module),
+    Function(Function),
+    Block(BlockExpression),
+    Branch(IfThenElse),
+    Expression(Expression),
+}
+
+struct ZeaNodeQuery {
+    id: NodeId,
+}
+impl ZeaNodeQuery {
+    pub fn query_node_with_id(id: NodeId, module: &Module) -> Option<ZeaASTNode> {
+        let mut s = Self { id };
+        match s.visit_module(module) {
+            Ok(Some(n)) => Some(n),
+            _ => None,
+        }
+    }
+}
+
+macro_rules! variant_to_some {
+    ($selfT:ident, $self:ident, $variantname:ident) => {
+        match $self {
+            $selfT::$variantname(var) => Some(var),
+            _ => None,
+        }
+    };
+}
+impl ZeaASTNode {
+    pub fn as_module(self) -> Option<Module> {
+        variant_to_some!(Self, self, Module)
+    }
+    pub fn as_block(self) -> Option<BlockExpression> {
+        variant_to_some!(Self, self, Block)
+    }
+    pub fn as_function(self) -> Option<Function> {
+        variant_to_some!(Self, self, Function)
+    }
+    pub fn as_branch(self) -> Option<IfThenElse> {
+        variant_to_some!(Self, self, Branch)
+    }
+    pub fn as_expr(self) -> Option<Expression> {
+        variant_to_some!(Self, self, Expression)
+    }
+}
+
+#[derive(Default, Debug, Clone)]
 pub struct Module {
     pub id: NodeId,
     pub imports: Vec<String>,

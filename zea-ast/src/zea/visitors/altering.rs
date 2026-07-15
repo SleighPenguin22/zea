@@ -10,9 +10,12 @@ use crate::zea::{
     IfThenElse, InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
     Reassignment, SimpleInitialization, Statement, StructDataTypeDefinition,
 };
+use crate::ZeaError;
 use indexmap::set::MutableValues;
 use indexmap::IndexSet;
 use std::collections::HashMap;
+use std::process::exit;
+use zea_internal_macros::VariantToStr;
 
 pub trait NodeLabeler: Sized {
     /// Start `Self`'s id-generator with the last id that `other_generator` used,
@@ -247,7 +250,8 @@ impl BlockScopeIndex {
         self.0 == 0
     }
 }
-
+/// A lexical scope within a block-like node,
+/// keeping track of all identifiers introduced within the scope
 #[derive(Eq, Hash, PartialEq, Debug)]
 pub struct BlockScope {
     /// The node that created this scope; a link to a [`BlockExpression`]
@@ -258,6 +262,14 @@ pub struct BlockScope {
     /// can be used to check if an identifier has been declared at a point in the block.
     introductions: Vec<ScopedIdentifier>,
     children: Vec<BlockScopeIndex>,
+    kind: ScopeKind,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, VariantToStr)]
+enum ScopeKind {
+    Function,
+    Block,
+    BranchTwig,
+    Global,
 }
 
 impl BlockScope {
@@ -267,6 +279,7 @@ impl BlockScope {
             parent,
             introductions: vec![],
             children: vec![],
+            kind: ScopeKind::Block,
         }
     }
     pub fn add_child(&mut self, idx: BlockScopeIndex) -> &mut Self {
@@ -289,15 +302,52 @@ impl BlockScope {
 /// and then replaces all occurences of Expression::UnscopedIdent with an
 /// Expression::ScopedIdent.
 pub struct IdentifierScoper {
-    /// map an Ident-expression to a BlockScope and the nearest enclosing block.
+    /// The scope-path to the currently analyzed scope
     scope_stack: Vec<BlockScopeIndex>,
+    /// A set of all unique within the program
     scope_arena: IndexSet<BlockScope>,
+    /// map an Ident-expression to a BlockScope and the nearest enclosing block.
     node_to_scope: HashMap<NodeId, BlockScopeIndex>,
 }
 #[derive(Debug)]
 pub struct NotInScopeError {
     ident: String,
     scope_stack_top: BlockScopeIndex,
+}
+
+impl ZeaError for NotInScopeError {
+    type ErrContext = (IdentifierScoper, Module);
+    fn zea_error_format(&self, ctx: &Self::ErrContext) -> String {
+        let (scope_ctx, _module) = ctx;
+        let origin = scope_ctx.get(self.scope_stack_top);
+        let ident = &self.ident;
+        let pretty_scope_kind = scopekind_to_pretty_string(origin.kind);
+        format!(
+            "identifier `{ident}` not found within this scope\n\
+            within {pretty_scope_kind}"
+        )
+    }
+}
+
+fn scopekind_to_pretty_string(scopekind: ScopeKind) -> &'static str {
+    match scopekind {
+        ScopeKind::Function => "function",
+        ScopeKind::Block => "block",
+        ScopeKind::BranchTwig => "branch",
+        ScopeKind::Global => "global scope",
+    }
+}
+
+pub fn scope_module(mut module: Module) -> Module {
+    let mut scoper = IdentifierScoper::new(&module);
+    match scoper.visit_module(&mut module) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("{}", e.zea_error_format(&(scoper, module)));
+            exit(1)
+        }
+    }
+    module
 }
 
 impl Transfomer for IdentifierScoper {
@@ -325,7 +375,7 @@ impl Transfomer for IdentifierScoper {
         &mut self,
         block: &mut BlockExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        self.enter_scope(block.id);
+        self.enter_scope(block.id, ScopeKind::Block);
         walk_mut_block(self, block)?;
         self.exit_scope();
         Ok(())
@@ -367,7 +417,7 @@ impl Transfomer for IdentifierScoper {
         &mut self,
         funcdef: &mut Function,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        let scope = self.enter_scope(funcdef.body.id);
+        let scope = self.enter_scope(funcdef.body.id, ScopeKind::Function);
         for param in funcdef.params.iter() {
             scope.add_introduction(ScopedIdentifier::from_func_param(param));
         }
@@ -413,6 +463,7 @@ impl IdentifierScoper {
             parent: BlockScopeIndex::sentinel(),
             introductions: vec![],
             children: vec![],
+            kind: ScopeKind::Global,
         };
 
         let global_scope = BlockScope {
@@ -420,10 +471,10 @@ impl IdentifierScoper {
             parent: BlockScopeIndex::sentinel(),
             introductions: vec![],
             children: vec![],
+            kind: ScopeKind::Global,
         };
         self.scope_arena.insert(dummy_scope);
         self.scope_arena.insert(global_scope);
-        eprint!("{:?}", self.scope_arena);
 
         self.scope_stack.push(BlockScopeIndex(1));
         self.scope_arena
@@ -441,13 +492,14 @@ impl IdentifierScoper {
             .expect("invalid block scope index")
     }
 
-    fn enter_scope(&mut self, origin: NodeId) -> &mut BlockScope {
+    fn enter_scope(&mut self, origin: NodeId, kind: ScopeKind) -> &mut BlockScope {
         let parent = BlockScopeIndex(self.scope_stack.len() as u32 - 1);
         let scope = BlockScope {
             origin,
             parent,
             introductions: Vec::with_capacity(8),
             children: Vec::with_capacity(4),
+            kind,
         };
         let (idx, _duplicate) = self.scope_arena.insert_full(scope);
         let idx = BlockScopeIndex(idx as u32);
@@ -502,7 +554,7 @@ impl IdentifierScoper {
     /// as the non-block path will never be taken given the current parser implementation.
     fn visit_branch_twig(&mut self, twig: &mut Expression) -> Result<(), NotInScopeError> {
         if let Some(twig) = branch_twig_as_block(twig) {
-            self.enter_scope(twig.id);
+            self.enter_scope(twig.id, ScopeKind::BranchTwig);
             self.visit_block(twig)?;
             self.exit_scope();
         } else {

@@ -1,4 +1,6 @@
 #![allow(clippy::new_without_default)]
+use std::ops::BitAnd;
+
 use crate::helper_impls::StructuralEq;
 use crate::zea::visitors::{
     walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init, Visitor,
@@ -6,7 +8,7 @@ use crate::zea::visitors::{
 use crate::zea::{
     BlockExpression, Expression, ExpressionKind, FuncParam, Function, FunctionCall, IfThenElse,
     InitializationBlock, InitializationKind, Module, NodeId, PackedInitialization,
-    SimpleInitialization, Statement, StatementKind,
+    SimpleInitialization, Statement, StatementKind, ZeaASTNode, ZeaNodeQuery,
 };
 use indexmap::{IndexMap, IndexSet};
 
@@ -183,7 +185,7 @@ impl ScopeAnnotations {
             ExpressionKind::MemberAccess(data, _) => self.gather_idents_expr(data),
             ExpressionKind::IfThenElse(ite) => self.gather_idents_branch(ite),
             ExpressionKind::Block(eb) => self.gather_idents_block(eb),
-            ExpressionKind::ScopedIdent(_) => todo!("gather scoped ident"),
+            ExpressionKind::ScopedIdent(_) => {}
         }
     }
     fn gather_idents_call(&mut self, call: &FunctionCall) {
@@ -269,5 +271,87 @@ impl Visitor for ExpressionCollector {
         _branch: &IfThenElse,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         todo!("cannot yet collect expressions in branches")
+    }
+}
+
+impl Visitor for ZeaNodeQuery {
+    type VisitorError = ();
+    type VisitorOk = Option<ZeaASTNode>;
+    fn visit_branch(&mut self, branch: &IfThenElse) -> Result<Self::VisitorOk, Self::VisitorError> {
+        (self.id == branch.id)
+            .then_some(Some(ZeaASTNode::Branch(branch.clone())))
+            .or_else(|| self.visit_expr(&branch.condition).ok())
+            .or_else(|| self.visit_expr(&branch.true_case).ok())
+            .or_else(|| {
+                if let Some(twig) = &branch.false_case {
+                    self.visit_expr(twig.as_ref()).ok()
+                } else {
+                    None
+                }
+            })
+            .ok_or(())
+    }
+    fn visit_block(
+        &mut self,
+        block: &BlockExpression,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        (self.id == block.id)
+            .then_some(Some(ZeaASTNode::Block(block.clone())))
+            .or_else(|| {
+                block
+                    .statements
+                    .iter()
+                    .find_map(|stmt| self.visit_stmt(stmt).ok())
+            })
+            .or_else(|| self.visit_expr(&block.last).ok())
+            .ok_or(())
+    }
+    fn visit_module(&mut self, module: &Module) -> Result<Self::VisitorOk, Self::VisitorError> {
+        (self.id == module.id)
+            .then_some(Some(ZeaASTNode::Module(module.clone())))
+            .or_else(|| {
+                module
+                    .global_vars
+                    .iter()
+                    .find_map(|glob| self.visit_initblock(glob).ok())
+            })
+            .or_else(|| {
+                module
+                    .functions
+                    .iter()
+                    .find_map(|f| self.visit_funcdef(f).ok())
+            })
+            .or_else(|| {
+                module
+                    .struct_definitions
+                    .iter()
+                    .find_map(|s| self.visit_structdef(s).ok())
+            })
+            .ok_or(())
+    }
+    fn visit_expr(&mut self, expr: &Expression) -> Result<Self::VisitorOk, Self::VisitorError> {
+        if self.id == expr.id {
+            Ok(Some(ZeaASTNode::Expression(expr.clone())))
+        } else {
+            match &expr.kind {
+                ExpressionKind::Unit
+                | ExpressionKind::IntegerLiteral(_)
+                | ExpressionKind::BoolLiteral(_)
+                | ExpressionKind::FloatLiteral(_)
+                | ExpressionKind::StringLiteral(_)
+                | ExpressionKind::UnScopedIdent(_) => Ok(None),
+                ExpressionKind::ScopedIdent(_) => Ok(None),
+                ExpressionKind::FunctionCall(function_call) => self.visit_call(function_call),
+                ExpressionKind::BinOpExpr(_, expression, expression1) => self
+                    .visit_expr(expression)
+                    .ok()
+                    .or_else(|| self.visit_expr(expression1).ok())
+                    .ok_or(()),
+                ExpressionKind::UnOpExpr(_, expression) => self.visit_expr(expression),
+                ExpressionKind::MemberAccess(expression, _) => self.visit_expr(expression),
+                ExpressionKind::IfThenElse(if_then_else) => self.visit_branch(if_then_else),
+                ExpressionKind::Block(block_expression) => self.visit_block(block_expression),
+            }
+        }
     }
 }
