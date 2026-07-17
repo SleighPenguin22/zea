@@ -19,7 +19,7 @@ use zea_ipr::zea::BareNodeLabeler;
 use zea_ipr::zea::visitors::annotating::SemanticASTViolation;
 
 use zea_ipr::zea::immediate_parsed_representation::*;
-use zea_ipr::zea::visitors::Transfomer;
+use zea_ipr::zea::visitors::IPRTransfomer;
 pub fn parse_module(src: &'_ str) -> (IPRModule, BareNodeLabeler) {
     let p = ModuleParser::new();
     info!("parsing source file...");

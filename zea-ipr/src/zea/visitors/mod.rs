@@ -100,7 +100,7 @@ pub trait IPRVisitor: Sized {
         walk_assignpat(self, pattern)
     }
 }
-pub trait Transfomer: Sized {
+pub trait IPRTransfomer: Sized {
     type TransformerError;
     type TransformerOk: Default;
     fn visit_expr(
@@ -411,7 +411,7 @@ fn walk_module<V: IPRVisitor>(
     Ok(V::VisitorOk::default())
 }
 
-fn walk_mut_expr<V: Transfomer>(
+fn walk_mut_expr<V: IPRTransfomer>(
     v: &mut V,
     e: &mut IPRExpression,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -448,7 +448,7 @@ fn walk_mut_expr<V: Transfomer>(
     };
     Ok(V::TransformerOk::default())
 }
-fn walk_mut_stmt<V: Transfomer>(
+fn walk_mut_stmt<V: IPRTransfomer>(
     v: &mut V,
     s: &mut IPRStatement,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -463,14 +463,14 @@ fn walk_mut_stmt<V: Transfomer>(
     }
 }
 
-fn walk_mut_reassignment<V: Transfomer>(
+fn walk_mut_reassignment<V: IPRTransfomer>(
     v: &mut V,
     r: &mut IPRReassignment,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_expr(&mut r.value)
 }
 
-fn walk_mut_branch<V: Transfomer>(
+fn walk_mut_branch<V: IPRTransfomer>(
     v: &mut V,
     b: &mut IPRBranch,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -481,7 +481,7 @@ fn walk_mut_branch<V: Transfomer>(
     }
     Ok(V::TransformerOk::default())
 }
-fn walk_mut_call<V: Transfomer>(
+fn walk_mut_call<V: IPRTransfomer>(
     v: &mut V,
     c: &mut IPRFunctionCall,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -492,7 +492,7 @@ fn walk_mut_call<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_block<V: Transfomer>(
+fn walk_mut_block<V: IPRTransfomer>(
     v: &mut V,
     block: &mut IPRBlockExpression,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -502,7 +502,7 @@ fn walk_mut_block<V: Transfomer>(
     v.visit_expr(&mut block.last)
 }
 
-fn walk_mut_assignpat<V: Transfomer>(
+fn walk_mut_assignpat<V: IPRTransfomer>(
     v: &mut V,
     pat: &mut IPRAssignmentPattern,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -517,7 +517,7 @@ fn walk_mut_assignpat<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_type<V: Transfomer>(
+fn walk_mut_type<V: IPRTransfomer>(
     v: &mut V,
     typ: &mut IPRTypeSpecifier,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -538,7 +538,7 @@ fn walk_mut_type<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_packed_init<V: Transfomer>(
+fn walk_mut_packed_init<V: IPRTransfomer>(
     v: &mut V,
     init: &mut IPRPackedInitialization,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -550,7 +550,7 @@ fn walk_mut_packed_init<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_punpacked_init<V: Transfomer>(
+fn walk_mut_punpacked_init<V: IPRTransfomer>(
     v: &mut V,
     init: &mut IPRPartiallyUnpackedInitialization,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -561,7 +561,7 @@ fn walk_mut_punpacked_init<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_unpacked_init<V: Transfomer>(
+fn walk_mut_unpacked_init<V: IPRTransfomer>(
     v: &mut V,
     init: &mut IPRSimpleInitialization,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -572,7 +572,7 @@ fn walk_mut_unpacked_init<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_initblock<V: Transfomer>(
+fn walk_mut_initblock<V: IPRTransfomer>(
     v: &mut V,
     init: &mut IPRInitializationBlock,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -587,7 +587,7 @@ fn walk_mut_initblock<V: Transfomer>(
     }
 }
 
-fn walk_mut_funcdef<V: Transfomer>(
+fn walk_mut_funcdef<V: IPRTransfomer>(
     v: &mut V,
     f: &mut IPRFunction,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -599,7 +599,7 @@ fn walk_mut_funcdef<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_structdef<V: Transfomer>(
+fn walk_mut_structdef<V: IPRTransfomer>(
     v: &mut V,
     s: &mut IPRStructDataTypeDefinition,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -609,7 +609,7 @@ fn walk_mut_structdef<V: Transfomer>(
     Ok(V::TransformerOk::default())
 }
 
-fn walk_mut_module<V: Transfomer>(
+fn walk_mut_module<V: IPRTransfomer>(
     v: &mut V,
     module: &mut IPRModule,
 ) -> Result<V::TransformerOk, V::TransformerError> {
@@ -633,7 +633,7 @@ impl IPRModule {
         v.visit_module(self).map(|_| v)
     }
 
-    pub fn transform_self_with<V: Transfomer + NodeLabeler>(
+    pub fn transform_self_with<V: IPRTransfomer + NodeLabeler>(
         &mut self,
         labeler: impl NodeLabeler,
     ) -> Result<V, V::TransformerError> {

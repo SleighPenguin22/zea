@@ -3,7 +3,7 @@ use crate::zea::visitors::annotating::IPRScopedIdentifier;
 use crate::zea::visitors::{
     walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef,
     walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef,
-    walk_mut_unpacked_init, Transfomer,
+    walk_mut_unpacked_init, IPRTransfomer,
 };
 use crate::zea::{immediate_parsed_representation::*, NodeId};
 use crate::ZeaError;
@@ -59,7 +59,7 @@ impl NodeLabeler for BareNodeLabeler {
     }
 }
 
-impl Transfomer for BareNodeLabeler {
+impl IPRTransfomer for BareNodeLabeler {
     type TransformerOk = ();
     type TransformerError = ();
     fn visit_block(
@@ -166,7 +166,7 @@ impl NodeLabeler for AssignmentSimplifier {
     }
 }
 
-impl Transfomer for AssignmentSimplifier {
+impl IPRTransfomer for AssignmentSimplifier {
     type TransformerError = ();
     type TransformerOk = ();
     fn visit_initblock(
@@ -352,7 +352,7 @@ pub fn scope_module(mut module: IPRModule) -> IPRModule {
     module
 }
 
-impl Transfomer for IdentifierScoper {
+impl IPRTransfomer for IdentifierScoper {
     type TransformerError = NotInScopeError;
     type TransformerOk = ();
     fn visit_expr(
@@ -568,7 +568,7 @@ impl IdentifierScoper {
 
 #[cfg(test)]
 mod tests {
-    use crate::zea::visitors::Transfomer;
+    use crate::zea::visitors::IPRTransfomer;
     use crate::zea::*;
     use crate::zea::{IPRModule, NodeLabeler};
     use zea_parser::zepast;

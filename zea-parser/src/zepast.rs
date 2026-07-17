@@ -66,84 +66,84 @@ impl fmt::Display for ParseError {
 // Free helpers — node construction (all use NodeId::sentinel())
 // ---------------------------------------------------------------------------
 
-fn expr_binop(op: BinOp, left: HIRExpression, right: HIRExpression) -> HIRExpression {
-    HIRExpression {
+fn expr_binop(op: BinOp, left: IPRExpression, right: IPRExpression) -> IPRExpression {
+    IPRExpression {
         id: NodeId::sentinel(),
-        kind: HIRExpressionKind::BinOpExpr(op, Box::new(left), Box::new(right)),
+        kind: IPRExpressionKind::BinOpExpr(op, Box::new(left), Box::new(right)),
     }
 }
-fn expr_unop(op: UnOp, arg: HIRExpression) -> HIRExpression {
-    HIRExpression {
+fn expr_unop(op: UnOp, arg: IPRExpression) -> IPRExpression {
+    IPRExpression {
         id: NodeId::sentinel(),
-        kind: HIRExpressionKind::UnOpExpr(op, Box::new(arg)),
+        kind: IPRExpressionKind::UnOpExpr(op, Box::new(arg)),
     }
 }
-fn expr_member_access(subject: HIRExpression, field: String) -> HIRExpression {
-    HIRExpression {
+fn expr_member_access(subject: IPRExpression, field: String) -> IPRExpression {
+    IPRExpression {
         id: NodeId::sentinel(),
-        kind: HIRExpressionKind::MemberAccess(Box::new(subject), field),
+        kind: IPRExpressionKind::MemberAccess(Box::new(subject), field),
     }
 }
-fn expr_block(block: HIRBlockExpression) -> HIRExpression {
-    HIRExpression {
+fn expr_block(block: IPRBlockExpression) -> IPRExpression {
+    IPRExpression {
         id: NodeId::sentinel(),
-        kind: HIRExpressionKind::Block(Box::new(block)),
-    }
-}
-
-fn stmt_ret(expr: HIRExpression) -> HIRStatement {
-    HIRStatement {
-        id: NodeId::sentinel(),
-        kind: HIRStatementKind::Return(expr),
-    }
-}
-fn stmt_tail(expr: HIRExpression) -> HIRStatement {
-    HIRStatement {
-        id: NodeId::sentinel(),
-        kind: HIRStatementKind::BlockTail(expr),
-    }
-}
-fn stmt_block(block: HIRBlockExpression) -> HIRStatement {
-    HIRStatement {
-        id: NodeId::sentinel(),
-        kind: HIRStatementKind::Block(block),
-    }
-}
-fn stmt_call(call: HIRFunctionCall) -> HIRStatement {
-    HIRStatement {
-        id: NodeId::sentinel(),
-        kind: HIRStatementKind::FunctionCall(call),
-    }
-}
-fn stmt_init_packed(packed: HIRPackedInitialization) -> HIRStatement {
-    HIRStatement {
-        id: NodeId::sentinel(),
-        kind: HIRStatementKind::Initialization(init_packed(packed)),
-    }
-}
-fn stmt_init_unpacked(inits: Vec<HIRSimpleInitialization>) -> HIRStatement {
-    HIRStatement {
-        id: NodeId::sentinel(),
-        kind: HIRStatementKind::Initialization(init_unpacked(inits)),
-    }
-}
-fn stmt_if_then_else(ite: HIRBranch) -> HIRStatement {
-    HIRStatement {
-        id: NodeId::sentinel(),
-        kind: HIRStatementKind::IfThenElse(ite),
+        kind: IPRExpressionKind::Block(Box::new(block)),
     }
 }
 
-fn init_packed(packed: HIRPackedInitialization) -> IPRInitializationBlock {
-    IPRInitializationBlock {
+fn stmt_ret(expr: IPRExpression) -> IPRStatement {
+    IPRStatement {
         id: NodeId::sentinel(),
-        kind: HIRInitializationKind::Packed(packed),
+        kind: IPRStatementKind::Return(expr),
     }
 }
-fn init_unpacked(inits: Vec<HIRSimpleInitialization>) -> IPRInitializationBlock {
+fn stmt_tail(expr: IPRExpression) -> IPRStatement {
+    IPRStatement {
+        id: NodeId::sentinel(),
+        kind: IPRStatementKind::BlockTail(expr),
+    }
+}
+fn stmt_block(block: IPRBlockExpression) -> IPRStatement {
+    IPRStatement {
+        id: NodeId::sentinel(),
+        kind: IPRStatementKind::Block(block),
+    }
+}
+fn stmt_call(call: IPRFunctionCall) -> IPRStatement {
+    IPRStatement {
+        id: NodeId::sentinel(),
+        kind: IPRStatementKind::FunctionCall(call),
+    }
+}
+fn stmt_init_packed(packed: IPRPackedInitialization) -> IPRStatement {
+    IPRStatement {
+        id: NodeId::sentinel(),
+        kind: IPRStatementKind::Initialization(init_packed(packed)),
+    }
+}
+fn stmt_init_unpacked(inits: Vec<IPRSimpleInitialization>) -> IPRStatement {
+    IPRStatement {
+        id: NodeId::sentinel(),
+        kind: IPRStatementKind::Initialization(init_unpacked(inits)),
+    }
+}
+fn stmt_if_then_else(ite: IPRBranch) -> IPRStatement {
+    IPRStatement {
+        id: NodeId::sentinel(),
+        kind: IPRStatementKind::IfThenElse(ite),
+    }
+}
+
+fn init_packed(packed: IPRPackedInitialization) -> IPRInitializationBlock {
     IPRInitializationBlock {
         id: NodeId::sentinel(),
-        kind: HIRInitializationKind::Unpacked(inits),
+        kind: IPRInitializationKind::Packed(packed),
+    }
+}
+fn init_unpacked(inits: Vec<IPRSimpleInitialization>) -> IPRInitializationBlock {
+    IPRInitializationBlock {
+        id: NodeId::sentinel(),
+        kind: IPRInitializationKind::Unpacked(inits),
     }
 }
 
@@ -194,10 +194,10 @@ fn _parse_module(src: &str) -> Result<IPRModule, ParseError> {
 ///     lit_int(1)
 ///   @unit
 /// ```
-pub fn parse_expression(src: &str) -> HIRExpression {
+pub fn parse_expression(src: &str) -> IPRExpression {
     _parse_expression(src).unwrap_or_else(|e| panic!("{e}"))
 }
-fn _parse_expression(src: &str) -> Result<HIRExpression, ParseError> {
+fn _parse_expression(src: &str) -> Result<IPRExpression, ParseError> {
     let mut p = ZeaPrettyAstParser::new(src);
     let expr = p.parse_expr(0)?;
     p.expect_end()?;
@@ -212,11 +212,11 @@ fn _parse_expression(src: &str) -> Result<HIRExpression, ParseError> {
 ///     lit_int(1)
 ///   @unit
 /// ```
-pub fn parse_block(src: &str) -> HIRBlockExpression {
+pub fn parse_block(src: &str) -> IPRBlockExpression {
     _parse_block(src).unwrap_or_else(|e| panic!("{e}"))
 }
 
-fn _parse_block(src: &str) -> Result<HIRBlockExpression, ParseError> {
+fn _parse_block(src: &str) -> Result<IPRBlockExpression, ParseError> {
     let mut p = ZeaPrettyAstParser::new(src);
     p.expect_line(0, "block")?;
     let block = p.parse_block_expr(0)?;
@@ -230,11 +230,11 @@ fn _parse_block(src: &str) -> Result<HIRBlockExpression, ParseError> {
 /// - return
 ///   lit_int(42)
 /// ```
-pub fn parse_statement(src: &str) -> HIRStatement {
+pub fn parse_statement(src: &str) -> IPRStatement {
     _parse_statement(src).unwrap_or_else(|e| panic!("{e}"))
 }
 
-fn _parse_statement(src: &str) -> Result<HIRStatement, ParseError> {
+fn _parse_statement(src: &str) -> Result<IPRStatement, ParseError> {
     let mut p = ZeaPrettyAstParser::new(src);
     let (d, c) = p.peek().ok_or(ParseError::UnexpectedEndOfInput {
         expected: "statement starting with `- `".into(),
@@ -443,14 +443,14 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .value            -- depth + 1
     ///     <expr>          -- depth + 2
     /// ```
-    fn parse_packed_init(&mut self, depth: usize) -> Result<HIRPackedInitialization, ParseError> {
+    fn parse_packed_init(&mut self, depth: usize) -> Result<IPRPackedInitialization, ParseError> {
         self.expect_line(depth + 1, ".pattern")?;
         let assignee = self.parse_assign_pattern(depth + 2)?;
         self.expect_line(depth + 1, ".type")?;
         let typ = self.parse_type_opt(depth + 2)?;
         self.expect_line(depth + 1, ".value")?;
         let value = self.parse_expr(depth + 2)?;
-        Ok(HIRPackedInitialization {
+        Ok(IPRPackedInitialization {
             assignee,
             typ,
             value,
@@ -470,7 +470,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     fn parse_init_unpacked_list(
         &mut self,
         depth: usize,
-    ) -> Result<Vec<HIRSimpleInitialization>, ParseError> {
+    ) -> Result<Vec<IPRSimpleInitialization>, ParseError> {
         let mut items = Vec::new();
         loop {
             match self.peek() {
@@ -495,14 +495,14 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .value            -- depth + 1
     ///     <expr>          -- depth + 2
     /// ```
-    fn parse_simple_init(&mut self, depth: usize) -> Result<HIRSimpleInitialization, ParseError> {
+    fn parse_simple_init(&mut self, depth: usize) -> Result<IPRSimpleInitialization, ParseError> {
         self.expect_line(depth + 1, ".assignee")?;
         let assignee = self.parse_string_at(depth + 2)?;
         self.expect_line(depth + 1, ".type")?;
         let typ = self.parse_type_opt(depth + 2)?;
         self.expect_line(depth + 1, ".value")?;
         let value = self.parse_expr(depth + 2)?;
-        Ok(HIRSimpleInitialization {
+        Ok(IPRSimpleInitialization {
             id: NodeId::sentinel(),
             assignee,
             typ,
@@ -523,7 +523,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   <pat>             -- depth + 1
     /// )                   -- depth
     /// ```
-    fn parse_assign_pattern(&mut self, depth: usize) -> Result<HIRAssignmentPattern, ParseError> {
+    fn parse_assign_pattern(&mut self, depth: usize) -> Result<IPRAssignmentPattern, ParseError> {
         let content = self.expect_at_depth(depth, "assignment pattern")?;
         if content == "(" {
             self.advance();
@@ -533,7 +533,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
                     // Closing paren is at the same depth as the opening one.
                     Some((dd, cc)) if dd == depth && cc == ")" => {
                         self.advance();
-                        return Ok(HIRAssignmentPattern::Tuple(pats));
+                        return Ok(IPRAssignmentPattern::Tuple(pats));
                     }
                     // Sub-patterns are one level deeper.
                     Some((dd, _)) if dd == depth + 1 => {
@@ -555,7 +555,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
             }
         } else {
             self.advance();
-            Ok(HIRAssignmentPattern::Identifier(content.to_string()))
+            Ok(IPRAssignmentPattern::Identifier(content.to_string()))
         }
     }
 
@@ -567,7 +567,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///
     /// The special string `@unknown` represents `None`.
     /// Everything else is delegated to `parse_type_string`.
-    fn parse_type_opt(&mut self, depth: usize) -> Result<Option<HIRTypeSpecifier>, ParseError> {
+    fn parse_type_opt(&mut self, depth: usize) -> Result<Option<IPRTypeSpecifier>, ParseError> {
         let content = self.expect_at_depth(depth, "type")?;
         if content == "@unknown" {
             self.advance();
@@ -612,7 +612,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         self.expect_line(depth + 1, ".returns")?;
         let returns = self
             .parse_type_opt(depth + 2)?
-            .unwrap_or(HIRTypeSpecifier::Unit);
+            .unwrap_or(IPRTypeSpecifier::Unit);
 
         self.expect_line(depth + 1, ".params")?;
         let params = self.parse_param_list(depth + 2)?;
@@ -664,7 +664,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         Ok(IPRFuncParam {
             id: NodeId::sentinel(),
             name,
-            typ: typ.unwrap_or(HIRTypeSpecifier::Unit),
+            typ: typ.unwrap_or(IPRTypeSpecifier::Unit),
         })
     }
 
@@ -675,7 +675,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// Parse a statement given its kind string (the content after `- `).
     ///
     /// `depth` is the depth of the `- <kind>` line itself.
-    fn parse_stmt_content(&mut self, kind: &str, depth: usize) -> Result<HIRStatement, ParseError> {
+    fn parse_stmt_content(&mut self, kind: &str, depth: usize) -> Result<IPRStatement, ParseError> {
         match kind {
             "return" => Ok(stmt_ret(self.parse_expr(depth + 1)?)),
             "tail" => Ok(stmt_tail(self.parse_expr(depth + 1)?)),
@@ -699,7 +699,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// Parse any expression at the given depth.
     ///
     /// Consumes the current line, then delegates to [`parse_expr_content`].
-    fn parse_expr(&mut self, depth: usize) -> Result<HIRExpression, ParseError> {
+    fn parse_expr(&mut self, depth: usize) -> Result<IPRExpression, ParseError> {
         let content = self.expect_at_depth(depth, "expression")?;
         let line = self.cursor;
         self.advance();
@@ -719,13 +719,13 @@ impl<'a> ZeaPrettyAstParser<'a> {
         content: &str,
         depth: usize,
         line: usize,
-    ) -> Result<HIRExpression, ParseError> {
+    ) -> Result<IPRExpression, ParseError> {
         // ident("name")
         if let Some(name) = content.strip_prefix("ident(") {
             let ident = name
                 .strip_suffix(')')
                 .ok_or_else(|| err_unexpected("ident(name)", content, line))?;
-            return Ok(HIRExpression::ident(ident.to_string()));
+            return Ok(IPRExpression::ident(ident.to_string()));
         }
 
         // lit_int(123)
@@ -736,7 +736,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
             let val: usize = n
                 .parse()
                 .map_err(|_| err_unexpected("integer literal", content, line))?;
-            return Ok(HIRExpression::wrap_lit_int(val));
+            return Ok(IPRExpression::wrap_lit_int(val));
         }
 
         // lit_float(3.14)
@@ -747,12 +747,12 @@ impl<'a> ZeaPrettyAstParser<'a> {
             let val: f64 = n
                 .parse()
                 .map_err(|_| err_unexpected("float literal", content, line))?;
-            return Ok(HIRExpression::wrap_lit_float(val));
+            return Ok(IPRExpression::wrap_lit_float(val));
         }
 
         // Keywords / compound expressions
         match content {
-            "@unit" => return Ok(HIRExpression::unit()),
+            "@unit" => return Ok(IPRExpression::unit()),
             "block" => {
                 let block = self.parse_block_expr(depth)?;
                 return Ok(expr_block(block));
@@ -797,7 +797,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// operator`Neg`        -- depth (already consumed)
     ///   <arg>              -- depth + 1
     /// ```
-    fn parse_operator_expr(&mut self, op: &str, depth: usize) -> Result<HIRExpression, ParseError> {
+    fn parse_operator_expr(&mut self, op: &str, depth: usize) -> Result<IPRExpression, ParseError> {
         if is_binop(op) {
             let binop = parse_binop(op)?;
             let left = self.parse_expr(depth + 1)?;
@@ -819,7 +819,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .member            -- depth + 1
     ///     <field_name>     -- depth + 2
     /// ```
-    fn parse_expr_member(&mut self, depth: usize) -> Result<HIRExpression, ParseError> {
+    fn parse_expr_member(&mut self, depth: usize) -> Result<IPRExpression, ParseError> {
         let expr = self.parse_expr(depth + 1)?;
         self.expect_line(depth + 1, ".member")?;
         let member = self.parse_string_at(depth + 2)?;
@@ -837,7 +837,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// - Lines starting with `- ` are statements.
     /// - A line without `- ` is the block's last expression.
     /// - A line at a shallower depth signals an implicit `()` last expression.
-    fn parse_block_expr(&mut self, depth: usize) -> Result<HIRBlockExpression, ParseError> {
+    fn parse_block_expr(&mut self, depth: usize) -> Result<IPRBlockExpression, ParseError> {
         let mut statements = Vec::new();
         loop {
             match self.peek() {
@@ -850,7 +850,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
                 // Last expression (no `- ` prefix)
                 Some((d, _)) if d == depth + 1 => {
                     let expr = self.parse_expr(depth + 1)?;
-                    return Ok(HIRBlockExpression {
+                    return Ok(IPRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
                         last: expr,
@@ -858,10 +858,10 @@ impl<'a> ZeaPrettyAstParser<'a> {
                 }
                 // Content ended (shallower depth or EOF) → implicit unit
                 Some((d, _)) if d < depth + 1 => {
-                    return Ok(HIRBlockExpression {
+                    return Ok(IPRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
-                        last: HIRExpression::unit(),
+                        last: IPRExpression::unit(),
                     });
                 }
                 Some(_) => {
@@ -873,10 +873,10 @@ impl<'a> ZeaPrettyAstParser<'a> {
                     ));
                 }
                 None => {
-                    return Ok(HIRBlockExpression {
+                    return Ok(IPRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
-                        last: HIRExpression::unit(),
+                        last: IPRExpression::unit(),
                     });
                 }
             }
@@ -898,7 +898,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .otherwise         -- depth + 1  (optional)
     ///     <false_case>     -- depth + 2
     /// ```
-    fn parse_branch(&mut self, depth: usize) -> Result<HIRBranch, ParseError> {
+    fn parse_branch(&mut self, depth: usize) -> Result<IPRBranch, ParseError> {
         self.expect_line(depth + 1, ".cond")?;
         let condition = self.parse_expr(depth + 2)?;
         self.expect_line(depth + 1, ".then")?;
@@ -909,7 +909,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         } else {
             None
         };
-        Ok(HIRBranch {
+        Ok(IPRBranch {
             id: NodeId::sentinel(),
             condition: Box::new(condition),
             true_case: Box::new(true_case),
@@ -931,7 +931,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///     - <arg>          -- depth + 2
     ///     - <arg>          -- depth + 2
     /// ```
-    fn parse_call(&mut self, depth: usize) -> Result<HIRFunctionCall, ParseError> {
+    fn parse_call(&mut self, depth: usize) -> Result<IPRFunctionCall, ParseError> {
         self.expect_line(depth + 1, ".subject")?;
         let subject = self.parse_expr(depth + 2)?;
         let args = if self.peek_field("args", depth + 1) {
@@ -940,7 +940,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         } else {
             Vec::new()
         };
-        Ok(HIRFunctionCall {
+        Ok(IPRFunctionCall {
             id: NodeId::sentinel(),
             subject: Box::new(subject),
             args,
@@ -948,7 +948,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     }
 
     /// Parse a list of `- <expr>` items at the given depth.
-    fn parse_expr_list(&mut self, depth: usize) -> Result<Vec<HIRExpression>, ParseError> {
+    fn parse_expr_list(&mut self, depth: usize) -> Result<Vec<IPRExpression>, ParseError> {
         let mut items = Vec::new();
         loop {
             match self.peek() {
@@ -981,38 +981,38 @@ impl<'a> ZeaPrettyAstParser<'a> {
 /// - `u<width>` → `Integer { width, signed: false }`
 /// - `f<width>` → `Float { width }`
 /// - Everything else → `Basic(name)`
-fn parse_type_string(s: &str) -> HIRTypeSpecifier {
+fn parse_type_string(s: &str) -> IPRTypeSpecifier {
     match s {
-        "()" => return HIRTypeSpecifier::Unit,
-        "!" => return HIRTypeSpecifier::Never,
-        "Bool" => return HIRTypeSpecifier::Bool,
+        "()" => return IPRTypeSpecifier::Unit,
+        "!" => return IPRTypeSpecifier::Never,
+        "Bool" => return IPRTypeSpecifier::Bool,
         _ => {}
     }
     if let Some(inner) = s.strip_prefix("&") {
-        return HIRTypeSpecifier::Pointer(Box::new(parse_type_string(inner)));
+        return IPRTypeSpecifier::Pointer(Box::new(parse_type_string(inner)));
     }
     if s.starts_with('[') && s.ends_with(']') {
         let inner = parse_type_string(&s[1..s.len() - 1]);
-        return HIRTypeSpecifier::ArrayOf(Box::new(inner));
+        return IPRTypeSpecifier::ArrayOf(Box::new(inner));
     }
     if let Some(w) = s.strip_prefix('i')
         && let Ok(width) = w.parse::<usize>() {
-            return HIRTypeSpecifier::Integer {
+            return IPRTypeSpecifier::Integer {
                 width,
                 signed: true,
             };
         }
     if let Some(w) = s.strip_prefix('u')
         && let Ok(width) = w.parse::<usize>() {
-            return HIRTypeSpecifier::Integer {
+            return IPRTypeSpecifier::Integer {
                 width,
                 signed: false,
             };
         }
     if let Some(w) = s.strip_prefix('f') && let Ok(width) = w.parse::<usize>() {
-        return HIRTypeSpecifier::Float { width };
+        return IPRTypeSpecifier::Float { width };
     }
-    HIRTypeSpecifier::NonScalar(s.to_string())
+    IPRTypeSpecifier::NonScalar(s.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -1109,8 +1109,8 @@ mod tests {
     fn function(
         name: &str,
         params: Vec<IPRFuncParam>,
-        returns: HIRTypeSpecifier,
-        body: HIRBlockExpression,
+        returns: IPRTypeSpecifier,
+        body: IPRBlockExpression,
     ) -> IPRFunction {
         IPRFunction {
             id: NodeId::sentinel(),
@@ -1121,7 +1121,7 @@ mod tests {
         }
     }
 
-    fn param(name: &str, typ: HIRTypeSpecifier) -> IPRFuncParam {
+    fn param(name: &str, typ: IPRTypeSpecifier) -> IPRFuncParam {
         IPRFuncParam {
             id: NodeId::sentinel(),
             name: name.into(),
@@ -1129,40 +1129,40 @@ mod tests {
         }
     }
 
-    fn block(stmts: Vec<HIRStatement>, last: HIRExpression) -> HIRBlockExpression {
-        HIRBlockExpression {
+    fn block(stmts: Vec<IPRStatement>, last: IPRExpression) -> IPRBlockExpression {
+        IPRBlockExpression {
             id: NodeId::sentinel(),
             statements: stmts,
             last,
         }
     }
 
-    fn expr_ident(name: &str) -> HIRExpression {
-        HIRExpression::ident(name.to_owned())
+    fn expr_ident(name: &str) -> IPRExpression {
+        IPRExpression::ident(name.to_owned())
     }
-    fn expr_int(n: usize) -> HIRExpression {
-        HIRExpression::wrap_lit_int(n)
+    fn expr_int(n: usize) -> IPRExpression {
+        IPRExpression::wrap_lit_int(n)
     }
-    fn expr_float(f: f64) -> HIRExpression {
-        HIRExpression::wrap_lit_float(f)
+    fn expr_float(f: f64) -> IPRExpression {
+        IPRExpression::wrap_lit_float(f)
     }
-    fn expr_unit() -> HIRExpression {
-        HIRExpression::unit()
+    fn expr_unit() -> IPRExpression {
+        IPRExpression::unit()
     }
-    fn expr_binop(op: BinOp, left: HIRExpression, right: HIRExpression) -> HIRExpression {
-        HIRExpression {
+    fn expr_binop(op: BinOp, left: IPRExpression, right: IPRExpression) -> IPRExpression {
+        IPRExpression {
             id: NodeId::sentinel(),
-            kind: HIRExpressionKind::BinOpExpr(op, Box::new(left), Box::new(right)),
+            kind: IPRExpressionKind::BinOpExpr(op, Box::new(left), Box::new(right)),
         }
     }
-    fn expr_member(subject: HIRExpression, field: &str) -> HIRExpression {
-        HIRExpression {
+    fn expr_member(subject: IPRExpression, field: &str) -> IPRExpression {
+        IPRExpression {
             id: NodeId::sentinel(),
-            kind: HIRExpressionKind::MemberAccess(Box::new(subject), field.to_owned()),
+            kind: IPRExpressionKind::MemberAccess(Box::new(subject), field.to_owned()),
         }
     }
-    fn expr_call(subject: HIRExpression, args: Vec<HIRExpression>) -> HIRExpression {
-        HIRFunctionCall {
+    fn expr_call(subject: IPRExpression, args: Vec<IPRExpression>) -> IPRExpression {
+        IPRFunctionCall {
             id: NodeId::sentinel(),
             subject: Box::new(subject),
             args,
@@ -1170,8 +1170,8 @@ mod tests {
         .wrap_in_expression()
     }
 
-    fn call_stmt(subject: HIRExpression, args: Vec<HIRExpression>) -> HIRStatement {
-        HIRFunctionCall {
+    fn call_stmt(subject: IPRExpression, args: Vec<IPRExpression>) -> IPRStatement {
+        IPRFunctionCall {
             id: NodeId::sentinel(),
             subject: Box::new(subject),
             args,
@@ -1179,20 +1179,20 @@ mod tests {
         .wrap_in_statement()
     }
 
-    fn t_i32() -> HIRTypeSpecifier {
-        HIRTypeSpecifier::Integer {
+    fn t_i32() -> IPRTypeSpecifier {
+        IPRTypeSpecifier::Integer {
             width: 32,
             signed: true,
         }
     }
-    fn t_unit() -> HIRTypeSpecifier {
-        HIRTypeSpecifier::Unit
+    fn t_unit() -> IPRTypeSpecifier {
+        IPRTypeSpecifier::Unit
     }
-    fn t_f64() -> HIRTypeSpecifier {
-        HIRTypeSpecifier::Float { width: 64 }
+    fn t_f64() -> IPRTypeSpecifier {
+        IPRTypeSpecifier::Float { width: 64 }
     }
-    fn t_ptr(inner: HIRTypeSpecifier) -> HIRTypeSpecifier {
-        HIRTypeSpecifier::Pointer(Box::new(inner))
+    fn t_ptr(inner: IPRTypeSpecifier) -> IPRTypeSpecifier {
+        IPRTypeSpecifier::Pointer(Box::new(inner))
     }
 
     // ---- roundtrip test infrastructure ---------------------------------------
@@ -1276,7 +1276,7 @@ mod tests {
             t_i32(),
             block(
                 vec![],
-                HIRBranch::if_else_block(expr_ident("cond"), expr_int(1), expr_int(0))
+                IPRBranch::if_else_block(expr_ident("cond"), expr_int(1), expr_int(0))
                     .wrap_in_expression(),
             ),
         )]));
@@ -1289,10 +1289,10 @@ mod tests {
             vec![],
             t_unit(),
             block(
-                vec![stmt_init_packed(HIRPackedInitialization::untyped(
-                    HIRAssignmentPattern::Tuple(vec![
-                        HIRAssignmentPattern::Identifier("a".into()),
-                        HIRAssignmentPattern::Identifier("b".into()),
+                vec![stmt_init_packed(IPRPackedInitialization::untyped(
+                    IPRAssignmentPattern::Tuple(vec![
+                        IPRAssignmentPattern::Identifier("a".into()),
+                        IPRAssignmentPattern::Identifier("b".into()),
                     ]),
                     expr_call(expr_ident("f"), vec![]),
                 ))],
@@ -1359,7 +1359,7 @@ mod tests {
         roundtrip(module_(vec![function(
             "main",
             vec![],
-            t_ptr(HIRTypeSpecifier::NonScalar("Int".into())),
+            t_ptr(IPRTypeSpecifier::NonScalar("Int".into())),
             block(vec![], expr_unit()),
         )]));
     }
@@ -1378,19 +1378,19 @@ mod tests {
     #[test]
     fn parse_bare_expression() {
         let expr = parse_expression("lit_int(42)\n");
-        assert!(matches!(expr.kind, HIRExpressionKind::IntegerLiteral(42)));
+        assert!(matches!(expr.kind, IPRExpressionKind::IntegerLiteral(42)));
     }
 
     #[test]
     fn parse_bare_block() {
         let block = parse_block("block\n  - return\n    lit_int(1)\n  @unit\n");
         assert_eq!(block.statements.len(), 1);
-        assert!(matches!(block.last.kind, HIRExpressionKind::Unit));
+        assert!(matches!(block.last.kind, IPRExpressionKind::Unit));
     }
 
     #[test]
     fn parse_bare_statement() {
         let stmt = parse_statement("- return\n  lit_int(42)\n");
-        assert!(matches!(stmt.kind, HIRStatementKind::Return(_)));
+        assert!(matches!(stmt.kind, IPRStatementKind::Return(_)));
     }
 }

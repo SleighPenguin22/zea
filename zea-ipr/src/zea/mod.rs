@@ -28,7 +28,7 @@ use crate::zea::visitors::IPRVisitor;
 mod typecheck;
 pub use typecheck::typecheck_module;
 mod impls;
-mod mir_nodes;
+mod typed_highlevel_representation;
 pub mod visitors;
 pub mod immediate_parsed_representation {
     use std::{fmt::Debug, fmt::Formatter, hash::Hash, hash::Hasher};
@@ -751,7 +751,7 @@ pub enum BinOp {
     GT,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr)]
 pub enum UnOp {
     Neg,
     LogNot,
@@ -1031,30 +1031,30 @@ pub(crate) mod test_ast_macros {
     macro_rules! ztyp {
         (U8) => {
             {
-            use crate::zea::hir_nodes::IPRTypeSpecifier;
+            use crate::zea::immediate_parsed_representation::IPRTypeSpecifier;
             IPRTypeSpecifier::t_U8()
         }
     };
         (I8) => {{
-            use crate::zea::hir_nodes::IPRTypeSpecifier;
+            use crate::zea::immediate_parsed_representation::IPRTypeSpecifier;
             IPRTypeSpecifier::t_I8()
         }
     };
         ($t:ident) => {
             {
-            use crate::zea::hir_nodes::IPRTypeSpecifier;
+            use crate::zea::immediate_parsed_representation::IPRTypeSpecifier;
                 IPRTypeSpecifier::NonScalar(String::from(stringify!($t)))
             }
         };
         (*$($t:tt)+) => {
             {
-            use crate::zea::hir_nodes::IPRTypeSpecifier;
+            use crate::zea::immediate_parsed_representation::IPRTypeSpecifier;
                 IPRTypeSpecifier::Pointer(Box::new(ztyp!($($t)+)))
             }
         };
         ([ ]$($t:tt)+) => {
             {
-            use crate::zea::hir_nodes::IPRTypeSpecifier;
+            use crate::zea::immediate_parsed_representation::IPRTypeSpecifier;
                 IPRTypeSpecifier::ArrayOf(Box::new(ztyp!($($t)+)))
             }
         };
