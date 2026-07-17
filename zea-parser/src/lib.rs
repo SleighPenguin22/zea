@@ -14,12 +14,12 @@ pub use parser::ModParser as ModuleParser;
 #[cfg(feature = "lalrpop_parser")]
 pub use parser::StmtParser as StatementParser;
 use std::process::exit;
-use zea_ast::zea::BareNodeLabeler;
+use zea_ipr::zea::BareNodeLabeler;
 
-use zea_ast::zea::visitors::annotating::SemanticASTViolation;
+use zea_ipr::zea::visitors::annotating::SemanticASTViolation;
 
-use zea_ast::zea::immediate_parsed_representation::*;
-use zea_ast::zea::visitors::Transfomer;
+use zea_ipr::zea::immediate_parsed_representation::*;
+use zea_ipr::zea::visitors::Transfomer;
 pub fn parse_module(src: &'_ str) -> (IPRModule, BareNodeLabeler) {
     let p = ModuleParser::new();
     info!("parsing source file...");
@@ -74,7 +74,7 @@ mod tests {
         AssignPatParser, ExprParser, FuncParser, InitParser, ModParser, StmtParser,
     };
 
-    use zea_ast::zea::{immediate_parsed_representation::*, BinOp, UnOp};
+    use zea_ipr::zea::{immediate_parsed_representation::*, BinOp, UnOp};
 
     // ── helpers ───────────────────────────────────────────────────────────────
 

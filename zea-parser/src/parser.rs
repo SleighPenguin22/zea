@@ -1,8 +1,8 @@
 // auto-generated: "lalrpop 0.23.1"
 // sha3: 03e0595f1b5d05a319dbfcfe2d2c1e9e298e737bc10951da9e93f41a4ca3f8aa
 use std::str::FromStr;
-use zea_ast::zea::immediate_parsed_representation ::*;
-use zea_ast::zea::{BinOp, UnOp, NodeId};
+use zea_ipr::zea::immediate_parsed_representation ::*;
+use zea_ipr::zea::{BinOp, UnOp, NodeId};
 use crate::{IPRModuleItem, separate_module_items};
 #[allow(unused_extern_crates)]
 extern crate lalrpop_util as __lalrpop_util;
@@ -16,8 +16,8 @@ extern crate alloc;
 mod __parse__AssignPat {
 
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -5400,8 +5400,8 @@ pub use self::__parse__AssignPat::AssignPatParser;
 mod __parse__Expr {
 
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -11378,8 +11378,8 @@ pub use self::__parse__Expr::ExprParser;
 mod __parse__Func {
 
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -17436,8 +17436,8 @@ pub use self::__parse__Func::FuncParser;
 mod __parse__FuncCall {
 
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -23419,8 +23419,8 @@ pub use self::__parse__FuncCall::FuncCallParser;
 mod __parse__Init {
 
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -29404,8 +29404,8 @@ pub use self::__parse__Init::InitParser;
 mod __parse__Mod {
 
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -35601,8 +35601,8 @@ pub use self::__parse__Mod::ModParser;
 mod __parse__Reassign {
 
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -41586,8 +41586,8 @@ pub use self::__parse__Reassign::ReassignParser;
 mod __parse__Stmt {
 
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -47577,8 +47577,8 @@ pub use self::__parse__Stmt::StmtParser;
 mod __intern_token {
     #![allow(unused_imports)]
     use std::str::FromStr;
-    use zea_ast::zea::immediate_parsed_representation ::*;
-    use zea_ast::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::zea::immediate_parsed_representation ::*;
+    use zea_ipr::zea::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;

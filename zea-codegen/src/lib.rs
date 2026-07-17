@@ -1,16 +1,16 @@
 #![allow(unused)]
 
-use zea_ast::c::Literal;
-use zea_ast::c::TypeSpecifier;
-use zea_ast::c::{
+use zea_ipr::c::Literal;
+use zea_ipr::c::TypeSpecifier;
+use zea_ipr::c::{
     Expression, FunctionDeclaration, FunctionDefinition, Initialisation, Reassignment, Statement,
     StatementBlock, TypedIdentifier, VariableDeclaration,
 };
-use zea_ast::zea::visitors::annotating::ScopedIdentifierKind;
+use zea_ipr::zea::visitors::annotating::ScopedIdentifierKind;
 
 pub mod node_c_conversion;
 
-pub fn canoncalize_zea_identifier(identifier: zea_ast::zea::IPRScopedIdentifier) -> String {
+pub fn canoncalize_zea_identifier(identifier: zea_ipr::zea::IPRScopedIdentifier) -> String {
     // match identifier.kind {
     //     ScopedIdentifierKind::LocalVar => {}
     //     ScopedIdentifierKind::GlobalVar => {}
@@ -179,8 +179,8 @@ macro_rules! set {
 #[cfg(test)]
 mod tests {
     use crate::{fold_str, EmitC};
-    use zea_ast::c;
-    use zea_ast::c::{TypeQualifier, TypeSpecifier};
+    use zea_ipr::c;
+    use zea_ipr::c::{TypeQualifier, TypeSpecifier};
 
     // #[test]
     // fn test_canonicalize_zea_identifier() {
