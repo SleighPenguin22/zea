@@ -1,9 +1,9 @@
 // auto-generated: "lalrpop 0.23.1"
-// sha3: 457340476d6c321ff8d13ce1a6e8dc146431b60efc8bd5bf638174f1d8f6e219
+// sha3: 03e0595f1b5d05a319dbfcfe2d2c1e9e298e737bc10951da9e93f41a4ca3f8aa
 use std::str::FromStr;
-use zea_ast::zea::hir_nodes::*;
+use zea_ast::zea::immediate_parsed_representation ::*;
 use zea_ast::zea::{BinOp, UnOp, NodeId};
-use crate::{HIRModuleItem, separate_module_items};
+use crate::{IPRModuleItem, separate_module_items};
 #[allow(unused_extern_crates)]
 extern crate lalrpop_util as __lalrpop_util;
 #[allow(unused_imports)]
@@ -16,9 +16,9 @@ extern crate alloc;
 mod __parse__AssignPat {
 
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -31,35 +31,35 @@ mod __parse__AssignPat {
      {
         Variant0(&'input str),
         Variant1(Option<&'input str>),
-        Variant2(HIRAssignmentPattern),
-        Variant3(alloc::vec::Vec<HIRAssignmentPattern>),
-        Variant4(HIRExpression),
-        Variant5(alloc::vec::Vec<HIRExpression>),
+        Variant2(IPRAssignmentPattern),
+        Variant3(alloc::vec::Vec<IPRAssignmentPattern>),
+        Variant4(IPRExpression),
+        Variant5(alloc::vec::Vec<IPRExpression>),
         Variant6(String),
         Variant7(alloc::vec::Vec<String>),
-        Variant8(HIRStatement),
-        Variant9(alloc::vec::Vec<HIRStatement>),
-        Variant10(HIRTypedIdentifier),
-        Variant11(alloc::vec::Vec<HIRTypedIdentifier>),
-        Variant12(HIRBlockExpression),
-        Variant13(Vec<HIRExpression>),
+        Variant8(IPRStatement),
+        Variant9(alloc::vec::Vec<IPRStatement>),
+        Variant10(IPRTypedIdentifier),
+        Variant11(alloc::vec::Vec<IPRTypedIdentifier>),
+        Variant12(IPRBlockExpression),
+        Variant13(Vec<IPRExpression>),
         Variant14(Vec<String>),
-        Variant15(Vec<HIRTypedIdentifier>),
-        Variant16(Vec<HIRAssignmentPattern>),
-        Variant17(HIRBranch),
-        Variant18(Option<HIRExpression>),
+        Variant15(Vec<IPRTypedIdentifier>),
+        Variant16(Vec<IPRAssignmentPattern>),
+        Variant17(IPRBranch),
+        Variant18(Option<IPRExpression>),
         Variant19(Option<String>),
-        Variant20(HIRFunction),
-        Variant21(HIRFunctionCall),
-        Variant22(HIRInitializationBlock),
-        Variant23(HIRModule),
+        Variant20(IPRFunction),
+        Variant21(IPRFunctionCall),
+        Variant22(IPRInitializationBlock),
+        Variant23(IPRModule),
         Variant24(Option<Vec<String>>),
-        Variant25((Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)),
-        Variant26(Vec<HIRModuleItem>),
+        Variant25((Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)),
+        Variant26(Vec<IPRModuleItem>),
         Variant27(usize),
-        Variant28(HIRReassignment),
-        Variant29(HIRTypeSpecifier),
-        Variant30(Option<HIRTypedIdentifier>),
+        Variant28(IPRReassignment),
+        Variant29(IPRTypeSpecifier),
+        Variant30(Option<IPRTypedIdentifier>),
     }
     const __ACTION: &[i16] = &[
         // State 0
@@ -288,7 +288,7 @@ mod __parse__AssignPat {
         type Token = Token<'input>;
         type TokenIndex = usize;
         type Symbol = __Symbol<'input>;
-        type Success = HIRAssignmentPattern;
+        type Success = IPRAssignmentPattern;
         type StateIndex = i16;
         type Action = i16;
         type ReduceIndex = i16;
@@ -1428,7 +1428,7 @@ mod __parse__AssignPat {
         >(
             &self,
             input: &'input str,
-        ) -> Result<HIRAssignmentPattern, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
+        ) -> Result<IPRAssignmentPattern, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
         {
             let mut __tokens = self.builder.matcher(input);
             __state_machine::Parser::drive(
@@ -1484,7 +1484,7 @@ mod __parse__AssignPat {
         __states: &mut alloc::vec::Vec<i16>,
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>,
         _: core::marker::PhantomData<(&'input (), &'ast ())>,
-    ) -> Option<Result<HIRAssignmentPattern,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
+    ) -> Option<Result<IPRAssignmentPattern,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
     {
         let (__pop_states, __nonterminal) = match __action {
             0 => {
@@ -1983,7 +1983,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize)
+    ) -> (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant25(__v), __r)) => (__l, __v, __r),
@@ -1994,7 +1994,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRAssignmentPattern, usize)
+    ) -> (usize, IPRAssignmentPattern, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant2(__v), __r)) => (__l, __v, __r),
@@ -2005,7 +2005,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBlockExpression, usize)
+    ) -> (usize, IPRBlockExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant12(__v), __r)) => (__l, __v, __r),
@@ -2016,7 +2016,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBranch, usize)
+    ) -> (usize, IPRBranch, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant17(__v), __r)) => (__l, __v, __r),
@@ -2027,7 +2027,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRExpression, usize)
+    ) -> (usize, IPRExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant4(__v), __r)) => (__l, __v, __r),
@@ -2038,7 +2038,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunction, usize)
+    ) -> (usize, IPRFunction, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant20(__v), __r)) => (__l, __v, __r),
@@ -2049,7 +2049,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunctionCall, usize)
+    ) -> (usize, IPRFunctionCall, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant21(__v), __r)) => (__l, __v, __r),
@@ -2060,7 +2060,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRInitializationBlock, usize)
+    ) -> (usize, IPRInitializationBlock, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant22(__v), __r)) => (__l, __v, __r),
@@ -2071,7 +2071,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRModule, usize)
+    ) -> (usize, IPRModule, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant23(__v), __r)) => (__l, __v, __r),
@@ -2082,7 +2082,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRReassignment, usize)
+    ) -> (usize, IPRReassignment, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant28(__v), __r)) => (__l, __v, __r),
@@ -2093,7 +2093,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRStatement, usize)
+    ) -> (usize, IPRStatement, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant8(__v), __r)) => (__l, __v, __r),
@@ -2104,7 +2104,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypeSpecifier, usize)
+    ) -> (usize, IPRTypeSpecifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant29(__v), __r)) => (__l, __v, __r),
@@ -2115,7 +2115,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypedIdentifier, usize)
+    ) -> (usize, IPRTypedIdentifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant10(__v), __r)) => (__l, __v, __r),
@@ -2126,7 +2126,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRExpression>, usize)
+    ) -> (usize, Option<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant18(__v), __r)) => (__l, __v, __r),
@@ -2137,7 +2137,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRTypedIdentifier>, usize)
+    ) -> (usize, Option<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant30(__v), __r)) => (__l, __v, __r),
@@ -2192,7 +2192,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant16(__v), __r)) => (__l, __v, __r),
@@ -2203,7 +2203,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRExpression>, usize)
+    ) -> (usize, Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant13(__v), __r)) => (__l, __v, __r),
@@ -2214,7 +2214,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRModuleItem>, usize)
+    ) -> (usize, Vec<IPRModuleItem>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant26(__v), __r)) => (__l, __v, __r),
@@ -2225,7 +2225,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant15(__v), __r)) => (__l, __v, __r),
@@ -2247,7 +2247,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant3(__v), __r)) => (__l, __v, __r),
@@ -2258,7 +2258,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRExpression>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant5(__v), __r)) => (__l, __v, __r),
@@ -2269,7 +2269,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRStatement>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRStatement>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant9(__v), __r)) => (__l, __v, __r),
@@ -2280,7 +2280,7 @@ mod __parse__AssignPat {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant11(__v), __r)) => (__l, __v, __r),
@@ -5400,9 +5400,9 @@ pub use self::__parse__AssignPat::AssignPatParser;
 mod __parse__Expr {
 
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -5415,35 +5415,35 @@ mod __parse__Expr {
      {
         Variant0(&'input str),
         Variant1(Option<&'input str>),
-        Variant2(HIRAssignmentPattern),
-        Variant3(alloc::vec::Vec<HIRAssignmentPattern>),
-        Variant4(HIRExpression),
-        Variant5(alloc::vec::Vec<HIRExpression>),
+        Variant2(IPRAssignmentPattern),
+        Variant3(alloc::vec::Vec<IPRAssignmentPattern>),
+        Variant4(IPRExpression),
+        Variant5(alloc::vec::Vec<IPRExpression>),
         Variant6(String),
         Variant7(alloc::vec::Vec<String>),
-        Variant8(HIRStatement),
-        Variant9(alloc::vec::Vec<HIRStatement>),
-        Variant10(HIRTypedIdentifier),
-        Variant11(alloc::vec::Vec<HIRTypedIdentifier>),
-        Variant12(HIRBlockExpression),
-        Variant13(Vec<HIRExpression>),
+        Variant8(IPRStatement),
+        Variant9(alloc::vec::Vec<IPRStatement>),
+        Variant10(IPRTypedIdentifier),
+        Variant11(alloc::vec::Vec<IPRTypedIdentifier>),
+        Variant12(IPRBlockExpression),
+        Variant13(Vec<IPRExpression>),
         Variant14(Vec<String>),
-        Variant15(Vec<HIRTypedIdentifier>),
-        Variant16(Vec<HIRAssignmentPattern>),
-        Variant17(HIRBranch),
-        Variant18(Option<HIRExpression>),
+        Variant15(Vec<IPRTypedIdentifier>),
+        Variant16(Vec<IPRAssignmentPattern>),
+        Variant17(IPRBranch),
+        Variant18(Option<IPRExpression>),
         Variant19(Option<String>),
-        Variant20(HIRFunction),
-        Variant21(HIRFunctionCall),
-        Variant22(HIRInitializationBlock),
-        Variant23(HIRModule),
+        Variant20(IPRFunction),
+        Variant21(IPRFunctionCall),
+        Variant22(IPRInitializationBlock),
+        Variant23(IPRModule),
         Variant24(Option<Vec<String>>),
-        Variant25((Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)),
-        Variant26(Vec<HIRModuleItem>),
+        Variant25((Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)),
+        Variant26(Vec<IPRModuleItem>),
         Variant27(usize),
-        Variant28(HIRReassignment),
-        Variant29(HIRTypeSpecifier),
-        Variant30(Option<HIRTypedIdentifier>),
+        Variant28(IPRReassignment),
+        Variant29(IPRTypeSpecifier),
+        Variant30(Option<IPRTypedIdentifier>),
     }
     const __ACTION: &[i16] = &[
         // State 0
@@ -6266,7 +6266,7 @@ mod __parse__Expr {
         type Token = Token<'input>;
         type TokenIndex = usize;
         type Symbol = __Symbol<'input>;
-        type Success = HIRExpression;
+        type Success = IPRExpression;
         type StateIndex = i16;
         type Action = i16;
         type ReduceIndex = i16;
@@ -7406,7 +7406,7 @@ mod __parse__Expr {
         >(
             &self,
             input: &'input str,
-        ) -> Result<HIRExpression, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
+        ) -> Result<IPRExpression, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
         {
             let mut __tokens = self.builder.matcher(input);
             __state_machine::Parser::drive(
@@ -7462,7 +7462,7 @@ mod __parse__Expr {
         __states: &mut alloc::vec::Vec<i16>,
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>,
         _: core::marker::PhantomData<(&'input (), &'ast ())>,
-    ) -> Option<Result<HIRExpression,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
+    ) -> Option<Result<IPRExpression,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
     {
         let (__pop_states, __nonterminal) = match __action {
             0 => {
@@ -7961,7 +7961,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize)
+    ) -> (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant25(__v), __r)) => (__l, __v, __r),
@@ -7972,7 +7972,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRAssignmentPattern, usize)
+    ) -> (usize, IPRAssignmentPattern, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant2(__v), __r)) => (__l, __v, __r),
@@ -7983,7 +7983,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBlockExpression, usize)
+    ) -> (usize, IPRBlockExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant12(__v), __r)) => (__l, __v, __r),
@@ -7994,7 +7994,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBranch, usize)
+    ) -> (usize, IPRBranch, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant17(__v), __r)) => (__l, __v, __r),
@@ -8005,7 +8005,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRExpression, usize)
+    ) -> (usize, IPRExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant4(__v), __r)) => (__l, __v, __r),
@@ -8016,7 +8016,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunction, usize)
+    ) -> (usize, IPRFunction, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant20(__v), __r)) => (__l, __v, __r),
@@ -8027,7 +8027,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunctionCall, usize)
+    ) -> (usize, IPRFunctionCall, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant21(__v), __r)) => (__l, __v, __r),
@@ -8038,7 +8038,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRInitializationBlock, usize)
+    ) -> (usize, IPRInitializationBlock, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant22(__v), __r)) => (__l, __v, __r),
@@ -8049,7 +8049,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRModule, usize)
+    ) -> (usize, IPRModule, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant23(__v), __r)) => (__l, __v, __r),
@@ -8060,7 +8060,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRReassignment, usize)
+    ) -> (usize, IPRReassignment, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant28(__v), __r)) => (__l, __v, __r),
@@ -8071,7 +8071,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRStatement, usize)
+    ) -> (usize, IPRStatement, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant8(__v), __r)) => (__l, __v, __r),
@@ -8082,7 +8082,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypeSpecifier, usize)
+    ) -> (usize, IPRTypeSpecifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant29(__v), __r)) => (__l, __v, __r),
@@ -8093,7 +8093,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypedIdentifier, usize)
+    ) -> (usize, IPRTypedIdentifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant10(__v), __r)) => (__l, __v, __r),
@@ -8104,7 +8104,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRExpression>, usize)
+    ) -> (usize, Option<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant18(__v), __r)) => (__l, __v, __r),
@@ -8115,7 +8115,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRTypedIdentifier>, usize)
+    ) -> (usize, Option<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant30(__v), __r)) => (__l, __v, __r),
@@ -8170,7 +8170,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant16(__v), __r)) => (__l, __v, __r),
@@ -8181,7 +8181,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRExpression>, usize)
+    ) -> (usize, Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant13(__v), __r)) => (__l, __v, __r),
@@ -8192,7 +8192,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRModuleItem>, usize)
+    ) -> (usize, Vec<IPRModuleItem>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant26(__v), __r)) => (__l, __v, __r),
@@ -8203,7 +8203,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant15(__v), __r)) => (__l, __v, __r),
@@ -8225,7 +8225,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant3(__v), __r)) => (__l, __v, __r),
@@ -8236,7 +8236,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRExpression>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant5(__v), __r)) => (__l, __v, __r),
@@ -8247,7 +8247,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRStatement>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRStatement>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant9(__v), __r)) => (__l, __v, __r),
@@ -8258,7 +8258,7 @@ mod __parse__Expr {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant11(__v), __r)) => (__l, __v, __r),
@@ -11378,9 +11378,9 @@ pub use self::__parse__Expr::ExprParser;
 mod __parse__Func {
 
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -11393,35 +11393,35 @@ mod __parse__Func {
      {
         Variant0(&'input str),
         Variant1(Option<&'input str>),
-        Variant2(HIRAssignmentPattern),
-        Variant3(alloc::vec::Vec<HIRAssignmentPattern>),
-        Variant4(HIRExpression),
-        Variant5(alloc::vec::Vec<HIRExpression>),
+        Variant2(IPRAssignmentPattern),
+        Variant3(alloc::vec::Vec<IPRAssignmentPattern>),
+        Variant4(IPRExpression),
+        Variant5(alloc::vec::Vec<IPRExpression>),
         Variant6(String),
         Variant7(alloc::vec::Vec<String>),
-        Variant8(HIRStatement),
-        Variant9(alloc::vec::Vec<HIRStatement>),
-        Variant10(HIRTypedIdentifier),
-        Variant11(alloc::vec::Vec<HIRTypedIdentifier>),
-        Variant12(HIRBlockExpression),
-        Variant13(Vec<HIRExpression>),
+        Variant8(IPRStatement),
+        Variant9(alloc::vec::Vec<IPRStatement>),
+        Variant10(IPRTypedIdentifier),
+        Variant11(alloc::vec::Vec<IPRTypedIdentifier>),
+        Variant12(IPRBlockExpression),
+        Variant13(Vec<IPRExpression>),
         Variant14(Vec<String>),
-        Variant15(Vec<HIRTypedIdentifier>),
-        Variant16(Vec<HIRAssignmentPattern>),
-        Variant17(HIRBranch),
-        Variant18(Option<HIRExpression>),
+        Variant15(Vec<IPRTypedIdentifier>),
+        Variant16(Vec<IPRAssignmentPattern>),
+        Variant17(IPRBranch),
+        Variant18(Option<IPRExpression>),
         Variant19(Option<String>),
-        Variant20(HIRFunction),
-        Variant21(HIRFunctionCall),
-        Variant22(HIRInitializationBlock),
-        Variant23(HIRModule),
+        Variant20(IPRFunction),
+        Variant21(IPRFunctionCall),
+        Variant22(IPRInitializationBlock),
+        Variant23(IPRModule),
         Variant24(Option<Vec<String>>),
-        Variant25((Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)),
-        Variant26(Vec<HIRModuleItem>),
+        Variant25((Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)),
+        Variant26(Vec<IPRModuleItem>),
         Variant27(usize),
-        Variant28(HIRReassignment),
-        Variant29(HIRTypeSpecifier),
-        Variant30(Option<HIRTypedIdentifier>),
+        Variant28(IPRReassignment),
+        Variant29(IPRTypeSpecifier),
+        Variant30(Option<IPRTypedIdentifier>),
     }
     const __ACTION: &[i16] = &[
         // State 0
@@ -12324,7 +12324,7 @@ mod __parse__Func {
         type Token = Token<'input>;
         type TokenIndex = usize;
         type Symbol = __Symbol<'input>;
-        type Success = HIRFunction;
+        type Success = IPRFunction;
         type StateIndex = i16;
         type Action = i16;
         type ReduceIndex = i16;
@@ -13464,7 +13464,7 @@ mod __parse__Func {
         >(
             &self,
             input: &'input str,
-        ) -> Result<HIRFunction, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
+        ) -> Result<IPRFunction, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
         {
             let mut __tokens = self.builder.matcher(input);
             __state_machine::Parser::drive(
@@ -13520,7 +13520,7 @@ mod __parse__Func {
         __states: &mut alloc::vec::Vec<i16>,
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>,
         _: core::marker::PhantomData<(&'input (), &'ast ())>,
-    ) -> Option<Result<HIRFunction,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
+    ) -> Option<Result<IPRFunction,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
     {
         let (__pop_states, __nonterminal) = match __action {
             0 => {
@@ -14019,7 +14019,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize)
+    ) -> (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant25(__v), __r)) => (__l, __v, __r),
@@ -14030,7 +14030,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRAssignmentPattern, usize)
+    ) -> (usize, IPRAssignmentPattern, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant2(__v), __r)) => (__l, __v, __r),
@@ -14041,7 +14041,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBlockExpression, usize)
+    ) -> (usize, IPRBlockExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant12(__v), __r)) => (__l, __v, __r),
@@ -14052,7 +14052,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBranch, usize)
+    ) -> (usize, IPRBranch, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant17(__v), __r)) => (__l, __v, __r),
@@ -14063,7 +14063,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRExpression, usize)
+    ) -> (usize, IPRExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant4(__v), __r)) => (__l, __v, __r),
@@ -14074,7 +14074,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunction, usize)
+    ) -> (usize, IPRFunction, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant20(__v), __r)) => (__l, __v, __r),
@@ -14085,7 +14085,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunctionCall, usize)
+    ) -> (usize, IPRFunctionCall, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant21(__v), __r)) => (__l, __v, __r),
@@ -14096,7 +14096,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRInitializationBlock, usize)
+    ) -> (usize, IPRInitializationBlock, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant22(__v), __r)) => (__l, __v, __r),
@@ -14107,7 +14107,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRModule, usize)
+    ) -> (usize, IPRModule, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant23(__v), __r)) => (__l, __v, __r),
@@ -14118,7 +14118,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRReassignment, usize)
+    ) -> (usize, IPRReassignment, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant28(__v), __r)) => (__l, __v, __r),
@@ -14129,7 +14129,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRStatement, usize)
+    ) -> (usize, IPRStatement, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant8(__v), __r)) => (__l, __v, __r),
@@ -14140,7 +14140,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypeSpecifier, usize)
+    ) -> (usize, IPRTypeSpecifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant29(__v), __r)) => (__l, __v, __r),
@@ -14151,7 +14151,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypedIdentifier, usize)
+    ) -> (usize, IPRTypedIdentifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant10(__v), __r)) => (__l, __v, __r),
@@ -14162,7 +14162,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRExpression>, usize)
+    ) -> (usize, Option<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant18(__v), __r)) => (__l, __v, __r),
@@ -14173,7 +14173,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRTypedIdentifier>, usize)
+    ) -> (usize, Option<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant30(__v), __r)) => (__l, __v, __r),
@@ -14228,7 +14228,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant16(__v), __r)) => (__l, __v, __r),
@@ -14239,7 +14239,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRExpression>, usize)
+    ) -> (usize, Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant13(__v), __r)) => (__l, __v, __r),
@@ -14250,7 +14250,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRModuleItem>, usize)
+    ) -> (usize, Vec<IPRModuleItem>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant26(__v), __r)) => (__l, __v, __r),
@@ -14261,7 +14261,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant15(__v), __r)) => (__l, __v, __r),
@@ -14283,7 +14283,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant3(__v), __r)) => (__l, __v, __r),
@@ -14294,7 +14294,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRExpression>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant5(__v), __r)) => (__l, __v, __r),
@@ -14305,7 +14305,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRStatement>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRStatement>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant9(__v), __r)) => (__l, __v, __r),
@@ -14316,7 +14316,7 @@ mod __parse__Func {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant11(__v), __r)) => (__l, __v, __r),
@@ -17436,9 +17436,9 @@ pub use self::__parse__Func::FuncParser;
 mod __parse__FuncCall {
 
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -17451,35 +17451,35 @@ mod __parse__FuncCall {
      {
         Variant0(&'input str),
         Variant1(Option<&'input str>),
-        Variant2(HIRAssignmentPattern),
-        Variant3(alloc::vec::Vec<HIRAssignmentPattern>),
-        Variant4(HIRExpression),
-        Variant5(alloc::vec::Vec<HIRExpression>),
+        Variant2(IPRAssignmentPattern),
+        Variant3(alloc::vec::Vec<IPRAssignmentPattern>),
+        Variant4(IPRExpression),
+        Variant5(alloc::vec::Vec<IPRExpression>),
         Variant6(String),
         Variant7(alloc::vec::Vec<String>),
-        Variant8(HIRStatement),
-        Variant9(alloc::vec::Vec<HIRStatement>),
-        Variant10(HIRTypedIdentifier),
-        Variant11(alloc::vec::Vec<HIRTypedIdentifier>),
-        Variant12(HIRBlockExpression),
-        Variant13(Vec<HIRExpression>),
+        Variant8(IPRStatement),
+        Variant9(alloc::vec::Vec<IPRStatement>),
+        Variant10(IPRTypedIdentifier),
+        Variant11(alloc::vec::Vec<IPRTypedIdentifier>),
+        Variant12(IPRBlockExpression),
+        Variant13(Vec<IPRExpression>),
         Variant14(Vec<String>),
-        Variant15(Vec<HIRTypedIdentifier>),
-        Variant16(Vec<HIRAssignmentPattern>),
-        Variant17(HIRBranch),
-        Variant18(Option<HIRExpression>),
+        Variant15(Vec<IPRTypedIdentifier>),
+        Variant16(Vec<IPRAssignmentPattern>),
+        Variant17(IPRBranch),
+        Variant18(Option<IPRExpression>),
         Variant19(Option<String>),
-        Variant20(HIRFunction),
-        Variant21(HIRFunctionCall),
-        Variant22(HIRInitializationBlock),
-        Variant23(HIRModule),
+        Variant20(IPRFunction),
+        Variant21(IPRFunctionCall),
+        Variant22(IPRInitializationBlock),
+        Variant23(IPRModule),
         Variant24(Option<Vec<String>>),
-        Variant25((Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)),
-        Variant26(Vec<HIRModuleItem>),
+        Variant25((Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)),
+        Variant26(Vec<IPRModuleItem>),
         Variant27(usize),
-        Variant28(HIRReassignment),
-        Variant29(HIRTypeSpecifier),
-        Variant30(Option<HIRTypedIdentifier>),
+        Variant28(IPRReassignment),
+        Variant29(IPRTypeSpecifier),
+        Variant30(Option<IPRTypedIdentifier>),
     }
     const __ACTION: &[i16] = &[
         // State 0
@@ -18307,7 +18307,7 @@ mod __parse__FuncCall {
         type Token = Token<'input>;
         type TokenIndex = usize;
         type Symbol = __Symbol<'input>;
-        type Success = HIRFunctionCall;
+        type Success = IPRFunctionCall;
         type StateIndex = i16;
         type Action = i16;
         type ReduceIndex = i16;
@@ -19447,7 +19447,7 @@ mod __parse__FuncCall {
         >(
             &self,
             input: &'input str,
-        ) -> Result<HIRFunctionCall, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
+        ) -> Result<IPRFunctionCall, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
         {
             let mut __tokens = self.builder.matcher(input);
             __state_machine::Parser::drive(
@@ -19503,7 +19503,7 @@ mod __parse__FuncCall {
         __states: &mut alloc::vec::Vec<i16>,
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>,
         _: core::marker::PhantomData<(&'input (), &'ast ())>,
-    ) -> Option<Result<HIRFunctionCall,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
+    ) -> Option<Result<IPRFunctionCall,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
     {
         let (__pop_states, __nonterminal) = match __action {
             0 => {
@@ -20002,7 +20002,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize)
+    ) -> (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant25(__v), __r)) => (__l, __v, __r),
@@ -20013,7 +20013,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRAssignmentPattern, usize)
+    ) -> (usize, IPRAssignmentPattern, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant2(__v), __r)) => (__l, __v, __r),
@@ -20024,7 +20024,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBlockExpression, usize)
+    ) -> (usize, IPRBlockExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant12(__v), __r)) => (__l, __v, __r),
@@ -20035,7 +20035,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBranch, usize)
+    ) -> (usize, IPRBranch, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant17(__v), __r)) => (__l, __v, __r),
@@ -20046,7 +20046,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRExpression, usize)
+    ) -> (usize, IPRExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant4(__v), __r)) => (__l, __v, __r),
@@ -20057,7 +20057,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunction, usize)
+    ) -> (usize, IPRFunction, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant20(__v), __r)) => (__l, __v, __r),
@@ -20068,7 +20068,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunctionCall, usize)
+    ) -> (usize, IPRFunctionCall, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant21(__v), __r)) => (__l, __v, __r),
@@ -20079,7 +20079,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRInitializationBlock, usize)
+    ) -> (usize, IPRInitializationBlock, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant22(__v), __r)) => (__l, __v, __r),
@@ -20090,7 +20090,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRModule, usize)
+    ) -> (usize, IPRModule, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant23(__v), __r)) => (__l, __v, __r),
@@ -20101,7 +20101,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRReassignment, usize)
+    ) -> (usize, IPRReassignment, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant28(__v), __r)) => (__l, __v, __r),
@@ -20112,7 +20112,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRStatement, usize)
+    ) -> (usize, IPRStatement, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant8(__v), __r)) => (__l, __v, __r),
@@ -20123,7 +20123,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypeSpecifier, usize)
+    ) -> (usize, IPRTypeSpecifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant29(__v), __r)) => (__l, __v, __r),
@@ -20134,7 +20134,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypedIdentifier, usize)
+    ) -> (usize, IPRTypedIdentifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant10(__v), __r)) => (__l, __v, __r),
@@ -20145,7 +20145,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRExpression>, usize)
+    ) -> (usize, Option<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant18(__v), __r)) => (__l, __v, __r),
@@ -20156,7 +20156,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRTypedIdentifier>, usize)
+    ) -> (usize, Option<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant30(__v), __r)) => (__l, __v, __r),
@@ -20211,7 +20211,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant16(__v), __r)) => (__l, __v, __r),
@@ -20222,7 +20222,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRExpression>, usize)
+    ) -> (usize, Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant13(__v), __r)) => (__l, __v, __r),
@@ -20233,7 +20233,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRModuleItem>, usize)
+    ) -> (usize, Vec<IPRModuleItem>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant26(__v), __r)) => (__l, __v, __r),
@@ -20244,7 +20244,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant15(__v), __r)) => (__l, __v, __r),
@@ -20266,7 +20266,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant3(__v), __r)) => (__l, __v, __r),
@@ -20277,7 +20277,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRExpression>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant5(__v), __r)) => (__l, __v, __r),
@@ -20288,7 +20288,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRStatement>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRStatement>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant9(__v), __r)) => (__l, __v, __r),
@@ -20299,7 +20299,7 @@ mod __parse__FuncCall {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant11(__v), __r)) => (__l, __v, __r),
@@ -23419,9 +23419,9 @@ pub use self::__parse__FuncCall::FuncCallParser;
 mod __parse__Init {
 
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -23434,35 +23434,35 @@ mod __parse__Init {
      {
         Variant0(&'input str),
         Variant1(Option<&'input str>),
-        Variant2(HIRAssignmentPattern),
-        Variant3(alloc::vec::Vec<HIRAssignmentPattern>),
-        Variant4(HIRExpression),
-        Variant5(alloc::vec::Vec<HIRExpression>),
+        Variant2(IPRAssignmentPattern),
+        Variant3(alloc::vec::Vec<IPRAssignmentPattern>),
+        Variant4(IPRExpression),
+        Variant5(alloc::vec::Vec<IPRExpression>),
         Variant6(String),
         Variant7(alloc::vec::Vec<String>),
-        Variant8(HIRStatement),
-        Variant9(alloc::vec::Vec<HIRStatement>),
-        Variant10(HIRTypedIdentifier),
-        Variant11(alloc::vec::Vec<HIRTypedIdentifier>),
-        Variant12(HIRBlockExpression),
-        Variant13(Vec<HIRExpression>),
+        Variant8(IPRStatement),
+        Variant9(alloc::vec::Vec<IPRStatement>),
+        Variant10(IPRTypedIdentifier),
+        Variant11(alloc::vec::Vec<IPRTypedIdentifier>),
+        Variant12(IPRBlockExpression),
+        Variant13(Vec<IPRExpression>),
         Variant14(Vec<String>),
-        Variant15(Vec<HIRTypedIdentifier>),
-        Variant16(Vec<HIRAssignmentPattern>),
-        Variant17(HIRBranch),
-        Variant18(Option<HIRExpression>),
+        Variant15(Vec<IPRTypedIdentifier>),
+        Variant16(Vec<IPRAssignmentPattern>),
+        Variant17(IPRBranch),
+        Variant18(Option<IPRExpression>),
         Variant19(Option<String>),
-        Variant20(HIRFunction),
-        Variant21(HIRFunctionCall),
-        Variant22(HIRInitializationBlock),
-        Variant23(HIRModule),
+        Variant20(IPRFunction),
+        Variant21(IPRFunctionCall),
+        Variant22(IPRInitializationBlock),
+        Variant23(IPRModule),
         Variant24(Option<Vec<String>>),
-        Variant25((Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)),
-        Variant26(Vec<HIRModuleItem>),
+        Variant25((Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)),
+        Variant26(Vec<IPRModuleItem>),
         Variant27(usize),
-        Variant28(HIRReassignment),
-        Variant29(HIRTypeSpecifier),
-        Variant30(Option<HIRTypedIdentifier>),
+        Variant28(IPRReassignment),
+        Variant29(IPRTypeSpecifier),
+        Variant30(Option<IPRTypedIdentifier>),
     }
     const __ACTION: &[i16] = &[
         // State 0
@@ -24292,7 +24292,7 @@ mod __parse__Init {
         type Token = Token<'input>;
         type TokenIndex = usize;
         type Symbol = __Symbol<'input>;
-        type Success = HIRInitializationBlock;
+        type Success = IPRInitializationBlock;
         type StateIndex = i16;
         type Action = i16;
         type ReduceIndex = i16;
@@ -25432,7 +25432,7 @@ mod __parse__Init {
         >(
             &self,
             input: &'input str,
-        ) -> Result<HIRInitializationBlock, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
+        ) -> Result<IPRInitializationBlock, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
         {
             let mut __tokens = self.builder.matcher(input);
             __state_machine::Parser::drive(
@@ -25488,7 +25488,7 @@ mod __parse__Init {
         __states: &mut alloc::vec::Vec<i16>,
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>,
         _: core::marker::PhantomData<(&'input (), &'ast ())>,
-    ) -> Option<Result<HIRInitializationBlock,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
+    ) -> Option<Result<IPRInitializationBlock,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
     {
         let (__pop_states, __nonterminal) = match __action {
             0 => {
@@ -25987,7 +25987,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize)
+    ) -> (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant25(__v), __r)) => (__l, __v, __r),
@@ -25998,7 +25998,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRAssignmentPattern, usize)
+    ) -> (usize, IPRAssignmentPattern, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant2(__v), __r)) => (__l, __v, __r),
@@ -26009,7 +26009,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBlockExpression, usize)
+    ) -> (usize, IPRBlockExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant12(__v), __r)) => (__l, __v, __r),
@@ -26020,7 +26020,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBranch, usize)
+    ) -> (usize, IPRBranch, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant17(__v), __r)) => (__l, __v, __r),
@@ -26031,7 +26031,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRExpression, usize)
+    ) -> (usize, IPRExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant4(__v), __r)) => (__l, __v, __r),
@@ -26042,7 +26042,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunction, usize)
+    ) -> (usize, IPRFunction, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant20(__v), __r)) => (__l, __v, __r),
@@ -26053,7 +26053,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunctionCall, usize)
+    ) -> (usize, IPRFunctionCall, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant21(__v), __r)) => (__l, __v, __r),
@@ -26064,7 +26064,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRInitializationBlock, usize)
+    ) -> (usize, IPRInitializationBlock, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant22(__v), __r)) => (__l, __v, __r),
@@ -26075,7 +26075,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRModule, usize)
+    ) -> (usize, IPRModule, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant23(__v), __r)) => (__l, __v, __r),
@@ -26086,7 +26086,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRReassignment, usize)
+    ) -> (usize, IPRReassignment, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant28(__v), __r)) => (__l, __v, __r),
@@ -26097,7 +26097,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRStatement, usize)
+    ) -> (usize, IPRStatement, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant8(__v), __r)) => (__l, __v, __r),
@@ -26108,7 +26108,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypeSpecifier, usize)
+    ) -> (usize, IPRTypeSpecifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant29(__v), __r)) => (__l, __v, __r),
@@ -26119,7 +26119,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypedIdentifier, usize)
+    ) -> (usize, IPRTypedIdentifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant10(__v), __r)) => (__l, __v, __r),
@@ -26130,7 +26130,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRExpression>, usize)
+    ) -> (usize, Option<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant18(__v), __r)) => (__l, __v, __r),
@@ -26141,7 +26141,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRTypedIdentifier>, usize)
+    ) -> (usize, Option<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant30(__v), __r)) => (__l, __v, __r),
@@ -26196,7 +26196,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant16(__v), __r)) => (__l, __v, __r),
@@ -26207,7 +26207,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRExpression>, usize)
+    ) -> (usize, Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant13(__v), __r)) => (__l, __v, __r),
@@ -26218,7 +26218,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRModuleItem>, usize)
+    ) -> (usize, Vec<IPRModuleItem>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant26(__v), __r)) => (__l, __v, __r),
@@ -26229,7 +26229,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant15(__v), __r)) => (__l, __v, __r),
@@ -26251,7 +26251,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant3(__v), __r)) => (__l, __v, __r),
@@ -26262,7 +26262,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRExpression>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant5(__v), __r)) => (__l, __v, __r),
@@ -26273,7 +26273,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRStatement>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRStatement>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant9(__v), __r)) => (__l, __v, __r),
@@ -26284,7 +26284,7 @@ mod __parse__Init {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant11(__v), __r)) => (__l, __v, __r),
@@ -29404,9 +29404,9 @@ pub use self::__parse__Init::InitParser;
 mod __parse__Mod {
 
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -29419,35 +29419,35 @@ mod __parse__Mod {
      {
         Variant0(&'input str),
         Variant1(Option<&'input str>),
-        Variant2(HIRAssignmentPattern),
-        Variant3(alloc::vec::Vec<HIRAssignmentPattern>),
-        Variant4(HIRExpression),
-        Variant5(alloc::vec::Vec<HIRExpression>),
+        Variant2(IPRAssignmentPattern),
+        Variant3(alloc::vec::Vec<IPRAssignmentPattern>),
+        Variant4(IPRExpression),
+        Variant5(alloc::vec::Vec<IPRExpression>),
         Variant6(String),
         Variant7(alloc::vec::Vec<String>),
-        Variant8(HIRStatement),
-        Variant9(alloc::vec::Vec<HIRStatement>),
-        Variant10(HIRTypedIdentifier),
-        Variant11(alloc::vec::Vec<HIRTypedIdentifier>),
-        Variant12(HIRBlockExpression),
-        Variant13(Vec<HIRExpression>),
+        Variant8(IPRStatement),
+        Variant9(alloc::vec::Vec<IPRStatement>),
+        Variant10(IPRTypedIdentifier),
+        Variant11(alloc::vec::Vec<IPRTypedIdentifier>),
+        Variant12(IPRBlockExpression),
+        Variant13(Vec<IPRExpression>),
         Variant14(Vec<String>),
-        Variant15(Vec<HIRTypedIdentifier>),
-        Variant16(Vec<HIRAssignmentPattern>),
-        Variant17(HIRBranch),
-        Variant18(Option<HIRExpression>),
+        Variant15(Vec<IPRTypedIdentifier>),
+        Variant16(Vec<IPRAssignmentPattern>),
+        Variant17(IPRBranch),
+        Variant18(Option<IPRExpression>),
         Variant19(Option<String>),
-        Variant20(HIRFunction),
-        Variant21(HIRFunctionCall),
-        Variant22(HIRInitializationBlock),
-        Variant23(HIRModule),
+        Variant20(IPRFunction),
+        Variant21(IPRFunctionCall),
+        Variant22(IPRInitializationBlock),
+        Variant23(IPRModule),
         Variant24(Option<Vec<String>>),
-        Variant25((Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)),
-        Variant26(Vec<HIRModuleItem>),
+        Variant25((Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)),
+        Variant26(Vec<IPRModuleItem>),
         Variant27(usize),
-        Variant28(HIRReassignment),
-        Variant29(HIRTypeSpecifier),
-        Variant30(Option<HIRTypedIdentifier>),
+        Variant28(IPRReassignment),
+        Variant29(IPRTypeSpecifier),
+        Variant30(Option<IPRTypedIdentifier>),
     }
     const __ACTION: &[i16] = &[
         // State 0
@@ -30489,7 +30489,7 @@ mod __parse__Mod {
         type Token = Token<'input>;
         type TokenIndex = usize;
         type Symbol = __Symbol<'input>;
-        type Success = HIRModule;
+        type Success = IPRModule;
         type StateIndex = i16;
         type Action = i16;
         type ReduceIndex = i16;
@@ -31629,7 +31629,7 @@ mod __parse__Mod {
         >(
             &self,
             input: &'input str,
-        ) -> Result<HIRModule, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
+        ) -> Result<IPRModule, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
         {
             let mut __tokens = self.builder.matcher(input);
             __state_machine::Parser::drive(
@@ -31685,7 +31685,7 @@ mod __parse__Mod {
         __states: &mut alloc::vec::Vec<i16>,
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>,
         _: core::marker::PhantomData<(&'input (), &'ast ())>,
-    ) -> Option<Result<HIRModule,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
+    ) -> Option<Result<IPRModule,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
     {
         let (__pop_states, __nonterminal) = match __action {
             0 => {
@@ -32184,7 +32184,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize)
+    ) -> (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant25(__v), __r)) => (__l, __v, __r),
@@ -32195,7 +32195,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRAssignmentPattern, usize)
+    ) -> (usize, IPRAssignmentPattern, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant2(__v), __r)) => (__l, __v, __r),
@@ -32206,7 +32206,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBlockExpression, usize)
+    ) -> (usize, IPRBlockExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant12(__v), __r)) => (__l, __v, __r),
@@ -32217,7 +32217,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBranch, usize)
+    ) -> (usize, IPRBranch, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant17(__v), __r)) => (__l, __v, __r),
@@ -32228,7 +32228,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRExpression, usize)
+    ) -> (usize, IPRExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant4(__v), __r)) => (__l, __v, __r),
@@ -32239,7 +32239,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunction, usize)
+    ) -> (usize, IPRFunction, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant20(__v), __r)) => (__l, __v, __r),
@@ -32250,7 +32250,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunctionCall, usize)
+    ) -> (usize, IPRFunctionCall, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant21(__v), __r)) => (__l, __v, __r),
@@ -32261,7 +32261,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRInitializationBlock, usize)
+    ) -> (usize, IPRInitializationBlock, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant22(__v), __r)) => (__l, __v, __r),
@@ -32272,7 +32272,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRModule, usize)
+    ) -> (usize, IPRModule, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant23(__v), __r)) => (__l, __v, __r),
@@ -32283,7 +32283,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRReassignment, usize)
+    ) -> (usize, IPRReassignment, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant28(__v), __r)) => (__l, __v, __r),
@@ -32294,7 +32294,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRStatement, usize)
+    ) -> (usize, IPRStatement, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant8(__v), __r)) => (__l, __v, __r),
@@ -32305,7 +32305,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypeSpecifier, usize)
+    ) -> (usize, IPRTypeSpecifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant29(__v), __r)) => (__l, __v, __r),
@@ -32316,7 +32316,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypedIdentifier, usize)
+    ) -> (usize, IPRTypedIdentifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant10(__v), __r)) => (__l, __v, __r),
@@ -32327,7 +32327,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRExpression>, usize)
+    ) -> (usize, Option<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant18(__v), __r)) => (__l, __v, __r),
@@ -32338,7 +32338,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRTypedIdentifier>, usize)
+    ) -> (usize, Option<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant30(__v), __r)) => (__l, __v, __r),
@@ -32393,7 +32393,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant16(__v), __r)) => (__l, __v, __r),
@@ -32404,7 +32404,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRExpression>, usize)
+    ) -> (usize, Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant13(__v), __r)) => (__l, __v, __r),
@@ -32415,7 +32415,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRModuleItem>, usize)
+    ) -> (usize, Vec<IPRModuleItem>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant26(__v), __r)) => (__l, __v, __r),
@@ -32426,7 +32426,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant15(__v), __r)) => (__l, __v, __r),
@@ -32448,7 +32448,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant3(__v), __r)) => (__l, __v, __r),
@@ -32459,7 +32459,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRExpression>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant5(__v), __r)) => (__l, __v, __r),
@@ -32470,7 +32470,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRStatement>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRStatement>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant9(__v), __r)) => (__l, __v, __r),
@@ -32481,7 +32481,7 @@ mod __parse__Mod {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant11(__v), __r)) => (__l, __v, __r),
@@ -35601,9 +35601,9 @@ pub use self::__parse__Mod::ModParser;
 mod __parse__Reassign {
 
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -35616,35 +35616,35 @@ mod __parse__Reassign {
      {
         Variant0(&'input str),
         Variant1(Option<&'input str>),
-        Variant2(HIRAssignmentPattern),
-        Variant3(alloc::vec::Vec<HIRAssignmentPattern>),
-        Variant4(HIRExpression),
-        Variant5(alloc::vec::Vec<HIRExpression>),
+        Variant2(IPRAssignmentPattern),
+        Variant3(alloc::vec::Vec<IPRAssignmentPattern>),
+        Variant4(IPRExpression),
+        Variant5(alloc::vec::Vec<IPRExpression>),
         Variant6(String),
         Variant7(alloc::vec::Vec<String>),
-        Variant8(HIRStatement),
-        Variant9(alloc::vec::Vec<HIRStatement>),
-        Variant10(HIRTypedIdentifier),
-        Variant11(alloc::vec::Vec<HIRTypedIdentifier>),
-        Variant12(HIRBlockExpression),
-        Variant13(Vec<HIRExpression>),
+        Variant8(IPRStatement),
+        Variant9(alloc::vec::Vec<IPRStatement>),
+        Variant10(IPRTypedIdentifier),
+        Variant11(alloc::vec::Vec<IPRTypedIdentifier>),
+        Variant12(IPRBlockExpression),
+        Variant13(Vec<IPRExpression>),
         Variant14(Vec<String>),
-        Variant15(Vec<HIRTypedIdentifier>),
-        Variant16(Vec<HIRAssignmentPattern>),
-        Variant17(HIRBranch),
-        Variant18(Option<HIRExpression>),
+        Variant15(Vec<IPRTypedIdentifier>),
+        Variant16(Vec<IPRAssignmentPattern>),
+        Variant17(IPRBranch),
+        Variant18(Option<IPRExpression>),
         Variant19(Option<String>),
-        Variant20(HIRFunction),
-        Variant21(HIRFunctionCall),
-        Variant22(HIRInitializationBlock),
-        Variant23(HIRModule),
+        Variant20(IPRFunction),
+        Variant21(IPRFunctionCall),
+        Variant22(IPRInitializationBlock),
+        Variant23(IPRModule),
         Variant24(Option<Vec<String>>),
-        Variant25((Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)),
-        Variant26(Vec<HIRModuleItem>),
+        Variant25((Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)),
+        Variant26(Vec<IPRModuleItem>),
         Variant27(usize),
-        Variant28(HIRReassignment),
-        Variant29(HIRTypeSpecifier),
-        Variant30(Option<HIRTypedIdentifier>),
+        Variant28(IPRReassignment),
+        Variant29(IPRTypeSpecifier),
+        Variant30(Option<IPRTypedIdentifier>),
     }
     const __ACTION: &[i16] = &[
         // State 0
@@ -36474,7 +36474,7 @@ mod __parse__Reassign {
         type Token = Token<'input>;
         type TokenIndex = usize;
         type Symbol = __Symbol<'input>;
-        type Success = HIRReassignment;
+        type Success = IPRReassignment;
         type StateIndex = i16;
         type Action = i16;
         type ReduceIndex = i16;
@@ -37614,7 +37614,7 @@ mod __parse__Reassign {
         >(
             &self,
             input: &'input str,
-        ) -> Result<HIRReassignment, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
+        ) -> Result<IPRReassignment, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
         {
             let mut __tokens = self.builder.matcher(input);
             __state_machine::Parser::drive(
@@ -37670,7 +37670,7 @@ mod __parse__Reassign {
         __states: &mut alloc::vec::Vec<i16>,
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>,
         _: core::marker::PhantomData<(&'input (), &'ast ())>,
-    ) -> Option<Result<HIRReassignment,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
+    ) -> Option<Result<IPRReassignment,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
     {
         let (__pop_states, __nonterminal) = match __action {
             0 => {
@@ -38169,7 +38169,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize)
+    ) -> (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant25(__v), __r)) => (__l, __v, __r),
@@ -38180,7 +38180,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRAssignmentPattern, usize)
+    ) -> (usize, IPRAssignmentPattern, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant2(__v), __r)) => (__l, __v, __r),
@@ -38191,7 +38191,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBlockExpression, usize)
+    ) -> (usize, IPRBlockExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant12(__v), __r)) => (__l, __v, __r),
@@ -38202,7 +38202,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBranch, usize)
+    ) -> (usize, IPRBranch, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant17(__v), __r)) => (__l, __v, __r),
@@ -38213,7 +38213,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRExpression, usize)
+    ) -> (usize, IPRExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant4(__v), __r)) => (__l, __v, __r),
@@ -38224,7 +38224,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunction, usize)
+    ) -> (usize, IPRFunction, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant20(__v), __r)) => (__l, __v, __r),
@@ -38235,7 +38235,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunctionCall, usize)
+    ) -> (usize, IPRFunctionCall, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant21(__v), __r)) => (__l, __v, __r),
@@ -38246,7 +38246,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRInitializationBlock, usize)
+    ) -> (usize, IPRInitializationBlock, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant22(__v), __r)) => (__l, __v, __r),
@@ -38257,7 +38257,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRModule, usize)
+    ) -> (usize, IPRModule, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant23(__v), __r)) => (__l, __v, __r),
@@ -38268,7 +38268,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRReassignment, usize)
+    ) -> (usize, IPRReassignment, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant28(__v), __r)) => (__l, __v, __r),
@@ -38279,7 +38279,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRStatement, usize)
+    ) -> (usize, IPRStatement, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant8(__v), __r)) => (__l, __v, __r),
@@ -38290,7 +38290,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypeSpecifier, usize)
+    ) -> (usize, IPRTypeSpecifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant29(__v), __r)) => (__l, __v, __r),
@@ -38301,7 +38301,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypedIdentifier, usize)
+    ) -> (usize, IPRTypedIdentifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant10(__v), __r)) => (__l, __v, __r),
@@ -38312,7 +38312,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRExpression>, usize)
+    ) -> (usize, Option<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant18(__v), __r)) => (__l, __v, __r),
@@ -38323,7 +38323,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRTypedIdentifier>, usize)
+    ) -> (usize, Option<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant30(__v), __r)) => (__l, __v, __r),
@@ -38378,7 +38378,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant16(__v), __r)) => (__l, __v, __r),
@@ -38389,7 +38389,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRExpression>, usize)
+    ) -> (usize, Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant13(__v), __r)) => (__l, __v, __r),
@@ -38400,7 +38400,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRModuleItem>, usize)
+    ) -> (usize, Vec<IPRModuleItem>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant26(__v), __r)) => (__l, __v, __r),
@@ -38411,7 +38411,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant15(__v), __r)) => (__l, __v, __r),
@@ -38433,7 +38433,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant3(__v), __r)) => (__l, __v, __r),
@@ -38444,7 +38444,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRExpression>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant5(__v), __r)) => (__l, __v, __r),
@@ -38455,7 +38455,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRStatement>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRStatement>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant9(__v), __r)) => (__l, __v, __r),
@@ -38466,7 +38466,7 @@ mod __parse__Reassign {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant11(__v), __r)) => (__l, __v, __r),
@@ -41586,9 +41586,9 @@ pub use self::__parse__Reassign::ReassignParser;
 mod __parse__Stmt {
 
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -41601,35 +41601,35 @@ mod __parse__Stmt {
      {
         Variant0(&'input str),
         Variant1(Option<&'input str>),
-        Variant2(HIRAssignmentPattern),
-        Variant3(alloc::vec::Vec<HIRAssignmentPattern>),
-        Variant4(HIRExpression),
-        Variant5(alloc::vec::Vec<HIRExpression>),
+        Variant2(IPRAssignmentPattern),
+        Variant3(alloc::vec::Vec<IPRAssignmentPattern>),
+        Variant4(IPRExpression),
+        Variant5(alloc::vec::Vec<IPRExpression>),
         Variant6(String),
         Variant7(alloc::vec::Vec<String>),
-        Variant8(HIRStatement),
-        Variant9(alloc::vec::Vec<HIRStatement>),
-        Variant10(HIRTypedIdentifier),
-        Variant11(alloc::vec::Vec<HIRTypedIdentifier>),
-        Variant12(HIRBlockExpression),
-        Variant13(Vec<HIRExpression>),
+        Variant8(IPRStatement),
+        Variant9(alloc::vec::Vec<IPRStatement>),
+        Variant10(IPRTypedIdentifier),
+        Variant11(alloc::vec::Vec<IPRTypedIdentifier>),
+        Variant12(IPRBlockExpression),
+        Variant13(Vec<IPRExpression>),
         Variant14(Vec<String>),
-        Variant15(Vec<HIRTypedIdentifier>),
-        Variant16(Vec<HIRAssignmentPattern>),
-        Variant17(HIRBranch),
-        Variant18(Option<HIRExpression>),
+        Variant15(Vec<IPRTypedIdentifier>),
+        Variant16(Vec<IPRAssignmentPattern>),
+        Variant17(IPRBranch),
+        Variant18(Option<IPRExpression>),
         Variant19(Option<String>),
-        Variant20(HIRFunction),
-        Variant21(HIRFunctionCall),
-        Variant22(HIRInitializationBlock),
-        Variant23(HIRModule),
+        Variant20(IPRFunction),
+        Variant21(IPRFunctionCall),
+        Variant22(IPRInitializationBlock),
+        Variant23(IPRModule),
         Variant24(Option<Vec<String>>),
-        Variant25((Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)),
-        Variant26(Vec<HIRModuleItem>),
+        Variant25((Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)),
+        Variant26(Vec<IPRModuleItem>),
         Variant27(usize),
-        Variant28(HIRReassignment),
-        Variant29(HIRTypeSpecifier),
-        Variant30(Option<HIRTypedIdentifier>),
+        Variant28(IPRReassignment),
+        Variant29(IPRTypeSpecifier),
+        Variant30(Option<IPRTypedIdentifier>),
     }
     const __ACTION: &[i16] = &[
         // State 0
@@ -42467,7 +42467,7 @@ mod __parse__Stmt {
         type Token = Token<'input>;
         type TokenIndex = usize;
         type Symbol = __Symbol<'input>;
-        type Success = HIRStatement;
+        type Success = IPRStatement;
         type StateIndex = i16;
         type Action = i16;
         type ReduceIndex = i16;
@@ -43607,7 +43607,7 @@ mod __parse__Stmt {
         >(
             &self,
             input: &'input str,
-        ) -> Result<HIRStatement, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
+        ) -> Result<IPRStatement, __lalrpop_util::ParseError<usize, Token<'input>, &'static str>>
         {
             let mut __tokens = self.builder.matcher(input);
             __state_machine::Parser::drive(
@@ -43663,7 +43663,7 @@ mod __parse__Stmt {
         __states: &mut alloc::vec::Vec<i16>,
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>,
         _: core::marker::PhantomData<(&'input (), &'ast ())>,
-    ) -> Option<Result<HIRStatement,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
+    ) -> Option<Result<IPRStatement,__lalrpop_util::ParseError<usize, Token<'input>, &'static str>>>
     {
         let (__pop_states, __nonterminal) = match __action {
             0 => {
@@ -44162,7 +44162,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize)
+    ) -> (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant25(__v), __r)) => (__l, __v, __r),
@@ -44173,7 +44173,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRAssignmentPattern, usize)
+    ) -> (usize, IPRAssignmentPattern, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant2(__v), __r)) => (__l, __v, __r),
@@ -44184,7 +44184,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBlockExpression, usize)
+    ) -> (usize, IPRBlockExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant12(__v), __r)) => (__l, __v, __r),
@@ -44195,7 +44195,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRBranch, usize)
+    ) -> (usize, IPRBranch, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant17(__v), __r)) => (__l, __v, __r),
@@ -44206,7 +44206,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRExpression, usize)
+    ) -> (usize, IPRExpression, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant4(__v), __r)) => (__l, __v, __r),
@@ -44217,7 +44217,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunction, usize)
+    ) -> (usize, IPRFunction, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant20(__v), __r)) => (__l, __v, __r),
@@ -44228,7 +44228,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRFunctionCall, usize)
+    ) -> (usize, IPRFunctionCall, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant21(__v), __r)) => (__l, __v, __r),
@@ -44239,7 +44239,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRInitializationBlock, usize)
+    ) -> (usize, IPRInitializationBlock, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant22(__v), __r)) => (__l, __v, __r),
@@ -44250,7 +44250,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRModule, usize)
+    ) -> (usize, IPRModule, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant23(__v), __r)) => (__l, __v, __r),
@@ -44261,7 +44261,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRReassignment, usize)
+    ) -> (usize, IPRReassignment, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant28(__v), __r)) => (__l, __v, __r),
@@ -44272,7 +44272,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRStatement, usize)
+    ) -> (usize, IPRStatement, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant8(__v), __r)) => (__l, __v, __r),
@@ -44283,7 +44283,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypeSpecifier, usize)
+    ) -> (usize, IPRTypeSpecifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant29(__v), __r)) => (__l, __v, __r),
@@ -44294,7 +44294,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, HIRTypedIdentifier, usize)
+    ) -> (usize, IPRTypedIdentifier, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant10(__v), __r)) => (__l, __v, __r),
@@ -44305,7 +44305,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRExpression>, usize)
+    ) -> (usize, Option<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant18(__v), __r)) => (__l, __v, __r),
@@ -44316,7 +44316,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Option<HIRTypedIdentifier>, usize)
+    ) -> (usize, Option<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant30(__v), __r)) => (__l, __v, __r),
@@ -44371,7 +44371,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant16(__v), __r)) => (__l, __v, __r),
@@ -44382,7 +44382,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRExpression>, usize)
+    ) -> (usize, Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant13(__v), __r)) => (__l, __v, __r),
@@ -44393,7 +44393,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRModuleItem>, usize)
+    ) -> (usize, Vec<IPRModuleItem>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant26(__v), __r)) => (__l, __v, __r),
@@ -44404,7 +44404,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant15(__v), __r)) => (__l, __v, __r),
@@ -44426,7 +44426,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant3(__v), __r)) => (__l, __v, __r),
@@ -44437,7 +44437,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRExpression>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRExpression>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant5(__v), __r)) => (__l, __v, __r),
@@ -44448,7 +44448,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRStatement>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRStatement>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant9(__v), __r)) => (__l, __v, __r),
@@ -44459,7 +44459,7 @@ mod __parse__Stmt {
       'input,
     >(
         __symbols: &mut alloc::vec::Vec<(usize,__Symbol<'input>,usize)>
-    ) -> (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize)
+    ) -> (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize)
      {
         match __symbols.pop() {
             Some((__l, __Symbol::Variant11(__v), __r)) => (__l, __v, __r),
@@ -47577,9 +47577,9 @@ pub use self::__parse__Stmt::StmtParser;
 mod __intern_token {
     #![allow(unused_imports)]
     use std::str::FromStr;
-    use zea_ast::zea::hir_nodes::*;
+    use zea_ast::zea::immediate_parsed_representation ::*;
     use zea_ast::zea::{BinOp, UnOp, NodeId};
-    use crate::{HIRModuleItem, separate_module_items};
+    use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
     #[allow(unused_imports)]
@@ -47648,8 +47648,8 @@ fn __action0<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRModule, usize),
-) -> HIRModule
+    (_, __0, _): (usize, IPRModule, usize),
+) -> IPRModule
 {
     __0
 }
@@ -47661,8 +47661,8 @@ fn __action1<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRInitializationBlock, usize),
-) -> HIRInitializationBlock
+    (_, __0, _): (usize, IPRInitializationBlock, usize),
+) -> IPRInitializationBlock
 {
     __0
 }
@@ -47674,8 +47674,8 @@ fn __action2<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRAssignmentPattern, usize),
-) -> HIRAssignmentPattern
+    (_, __0, _): (usize, IPRAssignmentPattern, usize),
+) -> IPRAssignmentPattern
 {
     __0
 }
@@ -47687,8 +47687,8 @@ fn __action3<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRReassignment, usize),
-) -> HIRReassignment
+    (_, __0, _): (usize, IPRReassignment, usize),
+) -> IPRReassignment
 {
     __0
 }
@@ -47700,8 +47700,8 @@ fn __action4<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRFunctionCall, usize),
-) -> HIRFunctionCall
+    (_, __0, _): (usize, IPRFunctionCall, usize),
+) -> IPRFunctionCall
 {
     __0
 }
@@ -47713,8 +47713,8 @@ fn __action5<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRFunction, usize),
-) -> HIRFunction
+    (_, __0, _): (usize, IPRFunction, usize),
+) -> IPRFunction
 {
     __0
 }
@@ -47726,8 +47726,8 @@ fn __action6<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRStatement, usize),
-) -> HIRStatement
+    (_, __0, _): (usize, IPRStatement, usize),
+) -> IPRStatement
 {
     __0
 }
@@ -47739,8 +47739,8 @@ fn __action7<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -47754,10 +47754,10 @@ fn __action8<
     input: &'input str,
     (_, i, _): (usize, String, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, t, _): (usize, HIRTypeSpecifier, usize),
-) -> HIRTypedIdentifier
+    (_, t, _): (usize, IPRTypeSpecifier, usize),
+) -> IPRTypedIdentifier
 {
-    HIRTypedIdentifier::new(t, i)
+    IPRTypedIdentifier::new(t, i)
 }
 
 #[allow(unused_variables)]
@@ -47770,11 +47770,11 @@ fn __action9<
     (_, name, _): (usize, String, usize),
     (_, imports, _): (usize, Option<Vec<String>>, usize),
     (_, exports, _): (usize, Option<Vec<String>>, usize),
-    (_, (global_vars, functions, struct_definitions, tagged_unions), _): (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize),
-) -> HIRModule
+    (_, (global_vars, functions, struct_definitions, tagged_unions), _): (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize),
+) -> IPRModule
 {
     {
-        HIRModule {
+        IPRModule {
             id: NodeId::sentinel(),
             imports: imports.unwrap_or(vec![]),
             exports: exports.unwrap_or(vec![]),
@@ -47793,12 +47793,12 @@ fn __action10<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, condition, _): (usize, HIRExpression, usize),
-    (_, true_case, _): (usize, HIRBlockExpression, usize),
-) -> HIRBranch
+    (_, condition, _): (usize, IPRExpression, usize),
+    (_, true_case, _): (usize, IPRBlockExpression, usize),
+) -> IPRBranch
 {
     {
-        HIRBranch::if_block(condition, true_case.wrap_in_expression())
+        IPRBranch::if_block(condition, true_case.wrap_in_expression())
     }
 }
 
@@ -47810,13 +47810,13 @@ fn __action11<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, condition, _): (usize, HIRExpression, usize),
-    (_, true_case, _): (usize, HIRBlockExpression, usize),
+    (_, condition, _): (usize, IPRExpression, usize),
+    (_, true_case, _): (usize, IPRBlockExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, false_case, _): (usize, HIRBlockExpression, usize),
-) -> HIRBranch
+    (_, false_case, _): (usize, IPRBlockExpression, usize),
+) -> IPRBranch
 {
-    HIRBranch::if_else_block(condition, true_case.wrap_in_expression(), false_case.wrap_in_expression())
+    IPRBranch::if_else_block(condition, true_case.wrap_in_expression(), false_case.wrap_in_expression())
 }
 
 #[allow(unused_variables)]
@@ -47872,8 +47872,8 @@ fn __action15<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, Vec<HIRModuleItem>, usize),
-) -> (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>)
+    (_, __0, _): (usize, Vec<IPRModuleItem>, usize),
+) -> (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>)
 {
     separate_module_items(__0)
 }
@@ -47887,7 +47887,7 @@ fn __action16<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> Vec<HIRModuleItem>
+) -> Vec<IPRModuleItem>
 {
     vec![]
 }
@@ -47899,13 +47899,13 @@ fn __action17<
     'ast,
 >(
     input: &'input str,
-    (_, cur, _): (usize, HIRInitializationBlock, usize),
-    (_, rest, _): (usize, Vec<HIRModuleItem>, usize),
-) -> Vec<HIRModuleItem>
+    (_, cur, _): (usize, IPRInitializationBlock, usize),
+    (_, rest, _): (usize, Vec<IPRModuleItem>, usize),
+) -> Vec<IPRModuleItem>
 {
     {
         let mut v = rest;
-        v.push(HIRModuleItem::Init(cur));
+        v.push(IPRModuleItem::Init(cur));
         v
     }
 }
@@ -47917,13 +47917,13 @@ fn __action18<
     'ast,
 >(
     input: &'input str,
-    (_, cur, _): (usize, HIRFunction, usize),
-    (_, rest, _): (usize, Vec<HIRModuleItem>, usize),
-) -> Vec<HIRModuleItem>
+    (_, cur, _): (usize, IPRFunction, usize),
+    (_, rest, _): (usize, Vec<IPRModuleItem>, usize),
+) -> Vec<IPRModuleItem>
 {
     {
             let mut v = rest;
-                    v.push(HIRModuleItem::Func(cur));
+                    v.push(IPRModuleItem::Func(cur));
                     v
         }
 }
@@ -47935,15 +47935,15 @@ fn __action19<
     'ast,
 >(
     input: &'input str,
-    (_, p, _): (usize, HIRAssignmentPattern, usize),
+    (_, p, _): (usize, IPRAssignmentPattern, usize),
     (_, _, _): (usize, &'input str, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, val, _): (usize, HIRExpression, usize),
+    (_, val, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRInitializationBlock
+) -> IPRInitializationBlock
 {
     {
-    HIRInitializationBlock::packed (
+    IPRInitializationBlock::packed (
         None,
         p,
         val
@@ -47958,16 +47958,16 @@ fn __action20<
     'ast,
 >(
     input: &'input str,
-    (_, p, _): (usize, HIRAssignmentPattern, usize),
+    (_, p, _): (usize, IPRAssignmentPattern, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, typ, _): (usize, HIRTypeSpecifier, usize),
+    (_, typ, _): (usize, IPRTypeSpecifier, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, val, _): (usize, HIRExpression, usize),
+    (_, val, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRInitializationBlock
+) -> IPRInitializationBlock
 {
     {
-    HIRInitializationBlock::packed (
+    IPRInitializationBlock::packed (
             Some(typ),
             p,
             val
@@ -47983,9 +47983,9 @@ fn __action21<
 >(
     input: &'input str,
     (_, i, _): (usize, String, usize),
-) -> HIRAssignmentPattern
+) -> IPRAssignmentPattern
 {
-    HIRAssignmentPattern::Identifier(i)
+    IPRAssignmentPattern::Identifier(i)
 }
 
 #[allow(unused_variables)]
@@ -47996,8 +47996,8 @@ fn __action22<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, __0, _): (usize, HIRAssignmentPattern, usize),
-) -> HIRAssignmentPattern
+    (_, __0, _): (usize, IPRAssignmentPattern, usize),
+) -> IPRAssignmentPattern
 {
     __0
 }
@@ -48010,9 +48010,9 @@ fn __action23<
 >(
     input: &'input str,
     (_, i, _): (usize, String, usize),
-) -> HIRAssignmentPattern
+) -> IPRAssignmentPattern
 {
-    HIRAssignmentPattern::Identifier(i)
+    IPRAssignmentPattern::Identifier(i)
 }
 
 #[allow(unused_variables)]
@@ -48023,11 +48023,11 @@ fn __action24<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, pats, _): (usize, Vec<HIRAssignmentPattern>, usize),
+    (_, pats, _): (usize, Vec<IPRAssignmentPattern>, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRAssignmentPattern
+) -> IPRAssignmentPattern
 {
-    HIRAssignmentPattern::Tuple(pats)
+    IPRAssignmentPattern::Tuple(pats)
 }
 
 #[allow(unused_variables)]
@@ -48039,12 +48039,12 @@ fn __action25<
     input: &'input str,
     (_, i, _): (usize, String, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, v, _): (usize, HIRExpression, usize),
+    (_, v, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRReassignment
+) -> IPRReassignment
 {
     {
-        HIRReassignment {
+        IPRReassignment {
             id: NodeId::sentinel(),
             assignee: i,
             value: v
@@ -48061,14 +48061,14 @@ fn __action26<
     input: &'input str,
     (_, subject, _): (usize, String, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, args, _): (usize, Vec<HIRExpression>, usize),
+    (_, args, _): (usize, Vec<IPRExpression>, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRFunctionCall
+) -> IPRFunctionCall
 {
     {
-        HIRFunctionCall {
+        IPRFunctionCall {
             id: NodeId::sentinel(),
-            subject: Box::new(HIRExpression::wrap_ident(subject)),
+            subject: Box::new(IPRExpression::wrap_ident(subject)),
             args
         }
     }
@@ -48084,18 +48084,18 @@ fn __action27<
     (_, _, _): (usize, &'input str, usize),
     (_, name, _): (usize, String, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, args, _): (usize, Vec<HIRTypedIdentifier>, usize),
+    (_, args, _): (usize, Vec<IPRTypedIdentifier>, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, body, _): (usize, HIRBlockExpression, usize),
-) -> HIRFunction
+    (_, body, _): (usize, IPRBlockExpression, usize),
+) -> IPRFunction
 {
     {
-        let params: Vec<HIRFuncParam> = args.into_iter().map(HIRFuncParam::from).collect();
-        HIRFunction {
+        let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
+        IPRFunction {
             id: NodeId::sentinel(),
             name,
             params,
-            returns: HIRTypeSpecifier::NonScalar("Void".to_string()),
+            returns: IPRTypeSpecifier::NonScalar("Void".to_string()),
             body
         }
     }
@@ -48111,16 +48111,16 @@ fn __action28<
     (_, _, _): (usize, &'input str, usize),
     (_, name, _): (usize, String, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, args, _): (usize, Vec<HIRTypedIdentifier>, usize),
+    (_, args, _): (usize, Vec<IPRTypedIdentifier>, usize),
     (_, _, _): (usize, &'input str, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, funcreturns, _): (usize, HIRTypeSpecifier, usize),
-    (_, body, _): (usize, HIRBlockExpression, usize),
-) -> HIRFunction
+    (_, funcreturns, _): (usize, IPRTypeSpecifier, usize),
+    (_, body, _): (usize, IPRBlockExpression, usize),
+) -> IPRFunction
 {
     {
-        let params: Vec<HIRFuncParam> = args.into_iter().map(HIRFuncParam::from).collect();
-        HIRFunction {
+        let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
+        IPRFunction {
             id: NodeId::sentinel(),
             name,
             params,
@@ -48138,9 +48138,9 @@ fn __action29<
 >(
     input: &'input str,
     (_, __0, _): (usize, String, usize),
-) -> HIRTypeSpecifier
+) -> IPRTypeSpecifier
 {
-    {HIRTypeSpecifier::NonScalar(__0)}
+    {IPRTypeSpecifier::NonScalar(__0)}
 }
 
 #[allow(unused_variables)]
@@ -48150,11 +48150,11 @@ fn __action30<
     'ast,
 >(
     input: &'input str,
-    (_, t, _): (usize, HIRTypeSpecifier, usize),
+    (_, t, _): (usize, IPRTypeSpecifier, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRTypeSpecifier
+) -> IPRTypeSpecifier
 {
-    {HIRTypeSpecifier::Pointer(Box::new(t))}
+    {IPRTypeSpecifier::Pointer(Box::new(t))}
 }
 
 #[allow(unused_variables)]
@@ -48165,11 +48165,11 @@ fn __action31<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, t, _): (usize, HIRTypeSpecifier, usize),
+    (_, t, _): (usize, IPRTypeSpecifier, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRTypeSpecifier
+) -> IPRTypeSpecifier
 {
-    {HIRTypeSpecifier::ArrayOf(Box::new(t))}
+    {IPRTypeSpecifier::ArrayOf(Box::new(t))}
 }
 
 #[allow(unused_variables)]
@@ -48180,18 +48180,18 @@ fn __action32<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, statements, _): (usize, alloc::vec::Vec<HIRStatement>, usize),
-    (_, tail, _): (usize, Option<HIRExpression>, usize),
+    (_, statements, _): (usize, alloc::vec::Vec<IPRStatement>, usize),
+    (_, tail, _): (usize, Option<IPRExpression>, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     {
         let last = if let Some(tail) = tail {
             tail
         } else {
-            HIRExpression::unit()
+            IPRExpression::unit()
         };
-        HIRBlockExpression {
+        IPRBlockExpression {
             id: NodeId::sentinel(),
             statements,
             last
@@ -48207,18 +48207,18 @@ fn __action33<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, statements, _): (usize, alloc::vec::Vec<HIRStatement>, usize),
-    (_, tail, _): (usize, Option<HIRExpression>, usize),
+    (_, statements, _): (usize, alloc::vec::Vec<IPRStatement>, usize),
+    (_, tail, _): (usize, Option<IPRExpression>, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     {
         let last = if let Some(tail) = tail {
             tail
         } else {
-            HIRExpression::unit()
+            IPRExpression::unit()
         };
-        HIRBlockExpression {
+        IPRBlockExpression {
             id: NodeId::sentinel(),
             statements,
             last
@@ -48234,14 +48234,14 @@ fn __action34<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, e, _): (usize, HIRExpression, usize),
+    (_, e, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRStatement
+) -> IPRStatement
 {
     {
-        HIRStatement {
+        IPRStatement {
             id: NodeId::sentinel(),
-            kind: HIRStatementKind::Return(e)
+            kind: IPRStatementKind::Return(e)
         }
     }
 }
@@ -48253,12 +48253,12 @@ fn __action35<
     'ast,
 >(
     input: &'input str,
-    (_, init, _): (usize, HIRInitializationBlock, usize),
-) -> HIRStatement
+    (_, init, _): (usize, IPRInitializationBlock, usize),
+) -> IPRStatement
 {
-    HIRStatement {
+    IPRStatement {
         id: NodeId::sentinel(),
-        kind: HIRStatementKind::Initialization(init)
+        kind: IPRStatementKind::Initialization(init)
     }
 }
 
@@ -48269,8 +48269,8 @@ fn __action36<
     'ast,
 >(
     input: &'input str,
-    (_, reinit, _): (usize, HIRReassignment, usize),
-) -> HIRStatement
+    (_, reinit, _): (usize, IPRReassignment, usize),
+) -> IPRStatement
 {
     reinit.wrap_in_statement()
 }
@@ -48282,8 +48282,8 @@ fn __action37<
     'ast,
 >(
     input: &'input str,
-    (_, block, _): (usize, HIRBlockExpression, usize),
-) -> HIRStatement
+    (_, block, _): (usize, IPRBlockExpression, usize),
+) -> IPRStatement
 {
     block.wrap_in_statement()
 }
@@ -48295,9 +48295,9 @@ fn __action38<
     'ast,
 >(
     input: &'input str,
-    (_, call, _): (usize, HIRFunctionCall, usize),
+    (_, call, _): (usize, IPRFunctionCall, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRStatement
+) -> IPRStatement
 {
     call.wrap_in_statement()
 }
@@ -48309,9 +48309,9 @@ fn __action39<
     'ast,
 >(
     input: &'input str,
-    (_, branch, _): (usize, HIRBranch, usize),
+    (_, branch, _): (usize, IPRBranch, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRStatement
+) -> IPRStatement
 {
     branch.wrap_in_statement()
 }
@@ -48323,8 +48323,8 @@ fn __action40<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48336,8 +48336,8 @@ fn __action41<
     'ast,
 >(
     input: &'input str,
-    (_, b, _): (usize, HIRBranch, usize),
-) -> HIRExpression
+    (_, b, _): (usize, IPRBranch, usize),
+) -> IPRExpression
 {
     b.wrap_in_expression()
 }
@@ -48349,8 +48349,8 @@ fn __action42<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48362,12 +48362,12 @@ fn __action43<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::LogOr, l, r)
+    IPRExpression::binop(BinOp::LogOr, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48377,8 +48377,8 @@ fn __action44<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48390,12 +48390,12 @@ fn __action45<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::LogXor, l, r)
+    IPRExpression::binop(BinOp::LogXor, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48405,8 +48405,8 @@ fn __action46<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48418,12 +48418,12 @@ fn __action47<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::LogAnd, l, r)
+    IPRExpression::binop(BinOp::LogAnd, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48433,8 +48433,8 @@ fn __action48<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48446,12 +48446,12 @@ fn __action49<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::BitOr, l, r)
+    IPRExpression::binop(BinOp::BitOr, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48461,12 +48461,12 @@ fn __action50<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::BitXor, l, r)
+    IPRExpression::binop(BinOp::BitXor, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48476,12 +48476,12 @@ fn __action51<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::BitAnd, l, r)
+    IPRExpression::binop(BinOp::BitAnd, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48491,8 +48491,8 @@ fn __action52<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48504,12 +48504,12 @@ fn __action53<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Eq, l, r)
+    IPRExpression::binop(BinOp::Eq, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48519,12 +48519,12 @@ fn __action54<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Neq, l, r)
+    IPRExpression::binop(BinOp::Neq, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48534,8 +48534,8 @@ fn __action55<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48547,12 +48547,12 @@ fn __action56<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::LT, l, r)
+    IPRExpression::binop(BinOp::LT, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48562,12 +48562,12 @@ fn __action57<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::GT, l, r)
+    IPRExpression::binop(BinOp::GT, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48577,12 +48577,12 @@ fn __action58<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Leq, l, r)
+    IPRExpression::binop(BinOp::Leq, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48592,12 +48592,12 @@ fn __action59<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Geq, l, r)
+    IPRExpression::binop(BinOp::Geq, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48607,8 +48607,8 @@ fn __action60<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48620,12 +48620,12 @@ fn __action61<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Lsh, l, r)
+    IPRExpression::binop(BinOp::Lsh, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48635,12 +48635,12 @@ fn __action62<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Rsh, l, r)
+    IPRExpression::binop(BinOp::Rsh, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48650,8 +48650,8 @@ fn __action63<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48663,12 +48663,12 @@ fn __action64<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Add, l, r)
+    IPRExpression::binop(BinOp::Add, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48678,12 +48678,12 @@ fn __action65<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Sub, l, r)
+    IPRExpression::binop(BinOp::Sub, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48693,8 +48693,8 @@ fn __action66<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48706,12 +48706,12 @@ fn __action67<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Mul, l, r)
+    IPRExpression::binop(BinOp::Mul, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48721,12 +48721,12 @@ fn __action68<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Div, l, r)
+    IPRExpression::binop(BinOp::Div, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48736,12 +48736,12 @@ fn __action69<
     'ast,
 >(
     input: &'input str,
-    (_, l, _): (usize, HIRExpression, usize),
+    (_, l, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, r, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, r, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Mod, l, r)
+    IPRExpression::binop(BinOp::Mod, l, r)
 }
 
 #[allow(unused_variables)]
@@ -48751,8 +48751,8 @@ fn __action70<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48765,10 +48765,10 @@ fn __action71<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, e, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, e, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::unop(UnOp::LogNot, e)
+    IPRExpression::unop(UnOp::LogNot, e)
 }
 
 #[allow(unused_variables)]
@@ -48779,10 +48779,10 @@ fn __action72<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, e, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, e, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::unop(UnOp::BitNot, e)
+    IPRExpression::unop(UnOp::BitNot, e)
 }
 
 #[allow(unused_variables)]
@@ -48793,10 +48793,10 @@ fn __action73<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, e, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, e, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
-    HIRExpression::unop(UnOp::Neg, e)
+    IPRExpression::unop(UnOp::Neg, e)
 }
 
 #[allow(unused_variables)]
@@ -48806,8 +48806,8 @@ fn __action74<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48819,8 +48819,8 @@ fn __action75<
     'ast,
 >(
     input: &'input str,
-    (_, c, _): (usize, HIRFunctionCall, usize),
-) -> HIRExpression
+    (_, c, _): (usize, IPRFunctionCall, usize),
+) -> IPRExpression
 {
     c.wrap_in_expression()
 }
@@ -48832,8 +48832,8 @@ fn __action76<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48845,12 +48845,12 @@ fn __action77<
     'ast,
 >(
     input: &'input str,
-    (_, t, _): (usize, HIRExpression, usize),
+    (_, t, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
     (_, m, _): (usize, String, usize),
-) -> HIRExpression
+) -> IPRExpression
 {
-    HIRExpression::member_access(t,m)
+    IPRExpression::member_access(t,m)
 }
 
 #[allow(unused_variables)]
@@ -48860,13 +48860,13 @@ fn __action78<
     'ast,
 >(
     input: &'input str,
-    (_, t, _): (usize, HIRExpression, usize),
+    (_, t, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-    (_, i, _): (usize, HIRExpression, usize),
+    (_, i, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRExpression
+) -> IPRExpression
 {
-    HIRExpression::binop(BinOp::Subscript, t, i)
+    IPRExpression::binop(BinOp::Subscript, t, i)
 }
 
 #[allow(unused_variables)]
@@ -48876,8 +48876,8 @@ fn __action79<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> HIRExpression
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> IPRExpression
 {
     __0
 }
@@ -48890,9 +48890,9 @@ fn __action80<
 >(
     input: &'input str,
     (_, n, _): (usize, usize, usize),
-) -> HIRExpression
+) -> IPRExpression
 {
-    HIRExpression::wrap_lit_int(n)
+    IPRExpression::wrap_lit_int(n)
 }
 
 #[allow(unused_variables)]
@@ -48903,9 +48903,9 @@ fn __action81<
 >(
     input: &'input str,
     (_, s, _): (usize, String, usize),
-) -> HIRExpression
+) -> IPRExpression
 {
-    HIRExpression::wrap_ident(s)
+    IPRExpression::wrap_ident(s)
 }
 
 #[allow(unused_variables)]
@@ -48916,9 +48916,9 @@ fn __action82<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, __0, _): (usize, HIRExpression, usize),
+    (_, __0, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRExpression
+) -> IPRExpression
 {
     __0
 }
@@ -48995,8 +48995,8 @@ fn __action88<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> Option<HIRExpression>
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> Option<IPRExpression>
 {
     Some(__0)
 }
@@ -49010,7 +49010,7 @@ fn __action89<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> Option<HIRExpression>
+) -> Option<IPRExpression>
 {
     None
 }
@@ -49024,7 +49024,7 @@ fn __action90<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> alloc::vec::Vec<HIRStatement>
+) -> alloc::vec::Vec<IPRStatement>
 {
     alloc::vec![]
 }
@@ -49036,8 +49036,8 @@ fn __action91<
     'ast,
 >(
     input: &'input str,
-    (_, v, _): (usize, alloc::vec::Vec<HIRStatement>, usize),
-) -> alloc::vec::Vec<HIRStatement>
+    (_, v, _): (usize, alloc::vec::Vec<IPRStatement>, usize),
+) -> alloc::vec::Vec<IPRStatement>
 {
     v
 }
@@ -49049,8 +49049,8 @@ fn __action92<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRStatement, usize),
-) -> HIRStatement
+    (_, __0, _): (usize, IPRStatement, usize),
+) -> IPRStatement
 {
     __0
 }
@@ -49062,9 +49062,9 @@ fn __action93<
     'ast,
 >(
     input: &'input str,
-    (_, items, _): (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize),
-    (_, last, _): (usize, Option<HIRTypedIdentifier>, usize),
-) -> Vec<HIRTypedIdentifier>
+    (_, items, _): (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize),
+    (_, last, _): (usize, Option<IPRTypedIdentifier>, usize),
+) -> Vec<IPRTypedIdentifier>
 {
     {
         let mut items = items;
@@ -49080,9 +49080,9 @@ fn __action94<
     'ast,
 >(
     input: &'input str,
-    (_, items, _): (usize, alloc::vec::Vec<HIRExpression>, usize),
-    (_, last, _): (usize, Option<HIRExpression>, usize),
-) -> Vec<HIRExpression>
+    (_, items, _): (usize, alloc::vec::Vec<IPRExpression>, usize),
+    (_, last, _): (usize, Option<IPRExpression>, usize),
+) -> Vec<IPRExpression>
 {
     {
         let mut items = items;
@@ -49098,10 +49098,10 @@ fn __action95<
     'ast,
 >(
     input: &'input str,
-    (_, first, _): (usize, HIRAssignmentPattern, usize),
-    (_, rest, _): (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
+    (_, first, _): (usize, IPRAssignmentPattern, usize),
+    (_, rest, _): (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
     (_, _, _): (usize, Option<&'input str>, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     {
         let mut items = vec![first];
@@ -49286,7 +49286,7 @@ fn __action108<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> alloc::vec::Vec<HIRAssignmentPattern>
+) -> alloc::vec::Vec<IPRAssignmentPattern>
 {
     alloc::vec![]
 }
@@ -49298,8 +49298,8 @@ fn __action109<
     'ast,
 >(
     input: &'input str,
-    (_, v, _): (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
-) -> alloc::vec::Vec<HIRAssignmentPattern>
+    (_, v, _): (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
+) -> alloc::vec::Vec<IPRAssignmentPattern>
 {
     v
 }
@@ -49312,8 +49312,8 @@ fn __action110<
 >(
     input: &'input str,
     (_, _, _): (usize, &'input str, usize),
-    (_, __0, _): (usize, HIRAssignmentPattern, usize),
-) -> HIRAssignmentPattern
+    (_, __0, _): (usize, IPRAssignmentPattern, usize),
+) -> IPRAssignmentPattern
 {
     __0
 }
@@ -49327,7 +49327,7 @@ fn __action111<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> alloc::vec::Vec<HIRExpression>
+) -> alloc::vec::Vec<IPRExpression>
 {
     alloc::vec![]
 }
@@ -49339,8 +49339,8 @@ fn __action112<
     'ast,
 >(
     input: &'input str,
-    (_, v, _): (usize, alloc::vec::Vec<HIRExpression>, usize),
-) -> alloc::vec::Vec<HIRExpression>
+    (_, v, _): (usize, alloc::vec::Vec<IPRExpression>, usize),
+) -> alloc::vec::Vec<IPRExpression>
 {
     v
 }
@@ -49352,9 +49352,9 @@ fn __action113<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
+    (_, __0, _): (usize, IPRExpression, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRExpression
+) -> IPRExpression
 {
     __0
 }
@@ -49366,8 +49366,8 @@ fn __action114<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRTypedIdentifier, usize),
-) -> Option<HIRTypedIdentifier>
+    (_, __0, _): (usize, IPRTypedIdentifier, usize),
+) -> Option<IPRTypedIdentifier>
 {
     Some(__0)
 }
@@ -49381,7 +49381,7 @@ fn __action115<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> Option<HIRTypedIdentifier>
+) -> Option<IPRTypedIdentifier>
 {
     None
 }
@@ -49395,7 +49395,7 @@ fn __action116<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> alloc::vec::Vec<HIRTypedIdentifier>
+) -> alloc::vec::Vec<IPRTypedIdentifier>
 {
     alloc::vec![]
 }
@@ -49407,8 +49407,8 @@ fn __action117<
     'ast,
 >(
     input: &'input str,
-    (_, v, _): (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize),
-) -> alloc::vec::Vec<HIRTypedIdentifier>
+    (_, v, _): (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize),
+) -> alloc::vec::Vec<IPRTypedIdentifier>
 {
     v
 }
@@ -49420,9 +49420,9 @@ fn __action118<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRTypedIdentifier, usize),
+    (_, __0, _): (usize, IPRTypedIdentifier, usize),
     (_, _, _): (usize, &'input str, usize),
-) -> HIRTypedIdentifier
+) -> IPRTypedIdentifier
 {
     __0
 }
@@ -49434,8 +49434,8 @@ fn __action119<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRStatement, usize),
-) -> alloc::vec::Vec<HIRStatement>
+    (_, __0, _): (usize, IPRStatement, usize),
+) -> alloc::vec::Vec<IPRStatement>
 {
     alloc::vec![__0]
 }
@@ -49447,9 +49447,9 @@ fn __action120<
     'ast,
 >(
     input: &'input str,
-    (_, v, _): (usize, alloc::vec::Vec<HIRStatement>, usize),
-    (_, e, _): (usize, HIRStatement, usize),
-) -> alloc::vec::Vec<HIRStatement>
+    (_, v, _): (usize, alloc::vec::Vec<IPRStatement>, usize),
+    (_, e, _): (usize, IPRStatement, usize),
+) -> alloc::vec::Vec<IPRStatement>
 {
     { let mut v = v; v.push(e); v }
 }
@@ -49461,8 +49461,8 @@ fn __action121<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRTypedIdentifier, usize),
-) -> alloc::vec::Vec<HIRTypedIdentifier>
+    (_, __0, _): (usize, IPRTypedIdentifier, usize),
+) -> alloc::vec::Vec<IPRTypedIdentifier>
 {
     alloc::vec![__0]
 }
@@ -49474,9 +49474,9 @@ fn __action122<
     'ast,
 >(
     input: &'input str,
-    (_, v, _): (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize),
-    (_, e, _): (usize, HIRTypedIdentifier, usize),
-) -> alloc::vec::Vec<HIRTypedIdentifier>
+    (_, v, _): (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize),
+    (_, e, _): (usize, IPRTypedIdentifier, usize),
+) -> alloc::vec::Vec<IPRTypedIdentifier>
 {
     { let mut v = v; v.push(e); v }
 }
@@ -49488,8 +49488,8 @@ fn __action123<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRExpression, usize),
-) -> alloc::vec::Vec<HIRExpression>
+    (_, __0, _): (usize, IPRExpression, usize),
+) -> alloc::vec::Vec<IPRExpression>
 {
     alloc::vec![__0]
 }
@@ -49501,9 +49501,9 @@ fn __action124<
     'ast,
 >(
     input: &'input str,
-    (_, v, _): (usize, alloc::vec::Vec<HIRExpression>, usize),
-    (_, e, _): (usize, HIRExpression, usize),
-) -> alloc::vec::Vec<HIRExpression>
+    (_, v, _): (usize, alloc::vec::Vec<IPRExpression>, usize),
+    (_, e, _): (usize, IPRExpression, usize),
+) -> alloc::vec::Vec<IPRExpression>
 {
     { let mut v = v; v.push(e); v }
 }
@@ -49515,8 +49515,8 @@ fn __action125<
     'ast,
 >(
     input: &'input str,
-    (_, __0, _): (usize, HIRAssignmentPattern, usize),
-) -> alloc::vec::Vec<HIRAssignmentPattern>
+    (_, __0, _): (usize, IPRAssignmentPattern, usize),
+) -> alloc::vec::Vec<IPRAssignmentPattern>
 {
     alloc::vec![__0]
 }
@@ -49528,9 +49528,9 @@ fn __action126<
     'ast,
 >(
     input: &'input str,
-    (_, v, _): (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
-    (_, e, _): (usize, HIRAssignmentPattern, usize),
-) -> alloc::vec::Vec<HIRAssignmentPattern>
+    (_, v, _): (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
+    (_, e, _): (usize, IPRAssignmentPattern, usize),
+) -> alloc::vec::Vec<IPRAssignmentPattern>
 {
     { let mut v = v; v.push(e); v }
 }
@@ -49570,10 +49570,10 @@ fn __action129<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, HIRAssignmentPattern, usize),
-    __1: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
+    __0: (usize, IPRAssignmentPattern, usize),
+    __1: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __2.0;
     let __end0 = __2.2;
@@ -49598,9 +49598,9 @@ fn __action130<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, HIRAssignmentPattern, usize),
-    __1: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
-) -> Vec<HIRAssignmentPattern>
+    __0: (usize, IPRAssignmentPattern, usize),
+    __1: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __1.2;
     let __end0 = __1.2;
@@ -49628,7 +49628,7 @@ fn __action131<
     input: &'input str,
     __0: (usize, &'input str, usize),
     __1: (usize, String, usize),
-) -> HIRAssignmentPattern
+) -> IPRAssignmentPattern
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -49654,9 +49654,9 @@ fn __action132<
     input: &'input str,
     __0: (usize, &'input str, usize),
     __1: (usize, &'input str, usize),
-    __2: (usize, Vec<HIRAssignmentPattern>, usize),
+    __2: (usize, Vec<IPRAssignmentPattern>, usize),
     __3: (usize, &'input str, usize),
-) -> HIRAssignmentPattern
+) -> IPRAssignmentPattern
 {
     let __start0 = __1.0;
     let __end0 = __3.2;
@@ -49684,7 +49684,7 @@ fn __action133<
     input: &'input str,
     __0: (usize, &'input str, usize),
     __1: (usize, String, usize),
-) -> HIRAssignmentPattern
+) -> IPRAssignmentPattern
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -49710,9 +49710,9 @@ fn __action134<
     input: &'input str,
     __0: (usize, &'input str, usize),
     __1: (usize, &'input str, usize),
-    __2: (usize, Vec<HIRAssignmentPattern>, usize),
+    __2: (usize, Vec<IPRAssignmentPattern>, usize),
     __3: (usize, &'input str, usize),
-) -> HIRAssignmentPattern
+) -> IPRAssignmentPattern
 {
     let __start0 = __1.0;
     let __end0 = __3.2;
@@ -49739,9 +49739,9 @@ fn __action135<
 >(
     input: &'input str,
     __0: (usize, String, usize),
-    __1: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
+    __1: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __0.0;
     let __end0 = __0.2;
@@ -49767,11 +49767,11 @@ fn __action136<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, Vec<HIRAssignmentPattern>, usize),
+    __1: (usize, Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
-    __3: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
+    __3: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
     __4: (usize, &'input str, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __0.0;
     let __end0 = __2.2;
@@ -49799,8 +49799,8 @@ fn __action137<
 >(
     input: &'input str,
     __0: (usize, String, usize),
-    __1: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
-) -> Vec<HIRAssignmentPattern>
+    __1: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __0.0;
     let __end0 = __0.2;
@@ -49825,10 +49825,10 @@ fn __action138<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, Vec<HIRAssignmentPattern>, usize),
+    __1: (usize, Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
-    __3: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
-) -> Vec<HIRAssignmentPattern>
+    __3: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __0.0;
     let __end0 = __2.2;
@@ -49856,7 +49856,7 @@ fn __action139<
     input: &'input str,
     __0: (usize, &'input str, usize),
     __1: (usize, String, usize),
-) -> alloc::vec::Vec<HIRAssignmentPattern>
+) -> alloc::vec::Vec<IPRAssignmentPattern>
 {
     let __start0 = __0.0;
     let __end0 = __1.2;
@@ -49882,9 +49882,9 @@ fn __action140<
     input: &'input str,
     __0: (usize, &'input str, usize),
     __1: (usize, &'input str, usize),
-    __2: (usize, Vec<HIRAssignmentPattern>, usize),
+    __2: (usize, Vec<IPRAssignmentPattern>, usize),
     __3: (usize, &'input str, usize),
-) -> alloc::vec::Vec<HIRAssignmentPattern>
+) -> alloc::vec::Vec<IPRAssignmentPattern>
 {
     let __start0 = __0.0;
     let __end0 = __3.2;
@@ -49910,10 +49910,10 @@ fn __action141<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
+    __0: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
     __1: (usize, &'input str, usize),
     __2: (usize, String, usize),
-) -> alloc::vec::Vec<HIRAssignmentPattern>
+) -> alloc::vec::Vec<IPRAssignmentPattern>
 {
     let __start0 = __1.0;
     let __end0 = __2.2;
@@ -49938,12 +49938,12 @@ fn __action142<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
+    __0: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
     __1: (usize, &'input str, usize),
     __2: (usize, &'input str, usize),
-    __3: (usize, Vec<HIRAssignmentPattern>, usize),
+    __3: (usize, Vec<IPRAssignmentPattern>, usize),
     __4: (usize, &'input str, usize),
-) -> alloc::vec::Vec<HIRAssignmentPattern>
+) -> alloc::vec::Vec<IPRAssignmentPattern>
 {
     let __start0 = __1.0;
     let __end0 = __4.2;
@@ -49972,7 +49972,7 @@ fn __action143<
     input: &'input str,
     __0: (usize, String, usize),
     __1: (usize, &'input str, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __0.2;
     let __end0 = __1.0;
@@ -49999,9 +49999,9 @@ fn __action144<
 >(
     input: &'input str,
     __0: (usize, String, usize),
-    __1: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
+    __1: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -50027,10 +50027,10 @@ fn __action145<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, Vec<HIRAssignmentPattern>, usize),
+    __1: (usize, Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
     __3: (usize, &'input str, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __2.2;
     let __end0 = __3.0;
@@ -50059,11 +50059,11 @@ fn __action146<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, Vec<HIRAssignmentPattern>, usize),
+    __1: (usize, Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
-    __3: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
+    __3: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
     __4: (usize, &'input str, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __3.0;
     let __end0 = __3.2;
@@ -50091,7 +50091,7 @@ fn __action147<
 >(
     input: &'input str,
     __0: (usize, String, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __0.2;
     let __end0 = __0.2;
@@ -50117,8 +50117,8 @@ fn __action148<
 >(
     input: &'input str,
     __0: (usize, String, usize),
-    __1: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
-) -> Vec<HIRAssignmentPattern>
+    __1: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -50143,9 +50143,9 @@ fn __action149<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, Vec<HIRAssignmentPattern>, usize),
+    __1: (usize, Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
-) -> Vec<HIRAssignmentPattern>
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __2.2;
     let __end0 = __2.2;
@@ -50173,10 +50173,10 @@ fn __action150<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, Vec<HIRAssignmentPattern>, usize),
+    __1: (usize, Vec<IPRAssignmentPattern>, usize),
     __2: (usize, &'input str, usize),
-    __3: (usize, alloc::vec::Vec<HIRAssignmentPattern>, usize),
-) -> Vec<HIRAssignmentPattern>
+    __3: (usize, alloc::vec::Vec<IPRAssignmentPattern>, usize),
+) -> Vec<IPRAssignmentPattern>
 {
     let __start0 = __3.0;
     let __end0 = __3.2;
@@ -50202,9 +50202,9 @@ fn __action151<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, HIRExpression, usize),
+    __0: (usize, IPRExpression, usize),
     __1: (usize, &'input str, usize),
-) -> alloc::vec::Vec<HIRExpression>
+) -> alloc::vec::Vec<IPRExpression>
 {
     let __start0 = __0.0;
     let __end0 = __1.2;
@@ -50228,10 +50228,10 @@ fn __action152<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRExpression>, usize),
-    __1: (usize, HIRExpression, usize),
+    __0: (usize, alloc::vec::Vec<IPRExpression>, usize),
+    __1: (usize, IPRExpression, usize),
     __2: (usize, &'input str, usize),
-) -> alloc::vec::Vec<HIRExpression>
+) -> alloc::vec::Vec<IPRExpression>
 {
     let __start0 = __1.0;
     let __end0 = __2.2;
@@ -50256,8 +50256,8 @@ fn __action153<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, Option<HIRExpression>, usize),
-) -> Vec<HIRExpression>
+    __0: (usize, Option<IPRExpression>, usize),
+) -> Vec<IPRExpression>
 {
     let __start0 = __0.0;
     let __end0 = __0.0;
@@ -50282,9 +50282,9 @@ fn __action154<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRExpression>, usize),
-    __1: (usize, Option<HIRExpression>, usize),
-) -> Vec<HIRExpression>
+    __0: (usize, alloc::vec::Vec<IPRExpression>, usize),
+    __1: (usize, Option<IPRExpression>, usize),
+) -> Vec<IPRExpression>
 {
     let __start0 = __0.0;
     let __end0 = __0.2;
@@ -50414,8 +50414,8 @@ fn __action159<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, HIRStatement, usize),
-) -> alloc::vec::Vec<HIRStatement>
+    __0: (usize, IPRStatement, usize),
+) -> alloc::vec::Vec<IPRStatement>
 {
     let __start0 = __0.0;
     let __end0 = __0.2;
@@ -50438,9 +50438,9 @@ fn __action160<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRStatement>, usize),
-    __1: (usize, HIRStatement, usize),
-) -> alloc::vec::Vec<HIRStatement>
+    __0: (usize, alloc::vec::Vec<IPRStatement>, usize),
+    __1: (usize, IPRStatement, usize),
+) -> alloc::vec::Vec<IPRStatement>
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -50465,9 +50465,9 @@ fn __action161<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, Option<HIRExpression>, usize),
+    __1: (usize, Option<IPRExpression>, usize),
     __2: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __0.2;
     let __end0 = __1.0;
@@ -50495,10 +50495,10 @@ fn __action162<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, alloc::vec::Vec<HIRStatement>, usize),
-    __2: (usize, Option<HIRExpression>, usize),
+    __1: (usize, alloc::vec::Vec<IPRStatement>, usize),
+    __2: (usize, Option<IPRExpression>, usize),
     __3: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -50525,9 +50525,9 @@ fn __action163<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, Option<HIRExpression>, usize),
+    __1: (usize, Option<IPRExpression>, usize),
     __2: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __0.2;
     let __end0 = __1.0;
@@ -50555,10 +50555,10 @@ fn __action164<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, alloc::vec::Vec<HIRStatement>, usize),
-    __2: (usize, Option<HIRExpression>, usize),
+    __1: (usize, alloc::vec::Vec<IPRStatement>, usize),
+    __2: (usize, Option<IPRExpression>, usize),
     __3: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -50584,9 +50584,9 @@ fn __action165<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, HIRTypedIdentifier, usize),
+    __0: (usize, IPRTypedIdentifier, usize),
     __1: (usize, &'input str, usize),
-) -> alloc::vec::Vec<HIRTypedIdentifier>
+) -> alloc::vec::Vec<IPRTypedIdentifier>
 {
     let __start0 = __0.0;
     let __end0 = __1.2;
@@ -50610,10 +50610,10 @@ fn __action166<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize),
-    __1: (usize, HIRTypedIdentifier, usize),
+    __0: (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize),
+    __1: (usize, IPRTypedIdentifier, usize),
     __2: (usize, &'input str, usize),
-) -> alloc::vec::Vec<HIRTypedIdentifier>
+) -> alloc::vec::Vec<IPRTypedIdentifier>
 {
     let __start0 = __1.0;
     let __end0 = __2.2;
@@ -50638,8 +50638,8 @@ fn __action167<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, Option<HIRTypedIdentifier>, usize),
-) -> Vec<HIRTypedIdentifier>
+    __0: (usize, Option<IPRTypedIdentifier>, usize),
+) -> Vec<IPRTypedIdentifier>
 {
     let __start0 = __0.0;
     let __end0 = __0.0;
@@ -50664,9 +50664,9 @@ fn __action168<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize),
-    __1: (usize, Option<HIRTypedIdentifier>, usize),
-) -> Vec<HIRTypedIdentifier>
+    __0: (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize),
+    __1: (usize, Option<IPRTypedIdentifier>, usize),
+) -> Vec<IPRTypedIdentifier>
 {
     let __start0 = __0.0;
     let __end0 = __0.2;
@@ -50691,9 +50691,9 @@ fn __action169<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, HIRExpression, usize),
+    __1: (usize, IPRExpression, usize),
     __2: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -50720,7 +50720,7 @@ fn __action170<
     input: &'input str,
     __0: (usize, &'input str, usize),
     __1: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __0.2;
     let __end0 = __1.0;
@@ -50747,10 +50747,10 @@ fn __action171<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, alloc::vec::Vec<HIRStatement>, usize),
-    __2: (usize, HIRExpression, usize),
+    __1: (usize, alloc::vec::Vec<IPRStatement>, usize),
+    __2: (usize, IPRExpression, usize),
     __3: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __2.0;
     let __end0 = __2.2;
@@ -50777,9 +50777,9 @@ fn __action172<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, alloc::vec::Vec<HIRStatement>, usize),
+    __1: (usize, alloc::vec::Vec<IPRStatement>, usize),
     __2: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __1.2;
     let __end0 = __2.0;
@@ -50806,8 +50806,8 @@ fn __action173<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, HIRExpression, usize),
-) -> Vec<HIRExpression>
+    __0: (usize, IPRExpression, usize),
+) -> Vec<IPRExpression>
 {
     let __start0 = __0.0;
     let __end0 = __0.2;
@@ -50832,7 +50832,7 @@ fn __action174<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> Vec<HIRExpression>
+) -> Vec<IPRExpression>
 {
     let __start0 = *__lookbehind;
     let __end0 = *__lookahead;
@@ -50856,9 +50856,9 @@ fn __action175<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRExpression>, usize),
-    __1: (usize, HIRExpression, usize),
-) -> Vec<HIRExpression>
+    __0: (usize, alloc::vec::Vec<IPRExpression>, usize),
+    __1: (usize, IPRExpression, usize),
+) -> Vec<IPRExpression>
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -50882,8 +50882,8 @@ fn __action176<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRExpression>, usize),
-) -> Vec<HIRExpression>
+    __0: (usize, alloc::vec::Vec<IPRExpression>, usize),
+) -> Vec<IPRExpression>
 {
     let __start0 = __0.2;
     let __end0 = __0.2;
@@ -50909,9 +50909,9 @@ fn __action177<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, HIRExpression, usize),
+    __1: (usize, IPRExpression, usize),
     __2: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -50938,7 +50938,7 @@ fn __action178<
     input: &'input str,
     __0: (usize, &'input str, usize),
     __1: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __0.2;
     let __end0 = __1.0;
@@ -50965,10 +50965,10 @@ fn __action179<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, alloc::vec::Vec<HIRStatement>, usize),
-    __2: (usize, HIRExpression, usize),
+    __1: (usize, alloc::vec::Vec<IPRStatement>, usize),
+    __2: (usize, IPRExpression, usize),
     __3: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __2.0;
     let __end0 = __2.2;
@@ -50995,9 +50995,9 @@ fn __action180<
 >(
     input: &'input str,
     __0: (usize, &'input str, usize),
-    __1: (usize, alloc::vec::Vec<HIRStatement>, usize),
+    __1: (usize, alloc::vec::Vec<IPRStatement>, usize),
     __2: (usize, &'input str, usize),
-) -> HIRBlockExpression
+) -> IPRBlockExpression
 {
     let __start0 = __1.2;
     let __end0 = __2.0;
@@ -51129,8 +51129,8 @@ fn __action185<
     __0: (usize, String, usize),
     __1: (usize, Option<Vec<String>>, usize),
     __2: (usize, Vec<String>, usize),
-    __3: (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize),
-) -> HIRModule
+    __3: (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize),
+) -> IPRModule
 {
     let __start0 = __2.0;
     let __end0 = __2.2;
@@ -51158,8 +51158,8 @@ fn __action186<
     input: &'input str,
     __0: (usize, String, usize),
     __1: (usize, Option<Vec<String>>, usize),
-    __2: (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize),
-) -> HIRModule
+    __2: (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize),
+) -> IPRModule
 {
     let __start0 = __1.2;
     let __end0 = __2.0;
@@ -51189,8 +51189,8 @@ fn __action187<
     __0: (usize, String, usize),
     __1: (usize, Vec<String>, usize),
     __2: (usize, Vec<String>, usize),
-    __3: (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize),
-) -> HIRModule
+    __3: (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize),
+) -> IPRModule
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -51218,8 +51218,8 @@ fn __action188<
     input: &'input str,
     __0: (usize, String, usize),
     __1: (usize, Vec<String>, usize),
-    __2: (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize),
-) -> HIRModule
+    __2: (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize),
+) -> IPRModule
 {
     let __start0 = __0.2;
     let __end0 = __1.0;
@@ -51248,8 +51248,8 @@ fn __action189<
     input: &'input str,
     __0: (usize, String, usize),
     __1: (usize, Vec<String>, usize),
-    __2: (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize),
-) -> HIRModule
+    __2: (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize),
+) -> IPRModule
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -51275,8 +51275,8 @@ fn __action190<
 >(
     input: &'input str,
     __0: (usize, String, usize),
-    __1: (usize, (Vec<HIRInitializationBlock>, Vec<HIRFunction>, Vec<HIRStructDataTypeDefinition>, Vec<HIRTaggedUnionDataTypeDefinition>), usize),
-) -> HIRModule
+    __1: (usize, (Vec<IPRInitializationBlock>, Vec<IPRFunction>, Vec<IPRStructDataTypeDefinition>, Vec<IPRTaggedUnionDataTypeDefinition>), usize),
+) -> IPRModule
 {
     let __start0 = __0.2;
     let __end0 = __1.0;
@@ -51305,8 +51305,8 @@ fn __action191<
     __0: (usize, String, usize),
     __1: (usize, Vec<String>, usize),
     __2: (usize, Vec<String>, usize),
-    __3: (usize, Vec<HIRModuleItem>, usize),
-) -> HIRModule
+    __3: (usize, Vec<IPRModuleItem>, usize),
+) -> IPRModule
 {
     let __start0 = __3.0;
     let __end0 = __3.2;
@@ -51334,8 +51334,8 @@ fn __action192<
     input: &'input str,
     __0: (usize, String, usize),
     __1: (usize, Vec<String>, usize),
-    __2: (usize, Vec<HIRModuleItem>, usize),
-) -> HIRModule
+    __2: (usize, Vec<IPRModuleItem>, usize),
+) -> IPRModule
 {
     let __start0 = __2.0;
     let __end0 = __2.2;
@@ -51362,8 +51362,8 @@ fn __action193<
     input: &'input str,
     __0: (usize, String, usize),
     __1: (usize, Vec<String>, usize),
-    __2: (usize, Vec<HIRModuleItem>, usize),
-) -> HIRModule
+    __2: (usize, Vec<IPRModuleItem>, usize),
+) -> IPRModule
 {
     let __start0 = __2.0;
     let __end0 = __2.2;
@@ -51389,8 +51389,8 @@ fn __action194<
 >(
     input: &'input str,
     __0: (usize, String, usize),
-    __1: (usize, Vec<HIRModuleItem>, usize),
-) -> HIRModule
+    __1: (usize, Vec<IPRModuleItem>, usize),
+) -> IPRModule
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -51414,8 +51414,8 @@ fn __action195<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, HIRTypedIdentifier, usize),
-) -> Vec<HIRTypedIdentifier>
+    __0: (usize, IPRTypedIdentifier, usize),
+) -> Vec<IPRTypedIdentifier>
 {
     let __start0 = __0.0;
     let __end0 = __0.2;
@@ -51440,7 +51440,7 @@ fn __action196<
     input: &'input str,
     __lookbehind: &usize,
     __lookahead: &usize,
-) -> Vec<HIRTypedIdentifier>
+) -> Vec<IPRTypedIdentifier>
 {
     let __start0 = *__lookbehind;
     let __end0 = *__lookahead;
@@ -51464,9 +51464,9 @@ fn __action197<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize),
-    __1: (usize, HIRTypedIdentifier, usize),
-) -> Vec<HIRTypedIdentifier>
+    __0: (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize),
+    __1: (usize, IPRTypedIdentifier, usize),
+) -> Vec<IPRTypedIdentifier>
 {
     let __start0 = __1.0;
     let __end0 = __1.2;
@@ -51490,8 +51490,8 @@ fn __action198<
     'ast,
 >(
     input: &'input str,
-    __0: (usize, alloc::vec::Vec<HIRTypedIdentifier>, usize),
-) -> Vec<HIRTypedIdentifier>
+    __0: (usize, alloc::vec::Vec<IPRTypedIdentifier>, usize),
+) -> Vec<IPRTypedIdentifier>
 {
     let __start0 = __0.2;
     let __end0 = __0.2;

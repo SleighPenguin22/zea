@@ -1,11 +1,11 @@
 #![allow(clippy::new_without_default)]
-use crate::zea::visitors::annotating::HIRScopedIdentifier;
+use crate::zea::visitors::annotating::IPRScopedIdentifier;
 use crate::zea::visitors::{
     walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef,
     walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef,
     walk_mut_unpacked_init, Transfomer,
 };
-use crate::zea::{hir_nodes::*, NodeId};
+use crate::zea::{immediate_parsed_representation::*, NodeId};
 use crate::ZeaError;
 use indexmap::set::MutableValues;
 use indexmap::IndexSet;
@@ -64,77 +64,77 @@ impl Transfomer for BareNodeLabeler {
     type TransformerError = ();
     fn visit_block(
         &mut self,
-        block: &mut HIRBlockExpression,
+        block: &mut IPRBlockExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut block.id);
         walk_mut_block(self, block)
     }
     fn visit_branch(
         &mut self,
-        branch: &mut HIRBranch,
+        branch: &mut IPRBranch,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut branch.id);
         walk_mut_branch(self, branch)
     }
     fn visit_call(
         &mut self,
-        call: &mut HIRFunctionCall,
+        call: &mut IPRFunctionCall,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut call.id);
         walk_mut_call(self, call)
     }
     fn visit_expr(
         &mut self,
-        expr: &mut HIRExpression,
+        expr: &mut IPRExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut expr.id);
         walk_mut_expr(self, expr)
     }
     fn visit_funcdef(
         &mut self,
-        funcdef: &mut HIRFunction,
+        funcdef: &mut IPRFunction,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut funcdef.id);
         walk_mut_funcdef(self, funcdef)
     }
     fn visit_init(
         &mut self,
-        init: &mut HIRSimpleInitialization,
+        init: &mut IPRSimpleInitialization,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut init.id);
         walk_mut_unpacked_init(self, init)
     }
     fn visit_initblock(
         &mut self,
-        init: &mut HIRInitializationBlock,
+        init: &mut IPRInitializationBlock,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut init.id);
         walk_mut_initblock(self, init)
     }
     fn visit_module(
         &mut self,
-        module: &mut HIRModule,
+        module: &mut IPRModule,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut module.id);
         walk_mut_module(self, module)
     }
     fn visit_reassignment(
         &mut self,
-        reinit: &mut HIRReassignment,
+        reinit: &mut IPRReassignment,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut reinit.id);
         walk_mut_reassignment(self, reinit)
     }
     fn visit_stmt(
         &mut self,
-        stmt: &mut HIRStatement,
+        stmt: &mut IPRStatement,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut stmt.id);
         walk_mut_stmt(self, stmt)
     }
     fn visit_structdef(
         &mut self,
-        structdef: &mut HIRStructDataTypeDefinition,
+        structdef: &mut IPRStructDataTypeDefinition,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut structdef.id);
         walk_mut_structdef(self, structdef)
@@ -171,13 +171,13 @@ impl Transfomer for AssignmentSimplifier {
     type TransformerOk = ();
     fn visit_initblock(
         &mut self,
-        init: &mut HIRInitializationBlock,
+        init: &mut IPRInitializationBlock,
     ) -> Result<Self::TransformerOk, Self::TransformerOk> {
         match init.kind {
-            HIRInitializationKind::Packed(_) => {
-                init.kind = HIRInitializationKind::Unpacked(self.expand_assignment(init.clone()));
+            IPRInitializationKind::Packed(_) => {
+                init.kind = IPRInitializationKind::Unpacked(self.expand_assignment(init.clone()));
             }
-            HIRInitializationKind::Unpacked(_) => {}
+            IPRInitializationKind::Unpacked(_) => {}
         }
         walk_mut_initblock(self, init)
     }
@@ -189,42 +189,42 @@ impl AssignmentSimplifier {
     /// Also generates an expression referencing that initialization.
     fn synthesize_temporary(
         &mut self,
-        value: HIRExpression,
-    ) -> (HIRSimpleInitialization, HIRExpression) {
+        value: IPRExpression,
+    ) -> (IPRSimpleInitialization, IPRExpression) {
         let (id, label) = self.next_label_with_ident_string();
-        let mut init = HIRSimpleInitialization::untyped(&label, value);
+        let mut init = IPRSimpleInitialization::untyped(&label, value);
         init.id = id;
         let ident_expr =
-            HIRExpression::scoped_local(init.assignee.clone(), id).with_id(self.next_id());
+            IPRExpression::scoped_local(init.assignee.clone(), id).with_id(self.next_id());
         (init, ident_expr)
     }
     fn synthesize_unpacking_tuple_item(
         &mut self,
-        assignee: HIRAssignmentPattern,
-        value: HIRExpression,
+        assignee: IPRAssignmentPattern,
+        value: IPRExpression,
         index: usize,
-    ) -> HIRPackedInitialization {
-        let mut member_access = HIRExpression::member_access(value, format!("_{index}"));
+    ) -> IPRPackedInitialization {
+        let mut member_access = IPRExpression::member_access(value, format!("_{index}"));
         member_access.id = self.next_id();
-        HIRPackedInitialization::untyped(assignee, member_access)
+        IPRPackedInitialization::untyped(assignee, member_access)
     }
-    fn expand_assignment(&mut self, init: HIRInitializationBlock) -> Vec<HIRSimpleInitialization> {
+    fn expand_assignment(&mut self, init: IPRInitializationBlock) -> Vec<IPRSimpleInitialization> {
         match init.kind {
-            HIRInitializationKind::Packed(p) => self.expand_packed_init(p),
-            HIRInitializationKind::Unpacked(u) => u,
+            IPRInitializationKind::Packed(p) => self.expand_packed_init(p),
+            IPRInitializationKind::Unpacked(u) => u,
         }
     }
     fn expand_packed_init(
         &mut self,
-        init: HIRPackedInitialization,
-    ) -> Vec<HIRSimpleInitialization> {
+        init: IPRPackedInitialization,
+    ) -> Vec<IPRSimpleInitialization> {
         match init.assignee {
-            HIRAssignmentPattern::Identifier(i) => {
-                let mut simple = HIRSimpleInitialization::untyped(&i, init.value);
+            IPRAssignmentPattern::Identifier(i) => {
+                let mut simple = IPRSimpleInitialization::untyped(&i, init.value);
                 simple.id = self.next_id();
                 vec![simple]
             }
-            HIRAssignmentPattern::Tuple(t) => {
+            IPRAssignmentPattern::Tuple(t) => {
                 let (temp, ident_expr) = self.synthesize_temporary(init.value.clone());
 
                 let mut res = vec![temp];
@@ -262,7 +262,7 @@ pub struct BlockScope {
     parent: BlockScopeIndex,
     /// All identifiers the current scope introduces, in order.
     /// can be used to check if an identifier has been declared at a point in the block.
-    introductions: Vec<HIRScopedIdentifier>,
+    introductions: Vec<IPRScopedIdentifier>,
     children: Vec<BlockScopeIndex>,
     kind: ScopeKind,
 }
@@ -275,7 +275,7 @@ enum ScopeKind {
 }
 
 impl BlockScope {
-    pub fn from_block(block: &HIRBlockExpression, parent: BlockScopeIndex) -> Self {
+    pub fn from_block(block: &IPRBlockExpression, parent: BlockScopeIndex) -> Self {
         Self {
             origin: block.id,
             parent,
@@ -288,11 +288,11 @@ impl BlockScope {
         self.children.push(idx);
         self
     }
-    pub fn add_introduction(&mut self, ident: HIRScopedIdentifier) -> &mut Self {
+    pub fn add_introduction(&mut self, ident: IPRScopedIdentifier) -> &mut Self {
         self.introductions.push(ident);
         self
     }
-    pub fn introduces(&self, ident: &str) -> Option<&HIRScopedIdentifier> {
+    pub fn introduces(&self, ident: &str) -> Option<&IPRScopedIdentifier> {
         self.introductions.iter().find(|p| p.ident == ident)
     }
     pub fn is_module_root(&self) -> bool {
@@ -318,7 +318,7 @@ pub struct NotInScopeError {
 }
 
 impl ZeaError for NotInScopeError {
-    type ErrContext = (IdentifierScoper, HIRModule);
+    type ErrContext = (IdentifierScoper, IPRModule);
     fn zea_error_format(&self, ctx: &Self::ErrContext) -> String {
         let (scope_ctx, _module) = ctx;
         let origin = scope_ctx.get(self.scope_stack_top);
@@ -340,7 +340,7 @@ fn scopekind_to_pretty_string(scopekind: ScopeKind) -> &'static str {
     }
 }
 
-pub fn scope_module(mut module: HIRModule) -> HIRModule {
+pub fn scope_module(mut module: IPRModule) -> IPRModule {
     let mut scoper = IdentifierScoper::new(&module);
     match scoper.visit_module(&mut module) {
         Ok(_) => {}
@@ -357,16 +357,16 @@ impl Transfomer for IdentifierScoper {
     type TransformerOk = ();
     fn visit_expr(
         &mut self,
-        expr: &mut HIRExpression,
+        expr: &mut IPRExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
-        if let HIRExpressionKind::UnScopedIdent(i) = &mut expr.kind {
+        if let IPRExpressionKind::UnScopedIdent(i) = &mut expr.kind {
             if i == "true" {
-                expr.kind = HIRExpressionKind::BoolLiteral(true);
+                expr.kind = IPRExpressionKind::BoolLiteral(true);
             } else if i == "false" {
-                expr.kind = HIRExpressionKind::BoolLiteral(false);
+                expr.kind = IPRExpressionKind::BoolLiteral(false);
             } else {
                 let scoped_ident = self.resolve(i)?.clone();
-                expr.kind = HIRExpressionKind::ScopedIdent(scoped_ident);
+                expr.kind = IPRExpressionKind::ScopedIdent(scoped_ident);
             }
             return Ok(());
         }
@@ -375,7 +375,7 @@ impl Transfomer for IdentifierScoper {
     }
     fn visit_block(
         &mut self,
-        block: &mut HIRBlockExpression,
+        block: &mut IPRBlockExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.enter_scope(block.id, ScopeKind::Block);
         walk_mut_block(self, block)?;
@@ -384,29 +384,29 @@ impl Transfomer for IdentifierScoper {
     }
     fn visit_module(
         &mut self,
-        module: &mut HIRModule,
+        module: &mut IPRModule,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         // global variables are considered ordered; their scope covers everything below them.
         // global variables may not be initialized with function calls; they should be constants.
         for glob in module.global_vars.iter_mut() {
-            let HIRInitializationKind::Unpacked(u) = &mut glob.kind else {
+            let IPRInitializationKind::Unpacked(u) = &mut glob.kind else {
                 unreachable!("assignment should be unpacked before scope analysis")
             };
             for init in u {
                 walk_mut_unpacked_init(self, init)?;
                 self.current_scope()
-                    .add_introduction(HIRScopedIdentifier::from_global_init(init));
+                    .add_introduction(IPRScopedIdentifier::from_global_init(init));
             }
         }
         // Functions and imports are not considered ordered; their scope covers the whole of the module.
         for imp in module.imports.iter_mut() {
             self.current_scope()
-                .add_introduction(HIRScopedIdentifier::import_item(module.id, imp.clone()));
+                .add_introduction(IPRScopedIdentifier::import_item(module.id, imp.clone()));
         }
 
         for func in module.functions.iter_mut() {
             self.current_scope()
-                .add_introduction(HIRScopedIdentifier::from_funcdef(func));
+                .add_introduction(IPRScopedIdentifier::from_funcdef(func));
         }
 
         for func in module.functions.iter_mut() {
@@ -417,11 +417,11 @@ impl Transfomer for IdentifierScoper {
     }
     fn visit_funcdef(
         &mut self,
-        funcdef: &mut HIRFunction,
+        funcdef: &mut IPRFunction,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         let scope = self.enter_scope(funcdef.body.id, ScopeKind::Function);
         for param in funcdef.params.iter() {
-            scope.add_introduction(HIRScopedIdentifier::from_func_param(param));
+            scope.add_introduction(IPRScopedIdentifier::from_func_param(param));
         }
         walk_mut_block(self, &mut funcdef.body)?;
         self.exit_scope();
@@ -429,7 +429,7 @@ impl Transfomer for IdentifierScoper {
     }
     fn visit_branch(
         &mut self,
-        branch: &mut HIRBranch,
+        branch: &mut IPRBranch,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.visit_expr(branch.condition.as_mut())?;
 
@@ -442,15 +442,15 @@ impl Transfomer for IdentifierScoper {
     }
 }
 
-fn branch_twig_as_block(twig: &mut HIRExpression) -> Option<&mut HIRBlockExpression> {
+fn branch_twig_as_block(twig: &mut IPRExpression) -> Option<&mut IPRBlockExpression> {
     match &mut twig.kind {
-        HIRExpressionKind::Block(b) => Some(b.as_mut()),
+        IPRExpressionKind::Block(b) => Some(b.as_mut()),
         _ => None,
     }
 }
 
 impl IdentifierScoper {
-    pub fn new(module: &HIRModule) -> Self {
+    pub fn new(module: &IPRModule) -> Self {
         let mut new = Self {
             scope_stack: Vec::with_capacity(16),
             scope_arena: IndexSet::with_capacity(128),
@@ -459,7 +459,7 @@ impl IdentifierScoper {
         new.build_global_scope_skeleton(module);
         new
     }
-    fn build_global_scope_skeleton(&mut self, module: &HIRModule) -> &mut BlockScope {
+    fn build_global_scope_skeleton(&mut self, module: &IPRModule) -> &mut BlockScope {
         let dummy_scope = BlockScope {
             origin: NodeId::sentinel(),
             parent: BlockScopeIndex::sentinel(),
@@ -526,7 +526,7 @@ impl IdentifierScoper {
             .cloned()
             .expect("scope stack should not be empty")
     }
-    fn resolve(&mut self, ident: &str) -> Result<HIRScopedIdentifier, NotInScopeError> {
+    fn resolve(&mut self, ident: &str) -> Result<IPRScopedIdentifier, NotInScopeError> {
         let mut cur_scope_idx = *self.scope_stack.last().expect("stack should not be empty");
         let mut cur_scope = self.get_scope_mut(cur_scope_idx);
 
@@ -554,7 +554,7 @@ impl IdentifierScoper {
     /// but this might change in the future.
     /// This method exists as a future proofing thing,
     /// as the non-block path will never be taken given the current parser implementation.
-    fn visit_branch_twig(&mut self, twig: &mut HIRExpression) -> Result<(), NotInScopeError> {
+    fn visit_branch_twig(&mut self, twig: &mut IPRExpression) -> Result<(), NotInScopeError> {
         if let Some(twig) = branch_twig_as_block(twig) {
             self.enter_scope(twig.id, ScopeKind::BranchTwig);
             self.visit_block(twig)?;
@@ -570,10 +570,10 @@ impl IdentifierScoper {
 mod tests {
     use crate::zea::visitors::Transfomer;
     use crate::zea::*;
-    use crate::zea::{HIRModule, NodeLabeler};
+    use crate::zea::{IPRModule, NodeLabeler};
     use zea_parser::zepast;
 
-    fn prepare_module(mut ast: HIRModule) -> (HIRModule, impl NodeLabeler) {
+    fn prepare_module(mut ast: IPRModule) -> (IPRModule, impl NodeLabeler) {
         let mut labeler = BareNodeLabeler::new();
         labeler.visit_module(&mut ast).unwrap();
         let labeler = ast.simplify_assignments_after(labeler);

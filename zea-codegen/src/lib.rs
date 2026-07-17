@@ -10,7 +10,7 @@ use zea_ast::zea::visitors::annotating::ScopedIdentifierKind;
 
 pub mod node_c_conversion;
 
-pub fn canoncalize_zea_identifier(identifier: zea_ast::zea::HIRScopedIdentifier) -> String {
+pub fn canoncalize_zea_identifier(identifier: zea_ast::zea::IPRScopedIdentifier) -> String {
     // match identifier.kind {
     //     ScopedIdentifierKind::LocalVar => {}
     //     ScopedIdentifierKind::GlobalVar => {}

@@ -21,32 +21,32 @@
 /// The [`visitors::altering::BareNodeLabeler`] visitor
 /// grants a unique ID to node with a sentinel ID.
 use crate::helper_impls::StructuralEq;
-use crate::zea::hir_nodes::HIRASTNode;
-use crate::zea::hir_nodes::HIRModule;
-use crate::zea::visitors::Visitor;
+use crate::zea::immediate_parsed_representation::IPRASTNode;
+use crate::zea::immediate_parsed_representation::IPRModule;
+use crate::zea::visitors::IPRVisitor;
 
 mod typecheck;
 pub use typecheck::typecheck_module;
 mod impls;
 mod mir_nodes;
 pub mod visitors;
-pub mod hir_nodes {
+pub mod immediate_parsed_representation {
     use std::{fmt::Debug, fmt::Formatter, hash::Hash, hash::Hasher};
 
     use zea_internal_macros::{ASTStructuralEq, VariantToStr};
 
     use crate::{
         helper_impls::StructuralEq,
-        zea::{BinOp, HIRScopedIdentifier, UnOp},
+        zea::{BinOp, IPRScopedIdentifier, UnOp},
     };
 
     use super::NodeId;
-    pub enum HIRASTNode {
-        Module(HIRModule),
-        Function(HIRFunction),
-        Block(HIRBlockExpression),
-        Branch(HIRBranch),
-        Expression(HIRExpression),
+    pub enum IPRASTNode {
+        Module(IPRModule),
+        Function(IPRFunction),
+        Block(IPRBlockExpression),
+        Branch(IPRBranch),
+        Expression(IPRExpression),
     }
 
     macro_rules! variant_to_some {
@@ -57,54 +57,54 @@ pub mod hir_nodes {
             }
         };
     }
-    impl HIRASTNode {
-        pub fn as_module(self) -> Option<HIRModule> {
+    impl IPRASTNode {
+        pub fn as_module(self) -> Option<IPRModule> {
             variant_to_some!(Self, self, Module)
         }
-        pub fn as_block(self) -> Option<HIRBlockExpression> {
+        pub fn as_block(self) -> Option<IPRBlockExpression> {
             variant_to_some!(Self, self, Block)
         }
-        pub fn as_function(self) -> Option<HIRFunction> {
+        pub fn as_function(self) -> Option<IPRFunction> {
             variant_to_some!(Self, self, Function)
         }
-        pub fn as_branch(self) -> Option<HIRBranch> {
+        pub fn as_branch(self) -> Option<IPRBranch> {
             variant_to_some!(Self, self, Branch)
         }
-        pub fn as_expr(self) -> Option<HIRExpression> {
+        pub fn as_expr(self) -> Option<IPRExpression> {
             variant_to_some!(Self, self, Expression)
         }
     }
 
     #[derive(Default, Debug, Clone)]
-    pub struct HIRModule {
+    pub struct IPRModule {
         pub id: NodeId,
         pub imports: Vec<String>,
         pub exports: Vec<String>,
-        pub global_vars: Vec<HIRInitializationBlock>,
-        pub functions: Vec<HIRFunction>,
-        pub struct_definitions: Vec<HIRStructDataTypeDefinition>,
+        pub global_vars: Vec<IPRInitializationBlock>,
+        pub functions: Vec<IPRFunction>,
+        pub struct_definitions: Vec<IPRStructDataTypeDefinition>,
     }
 
-    impl HIRModule {
-        pub fn find_entry_point(&self) -> Option<&HIRFunction> {
+    impl IPRModule {
+        pub fn find_entry_point(&self) -> Option<&IPRFunction> {
             self.iter_functions().find(|func| func.name == "main")
         }
 
-        pub fn iter_functions(&self) -> impl Iterator<Item = &HIRFunction> {
+        pub fn iter_functions(&self) -> impl Iterator<Item = &IPRFunction> {
             self.functions.iter()
         }
-        pub fn iter_global_vars(&self) -> impl Iterator<Item = &HIRInitializationBlock> {
+        pub fn iter_global_vars(&self) -> impl Iterator<Item = &IPRInitializationBlock> {
             self.global_vars.iter()
         }
-        pub fn iter_structs(&self) -> impl Iterator<Item = &HIRStructDataTypeDefinition> {
+        pub fn iter_structs(&self) -> impl Iterator<Item = &IPRStructDataTypeDefinition> {
             self.struct_definitions.iter()
         }
     }
 
     #[derive(Debug, Clone)]
-    pub struct HIRFuncParam {
+    pub struct IPRFuncParam {
         pub id: NodeId,
-        pub typ: HIRTypeSpecifier,
+        pub typ: IPRTypeSpecifier,
         pub name: String,
     }
 
@@ -113,55 +113,55 @@ pub mod hir_nodes {
     /// Function may be defined only once within a module.
     /// Functions may be imported as many times as needed.
     #[derive(Debug, Clone)]
-    pub struct HIRFunction {
+    pub struct IPRFunction {
         pub id: NodeId,
         pub name: String,
-        pub params: Vec<HIRFuncParam>,
-        pub returns: HIRTypeSpecifier,
-        pub body: HIRBlockExpression,
+        pub params: Vec<IPRFuncParam>,
+        pub returns: IPRTypeSpecifier,
+        pub body: IPRBlockExpression,
     }
 
     #[derive(Debug, Clone)]
     pub struct HoistedFunctionSignature {
         pub id: NodeId,
         pub name: String,
-        pub args: Vec<HIRFuncParam>,
-        pub returns: HIRTypeSpecifier,
+        pub args: Vec<IPRFuncParam>,
+        pub returns: IPRTypeSpecifier,
     }
 
     #[derive(Debug, Clone)]
-    pub struct HIRStatement {
+    pub struct IPRStatement {
         pub id: NodeId,
-        pub kind: HIRStatementKind,
+        pub kind: IPRStatementKind,
     }
 
     #[derive(Debug, Clone, VariantToStr)]
-    pub enum HIRStatementKind {
+    pub enum IPRStatementKind {
         // initial pass
         /// Variable initialization
-        Initialization(HIRInitializationBlock),
+        Initialization(IPRInitializationBlock),
         /// Variable Reassignment
-        Reassignment(HIRReassignment),
-        FunctionCall(HIRFunctionCall),
+        Reassignment(IPRReassignment),
+        FunctionCall(IPRFunctionCall),
         /// Control-flow return
-        Return(HIRExpression),
+        Return(IPRExpression),
         /// A tailing expression in a block
-        BlockTail(HIRExpression),
+        BlockTail(IPRExpression),
 
         // CondMatch(Box<ConditionMatch>),
 
         // after expansion
-        Block(HIRBlockExpression),
-        IfThenElse(HIRBranch),
+        Block(IPRBlockExpression),
+        IfThenElse(IPRBranch),
     }
 
     /// A packed or unpacked initialisation
     #[derive(Debug, Clone)]
-    pub struct HIRInitializationBlock {
+    pub struct IPRInitializationBlock {
         pub id: NodeId,
-        pub kind: HIRInitializationKind,
+        pub kind: IPRInitializationKind,
     }
-    impl StructuralEq for HIRInitializationBlock {
+    impl StructuralEq for IPRInitializationBlock {
         fn eq_ignore_id(&self, other: &Self) -> bool {
             let mut is_eq = true;
             is_eq &= (self.kind).eq_ignore_id(&other.kind);
@@ -169,15 +169,15 @@ pub mod hir_nodes {
         }
     }
 
-    impl HIRInitializationBlock {
+    impl IPRInitializationBlock {
         pub fn packed(
-            typ: Option<HIRTypeSpecifier>,
-            assignee: HIRAssignmentPattern,
-            value: HIRExpression,
+            typ: Option<IPRTypeSpecifier>,
+            assignee: IPRAssignmentPattern,
+            value: IPRExpression,
         ) -> Self {
             Self {
                 id: NodeId::sentinel(),
-                kind: HIRInitializationKind::Packed(HIRPackedInitialization {
+                kind: IPRInitializationKind::Packed(IPRPackedInitialization {
                     typ,
                     assignee,
                     value,
@@ -195,14 +195,14 @@ pub mod hir_nodes {
     /// NOTE:
     /// Support for enum destructuring to be added later
     #[derive(Debug, Clone)]
-    pub struct HIRPackedInitialization {
-        pub typ: Option<HIRTypeSpecifier>,
-        pub assignee: HIRAssignmentPattern,
-        pub value: HIRExpression,
+    pub struct IPRPackedInitialization {
+        pub typ: Option<IPRTypeSpecifier>,
+        pub assignee: IPRAssignmentPattern,
+        pub value: IPRExpression,
     }
 
-    impl HIRPackedInitialization {
-        pub fn untyped(assignee: HIRAssignmentPattern, value: HIRExpression) -> Self {
+    impl IPRPackedInitialization {
+        pub fn untyped(assignee: IPRAssignmentPattern, value: IPRExpression) -> Self {
             Self {
                 typ: None,
                 assignee,
@@ -217,15 +217,15 @@ pub mod hir_nodes {
     /// - `var := value`
     /// - `var: type = value`
     #[derive(Debug, Clone)]
-    pub struct HIRSimpleInitialization {
+    pub struct IPRSimpleInitialization {
         pub id: NodeId,
-        pub typ: Option<HIRTypeSpecifier>,
+        pub typ: Option<IPRTypeSpecifier>,
         pub assignee: String,
-        pub value: HIRExpression,
+        pub value: IPRExpression,
     }
 
-    impl HIRSimpleInitialization {
-        pub fn untyped(assignee: &str, value: HIRExpression) -> Self {
+    impl IPRSimpleInitialization {
+        pub fn untyped(assignee: &str, value: IPRExpression) -> Self {
             Self {
                 id: NodeId::sentinel(),
                 assignee: assignee.to_string(),
@@ -236,159 +236,159 @@ pub mod hir_nodes {
     }
 
     #[derive(Debug, Clone)]
-    pub struct HIRPartiallyUnpackedInitialization {
-        pub temporary: HIRSimpleInitialization,
-        pub unpacked_assignments: Vec<HIRInitializationBlock>,
+    pub struct IPRPartiallyUnpackedInitialization {
+        pub temporary: IPRSimpleInitialization,
+        pub unpacked_assignments: Vec<IPRInitializationBlock>,
     }
 
     #[derive(Debug, Clone)]
-    pub enum HIRInitializationKind {
-        Packed(HIRPackedInitialization),
-        Unpacked(Vec<HIRSimpleInitialization>),
+    pub enum IPRInitializationKind {
+        Packed(IPRPackedInitialization),
+        Unpacked(Vec<IPRSimpleInitialization>),
     }
 
     #[derive(Debug, Clone)]
-    pub struct HIRReassignment {
+    pub struct IPRReassignment {
         pub id: NodeId,
         pub assignee: String,
-        pub value: HIRExpression,
+        pub value: IPRExpression,
     }
 
-    impl HIRReassignment {
-        pub fn wrap_in_statement(self) -> HIRStatement {
-            HIRStatement {
+    impl IPRReassignment {
+        pub fn wrap_in_statement(self) -> IPRStatement {
+            IPRStatement {
                 id: NodeId::sentinel(),
-                kind: HIRStatementKind::Reassignment(self),
+                kind: IPRStatementKind::Reassignment(self),
             }
         }
     }
 
     #[derive(Debug, Clone)]
-    pub struct HIRFunctionCall {
+    pub struct IPRFunctionCall {
         pub id: NodeId,
-        pub subject: Box<HIRExpression>,
-        pub args: Vec<HIRExpression>,
+        pub subject: Box<IPRExpression>,
+        pub args: Vec<IPRExpression>,
     }
 
-    impl HIRFunctionCall {
-        pub fn wrap_in_statement(self) -> HIRStatement {
-            HIRStatement {
+    impl IPRFunctionCall {
+        pub fn wrap_in_statement(self) -> IPRStatement {
+            IPRStatement {
                 id: NodeId::sentinel(),
-                kind: HIRStatementKind::FunctionCall(self),
+                kind: IPRStatementKind::FunctionCall(self),
             }
         }
 
-        pub fn wrap_in_expression(self) -> HIRExpression {
-            HIRExpression {
+        pub fn wrap_in_expression(self) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::FunctionCall(self),
+                kind: IPRExpressionKind::FunctionCall(self),
             }
         }
     }
 
     #[derive(Clone, Debug)]
-    pub struct HIRBlockExpression {
+    pub struct IPRBlockExpression {
         /// The label that the block expression has its value assigned to
         /// i.e. `__block0`, `__block1` etc.
         /// This label must be unique to the scope of the function in which it exists
         pub id: NodeId,
-        pub statements: Vec<HIRStatement>,
-        pub last: HIRExpression,
+        pub statements: Vec<IPRStatement>,
+        pub last: IPRExpression,
     }
 
-    impl HIRBlockExpression {
-        pub fn wrap_in_statement(self) -> HIRStatement {
-            HIRStatement {
+    impl IPRBlockExpression {
+        pub fn wrap_in_statement(self) -> IPRStatement {
+            IPRStatement {
                 id: NodeId::sentinel(),
-                kind: HIRStatementKind::Block(self),
+                kind: IPRStatementKind::Block(self),
             }
         }
-        pub fn wrap_in_expression(self) -> HIRExpression {
-            HIRExpression {
+        pub fn wrap_in_expression(self) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::Block(Box::new(self)),
+                kind: IPRExpressionKind::Block(Box::new(self)),
             }
         }
     }
 
     #[derive(Debug, Clone)]
-    pub struct HIRExpression {
+    pub struct IPRExpression {
         pub id: NodeId,
-        pub kind: HIRExpressionKind,
+        pub kind: IPRExpressionKind,
     }
 
-    impl HIRExpression {
+    impl IPRExpression {
         pub fn with_id(mut self, id: NodeId) -> Self {
             self.id = id;
             self
         }
     }
 
-    impl HIRExpression {
-        pub fn tuple_member_access(e: HIRExpression, field: usize) -> HIRExpression {
-            HIRExpression {
+    impl IPRExpression {
+        pub fn tuple_member_access(e: IPRExpression, field: usize) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::MemberAccess(Box::new(e), format!("_{field}")),
+                kind: IPRExpressionKind::MemberAccess(Box::new(e), format!("_{field}")),
             }
         }
 
-        pub fn ident(ident: String) -> HIRExpression {
-            HIRExpression {
+        pub fn ident(ident: String) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::UnScopedIdent(ident),
+                kind: IPRExpressionKind::UnScopedIdent(ident),
             }
         }
-        pub fn scoped_local(ident: String, origin: NodeId) -> HIRExpression {
-            HIRExpression {
+        pub fn scoped_local(ident: String, origin: NodeId) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::ScopedIdent(HIRScopedIdentifier::local(origin, ident)),
-            }
-        }
-
-        pub fn wrap_in_return_statement(self) -> HIRStatement {
-            HIRStatement {
-                id: NodeId::sentinel(),
-                kind: HIRStatementKind::Return(self),
+                kind: IPRExpressionKind::ScopedIdent(IPRScopedIdentifier::local(origin, ident)),
             }
         }
 
-        pub fn wrap_in_block_tail_statement(self) -> HIRStatement {
-            HIRStatement {
+        pub fn wrap_in_return_statement(self) -> IPRStatement {
+            IPRStatement {
                 id: NodeId::sentinel(),
-                kind: HIRStatementKind::BlockTail(self),
+                kind: IPRStatementKind::Return(self),
             }
         }
 
-        pub fn wrap_lit_int(i: usize) -> HIRExpression {
-            HIRExpression {
+        pub fn wrap_in_block_tail_statement(self) -> IPRStatement {
+            IPRStatement {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::IntegerLiteral(i),
-            }
-        }
-        pub fn wrap_lit_float(f: f64) -> HIRExpression {
-            HIRExpression {
-                id: NodeId::sentinel(),
-                kind: HIRExpressionKind::FloatLiteral(f),
+                kind: IPRStatementKind::BlockTail(self),
             }
         }
 
-        pub fn wrap_lit_bool(b: bool) -> HIRExpression {
-            HIRExpression {
+        pub fn wrap_lit_int(i: usize) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::BoolLiteral(b),
+                kind: IPRExpressionKind::IntegerLiteral(i),
+            }
+        }
+        pub fn wrap_lit_float(f: f64) -> IPRExpression {
+            IPRExpression {
+                id: NodeId::sentinel(),
+                kind: IPRExpressionKind::FloatLiteral(f),
             }
         }
 
-        pub fn wrap_ident(ident: String) -> HIRExpression {
-            HIRExpression {
+        pub fn wrap_lit_bool(b: bool) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::UnScopedIdent(ident),
+                kind: IPRExpressionKind::BoolLiteral(b),
+            }
+        }
+
+        pub fn wrap_ident(ident: String) -> IPRExpression {
+            IPRExpression {
+                id: NodeId::sentinel(),
+                kind: IPRExpressionKind::UnScopedIdent(ident),
             }
         }
     }
 
     #[derive(Debug, Clone, VariantToStr)]
-    pub enum HIRExpressionKind {
+    pub enum IPRExpressionKind {
         // initial pass
         Unit,
         IntegerLiteral(usize),
@@ -396,46 +396,46 @@ pub mod hir_nodes {
         FloatLiteral(f64),
         StringLiteral(String),
         UnScopedIdent(String),
-        ScopedIdent(HIRScopedIdentifier),
-        FunctionCall(HIRFunctionCall),
-        BinOpExpr(BinOp, Box<HIRExpression>, Box<HIRExpression>),
-        UnOpExpr(UnOp, Box<HIRExpression>),
-        MemberAccess(Box<HIRExpression>, String),
-        IfThenElse(HIRBranch),
+        ScopedIdent(IPRScopedIdentifier),
+        FunctionCall(IPRFunctionCall),
+        BinOpExpr(BinOp, Box<IPRExpression>, Box<IPRExpression>),
+        UnOpExpr(UnOp, Box<IPRExpression>),
+        MemberAccess(Box<IPRExpression>, String),
+        IfThenElse(IPRBranch),
 
         // PatternMatch(PatternMatch),
         // ConditionMatch(ConditionMatch),
         // IfThenElse(IfThenElse),
 
         // after expansion
-        Block(Box<HIRBlockExpression>),
+        Block(Box<IPRBlockExpression>),
     }
 
-    impl HIRExpression {
+    impl IPRExpression {
         pub const fn unit() -> Self {
-            HIRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::Unit,
+                kind: IPRExpressionKind::Unit,
             }
         }
 
-        pub fn binop(op: BinOp, l: HIRExpression, r: HIRExpression) -> HIRExpression {
-            HIRExpression {
+        pub fn binop(op: BinOp, l: IPRExpression, r: IPRExpression) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),
+                kind: IPRExpressionKind::BinOpExpr(op, Box::new(l), Box::new(r)),
             }
         }
-        pub fn unop(op: UnOp, e: HIRExpression) -> HIRExpression {
-            HIRExpression {
+        pub fn unop(op: UnOp, e: IPRExpression) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::UnOpExpr(op, Box::new(e)),
+                kind: IPRExpressionKind::UnOpExpr(op, Box::new(e)),
             }
         }
 
-        pub fn member_access(data: HIRExpression, member: String) -> HIRExpression {
-            HIRExpression {
+        pub fn member_access(data: IPRExpression, member: String) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::MemberAccess(Box::new(data), member),
+                kind: IPRExpressionKind::MemberAccess(Box::new(data), member),
             }
         }
     }
@@ -443,31 +443,31 @@ pub mod hir_nodes {
     #[derive(Clone, Debug, ASTStructuralEq)]
     pub struct ConditionMatch {
         pub id: NodeId,
-        conditions: Vec<HIRConditionMatchArm>,
+        conditions: Vec<IPRConditionMatchArm>,
     }
 
     #[derive(Clone, Debug, ASTStructuralEq)]
     pub struct PatternMatch {
         pub id: NodeId,
-        patterns: Vec<HIRPatternMatchArm>,
-        subject: Box<HIRExpression>,
+        patterns: Vec<IPRPatternMatchArm>,
+        subject: Box<IPRExpression>,
     }
 
     #[derive(Clone, Debug)]
-    pub struct HIRBranch {
+    pub struct IPRBranch {
         pub id: NodeId,
-        pub condition: Box<HIRExpression>,
-        pub true_case: Box<HIRExpression>,
-        pub false_case: Option<Box<HIRExpression>>,
+        pub condition: Box<IPRExpression>,
+        pub true_case: Box<IPRExpression>,
+        pub false_case: Option<Box<IPRExpression>>,
     }
 
-    impl Eq for HIRBranch {}
-    impl Hash for HIRBranch {
+    impl Eq for IPRBranch {}
+    impl Hash for IPRBranch {
         fn hash<H: Hasher>(&self, state: &mut H) {
             self.id.hash(state)
         }
     }
-    impl StructuralEq for HIRBranch {
+    impl StructuralEq for IPRBranch {
         fn eq_ignore_id(&self, other: &Self) -> bool {
             let mut is_eq = true;
             is_eq &= (self.condition).eq_ignore_id(&other.condition);
@@ -477,9 +477,9 @@ pub mod hir_nodes {
         }
     }
 
-    impl HIRBranch {
-        pub fn if_block(condition: HIRExpression, then: HIRExpression) -> Self {
-            HIRBranch {
+    impl IPRBranch {
+        pub fn if_block(condition: IPRExpression, then: IPRExpression) -> Self {
+            IPRBranch {
                 id: NodeId::sentinel(),
                 condition: Box::new(condition),
                 true_case: Box::new(then),
@@ -487,47 +487,47 @@ pub mod hir_nodes {
             }
         }
         pub fn if_else_block(
-            condition: HIRExpression,
-            then: HIRExpression,
-            otherwise: HIRExpression,
+            condition: IPRExpression,
+            then: IPRExpression,
+            otherwise: IPRExpression,
         ) -> Self {
-            HIRBranch {
+            IPRBranch {
                 id: NodeId::sentinel(),
                 condition: Box::new(condition),
                 true_case: Box::new(then),
                 false_case: Some(Box::new(otherwise)),
             }
         }
-        pub fn wrap_in_expression(self) -> HIRExpression {
-            HIRExpression {
+        pub fn wrap_in_expression(self) -> IPRExpression {
+            IPRExpression {
                 id: NodeId::sentinel(),
-                kind: HIRExpressionKind::IfThenElse(self),
+                kind: IPRExpressionKind::IfThenElse(self),
             }
         }
-        pub fn wrap_in_statement(self) -> HIRStatement {
-            HIRStatement {
+        pub fn wrap_in_statement(self) -> IPRStatement {
+            IPRStatement {
                 id: NodeId::sentinel(),
-                kind: HIRStatementKind::IfThenElse(self),
+                kind: IPRStatementKind::IfThenElse(self),
             }
         }
     }
     #[derive(Clone, Debug, ASTStructuralEq)]
-    pub struct HIRPatternMatchArm {
+    pub struct IPRPatternMatchArm {
         pub id: NodeId,
-        pat: HIRAssignmentPattern,
-        value: Box<HIRExpression>,
+        pat: IPRAssignmentPattern,
+        value: Box<IPRExpression>,
     }
     #[derive(Clone, Debug, ASTStructuralEq)]
-    pub struct HIRConditionMatchArm {
+    pub struct IPRConditionMatchArm {
         pub id: NodeId,
-        case: Box<HIRExpression>,
-        value: Box<HIRExpression>,
+        case: Box<IPRExpression>,
+        value: Box<IPRExpression>,
     }
     /// the left hand side of an assignment
     ///
     /// The simplest is a basic identifier
     #[derive(Debug, PartialEq, Clone, Eq, Hash)]
-    pub enum HIRAssignmentPattern {
+    pub enum IPRAssignmentPattern {
         /// the pattern
         ///
         /// `var a: ...`
@@ -543,23 +543,23 @@ pub mod hir_nodes {
         /// or
         ///
         /// `var (a,b,c) := ...`
-        Tuple(Vec<HIRAssignmentPattern>),
+        Tuple(Vec<IPRAssignmentPattern>),
     }
     #[derive(Debug, PartialEq, Clone, Eq, Hash)]
-    pub enum HIRMatchPattern {
+    pub enum IPRMatchPattern {
         /// the pattern `a => ...`
         Identifier(String),
         /// the pattern `(<pat>, <pat>, ...) => ...`
-        Tuple(Vec<HIRAssignmentPattern>),
+        Tuple(Vec<IPRAssignmentPattern>),
 
-        UnionVariant(String, String, Box<HIRAssignmentPattern>),
+        UnionVariant(String, String, Box<IPRAssignmentPattern>),
     }
 
-    impl std::fmt::Display for HIRAssignmentPattern {
+    impl std::fmt::Display for IPRAssignmentPattern {
         fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
             let s = match self {
-                HIRAssignmentPattern::Identifier(s) => s.clone(),
-                HIRAssignmentPattern::Tuple(tups) => {
+                IPRAssignmentPattern::Identifier(s) => s.clone(),
+                IPRAssignmentPattern::Tuple(tups) => {
                     let s: Vec<String> = tups.iter().map(|pat| pat.to_string()).collect();
                     format!("({})", s.join(", "))
                 }
@@ -570,34 +570,34 @@ pub mod hir_nodes {
 
     /// The Zea named Struct type / product type
     #[derive(Debug, Clone)]
-    pub struct HIRStructDataTypeDefinition {
+    pub struct IPRStructDataTypeDefinition {
         pub id: NodeId,
         pub name: String,
-        pub members: Vec<HIRTypedIdentifier>,
+        pub members: Vec<IPRTypedIdentifier>,
         pub reorder_fields: Option<bool>,
         pub alignment: Option<usize>,
     }
-    impl HIRStructDataTypeDefinition {
+    impl IPRStructDataTypeDefinition {
         pub(crate) fn should_reorder_fields(&self) -> bool {
             self.reorder_fields.is_none_or(|b| b)
         }
     }
 
-    pub struct HIRTaggedUnionDataTypeDefinition {
+    pub struct IPRTaggedUnionDataTypeDefinition {
         pub name: String,
-        pub members: Vec<HIRTaggedUnionVariant>,
+        pub members: Vec<IPRTaggedUnionVariant>,
     }
 
-    pub enum HIRTaggedUnionVariant {
+    pub enum IPRTaggedUnionVariant {
         TagVariant(String),
-        DataVariant(HIRTypedIdentifier),
+        DataVariant(IPRTypedIdentifier),
     }
 
     /// The Type that is bundled with a:
     /// - function parameter
     /// - identifier in declaration(-assignments)
     #[derive(PartialEq, Eq, Clone, Hash)]
-    pub enum HIRTypeSpecifier {
+    pub enum IPRTypeSpecifier {
         /// An aggregate DataType
         NonScalar(String),
         /// the type that a statement returns: similar to `void` or `()`
@@ -610,9 +610,9 @@ pub mod hir_nodes {
         Float { width: usize },
 
         /// a pointer to a memory location containing something of the inner type
-        Pointer(Box<HIRTypeSpecifier>),
+        Pointer(Box<IPRTypeSpecifier>),
         /// a pointer+length bundle of items of the inner type
-        ArrayOf(Box<HIRTypeSpecifier>),
+        ArrayOf(Box<IPRTypeSpecifier>),
         // /// `&[<type>]`
         // Slice(Box<Type>),
         // /// `?<type>`
@@ -621,21 +621,21 @@ pub mod hir_nodes {
         Never,
     }
 
-    impl Debug for HIRTypeSpecifier {
+    impl Debug for IPRTypeSpecifier {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             let str = match self {
-                HIRTypeSpecifier::NonScalar(typ) => typ,
-                HIRTypeSpecifier::Float { width } => &format!("f{width}"),
-                HIRTypeSpecifier::Integer { width, signed } => {
+                IPRTypeSpecifier::NonScalar(typ) => typ,
+                IPRTypeSpecifier::Float { width } => &format!("f{width}"),
+                IPRTypeSpecifier::Integer { width, signed } => {
                     &format!("{}{width}", if *signed { 'i' } else { 'u' })
                 }
-                HIRTypeSpecifier::Bool => "Bool",
-                HIRTypeSpecifier::ArrayOf(arr) => &format!("[{arr:?}]"),
+                IPRTypeSpecifier::Bool => "Bool",
+                IPRTypeSpecifier::ArrayOf(arr) => &format!("[{arr:?}]"),
                 // Type::Option(opt) => &format!("?{opt:?}"),
-                HIRTypeSpecifier::Pointer(ptr) => &format!("&{ptr:?}"),
+                IPRTypeSpecifier::Pointer(ptr) => &format!("&{ptr:?}"),
                 // Type::Slice(slice) => &format!("&[{slice:?}]"),
-                HIRTypeSpecifier::Unit => "()",
-                HIRTypeSpecifier::Never => "!",
+                IPRTypeSpecifier::Unit => "()",
+                IPRTypeSpecifier::Never => "!",
             };
 
             write!(f, "{}", str)
@@ -643,60 +643,60 @@ pub mod hir_nodes {
     }
 
     #[allow(non_snake_case)]
-    impl HIRTypeSpecifier {
-        pub const fn t_U8() -> HIRTypeSpecifier {
+    impl IPRTypeSpecifier {
+        pub const fn t_U8() -> IPRTypeSpecifier {
             Self::Integer {
                 width: 8,
                 signed: false,
             }
         }
-        pub const fn t_U16() -> HIRTypeSpecifier {
+        pub const fn t_U16() -> IPRTypeSpecifier {
             Self::Integer {
                 width: 16,
                 signed: false,
             }
         }
-        pub const fn t_U32() -> HIRTypeSpecifier {
+        pub const fn t_U32() -> IPRTypeSpecifier {
             Self::Integer {
                 width: 32,
                 signed: false,
             }
         }
-        pub const fn t_U64() -> HIRTypeSpecifier {
+        pub const fn t_U64() -> IPRTypeSpecifier {
             Self::Integer {
                 width: 64,
                 signed: false,
             }
         }
-        pub const fn t_I8() -> HIRTypeSpecifier {
+        pub const fn t_I8() -> IPRTypeSpecifier {
             Self::Integer {
                 width: 8,
                 signed: true,
             }
         }
-        pub const fn t_I16() -> HIRTypeSpecifier {
+        pub const fn t_I16() -> IPRTypeSpecifier {
             Self::Integer {
                 width: 16,
                 signed: true,
             }
         }
-        pub const fn t_I32() -> HIRTypeSpecifier {
+        pub const fn t_I32() -> IPRTypeSpecifier {
             Self::Integer {
                 width: 32,
                 signed: true,
             }
         }
-        pub const fn t_I64() -> HIRTypeSpecifier {
+        pub const fn t_I64() -> IPRTypeSpecifier {
             Self::Integer {
                 width: 64,
                 signed: true,
             }
         }
 
-        pub const fn t_F32() -> HIRTypeSpecifier {
+        pub const fn t_F32() -> IPRTypeSpecifier {
             Self::Float { width: 32 }
         }
-        pub const fn t_F64() -> HIRTypeSpecifier {
+        pub const fn t_F64() -> IPRTypeSpecifier {
             Self::Float { width: 64 }
         }
 
@@ -704,21 +704,21 @@ pub mod hir_nodes {
             Self::Bool
         }
         pub const fn t_Unit() -> Self {
-            HIRTypeSpecifier::Unit
+            IPRTypeSpecifier::Unit
         }
 
         pub const fn t_Never() -> Self {
-            HIRTypeSpecifier::Never
+            IPRTypeSpecifier::Never
         }
     }
     #[derive(Debug, Eq, PartialEq, Hash, Clone, ASTStructuralEq)]
-    pub struct HIRTypedIdentifier {
+    pub struct IPRTypedIdentifier {
         pub name: String,
-        pub typ: HIRTypeSpecifier,
+        pub typ: IPRTypeSpecifier,
     }
 
-    impl HIRTypedIdentifier {
-        pub fn new(typ: HIRTypeSpecifier, name: impl Into<String>) -> Self {
+    impl IPRTypedIdentifier {
+        pub fn new(typ: IPRTypeSpecifier, name: impl Into<String>) -> Self {
             Self {
                 typ,
                 name: name.into(),
@@ -1031,31 +1031,31 @@ pub(crate) mod test_ast_macros {
     macro_rules! ztyp {
         (U8) => {
             {
-            use crate::zea::hir_nodes::HIRTypeSpecifier;
-            HIRTypeSpecifier::t_U8()
+            use crate::zea::hir_nodes::IPRTypeSpecifier;
+            IPRTypeSpecifier::t_U8()
         }
     };
         (I8) => {{
-            use crate::zea::hir_nodes::HIRTypeSpecifier;
-            HIRTypeSpecifier::t_I8()
+            use crate::zea::hir_nodes::IPRTypeSpecifier;
+            IPRTypeSpecifier::t_I8()
         }
     };
         ($t:ident) => {
             {
-            use crate::zea::hir_nodes::HIRTypeSpecifier;
-                HIRTypeSpecifier::NonScalar(String::from(stringify!($t)))
+            use crate::zea::hir_nodes::IPRTypeSpecifier;
+                IPRTypeSpecifier::NonScalar(String::from(stringify!($t)))
             }
         };
         (*$($t:tt)+) => {
             {
-            use crate::zea::hir_nodes::HIRTypeSpecifier;
-                HIRTypeSpecifier::Pointer(Box::new(ztyp!($($t)+)))
+            use crate::zea::hir_nodes::IPRTypeSpecifier;
+                IPRTypeSpecifier::Pointer(Box::new(ztyp!($($t)+)))
             }
         };
         ([ ]$($t:tt)+) => {
             {
-            use crate::zea::hir_nodes::HIRTypeSpecifier;
-                HIRTypeSpecifier::ArrayOf(Box::new(ztyp!($($t)+)))
+            use crate::zea::hir_nodes::IPRTypeSpecifier;
+                IPRTypeSpecifier::ArrayOf(Box::new(ztyp!($($t)+)))
             }
         };
     }
@@ -1063,7 +1063,7 @@ pub(crate) mod test_ast_macros {
 }
 
 pub use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
-pub use crate::zea::visitors::annotating::HIRScopedIdentifier;
+pub use crate::zea::visitors::annotating::IPRScopedIdentifier;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_internal_macros::{ASTStructuralEq, VariantToStr};
@@ -1090,7 +1090,7 @@ struct ZeaNodeQuery {
     id: NodeId,
 }
 impl ZeaNodeQuery {
-    pub fn query_hir_node_with_id(id: NodeId, module: &HIRModule) -> Option<HIRASTNode> {
+    pub fn query_hir_node_with_id(id: NodeId, module: &IPRModule) -> Option<IPRASTNode> {
         let mut s = Self { id };
         match s.visit_module(module) {
             Ok(Some(n)) => Some(n),

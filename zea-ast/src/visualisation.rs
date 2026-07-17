@@ -1,5 +1,5 @@
-use crate::zea::hir_nodes::*;
-use crate::zea::HIRScopedIdentifier;
+use crate::zea::immediate_parsed_representation::*;
+use crate::zea::IPRScopedIdentifier;
 use std::fmt::Debug;
 
 pub trait IndentPrint: Debug {
@@ -39,7 +39,7 @@ fn fmt_list<T: IndentPrint>(items: &[T], depth: usize) -> String {
     result
 }
 
-impl IndentPrint for HIRFuncParam {
+impl IndentPrint for IPRFuncParam {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = ".param".indent_print(depth);
         buffer += &self.name.indent_print(depth + 1);
@@ -63,19 +63,19 @@ fn module_exports(imports: &[String], depth: usize) -> String {
     result
 }
 
-fn module_globs(globs: &[HIRInitializationBlock], depth: usize) -> String {
+fn module_globs(globs: &[IPRInitializationBlock], depth: usize) -> String {
     let mut result = ".globs".indent_print(depth);
     result += &fmt_list(globs, depth + 1);
     result
 }
 
-fn module_funcs(funcs: &[HIRFunction], depth: usize) -> String {
+fn module_funcs(funcs: &[IPRFunction], depth: usize) -> String {
     let mut result = ".funcs".indent_print(depth);
     result += &fmt_list(funcs, depth + 1);
     result
 }
 
-impl IndentPrint for HIRModule {
+impl IndentPrint for IPRModule {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "module".indent_print(depth);
         buffer += &module_imports(&self.imports, depth + 1);
@@ -86,13 +86,13 @@ impl IndentPrint for HIRModule {
     }
 }
 
-fn func_params(params: &[HIRFuncParam], depth: usize) -> String {
+fn func_params(params: &[IPRFuncParam], depth: usize) -> String {
     let mut buffer = ".params".indent_print(depth);
     buffer += &fmt_list(params, depth + 1);
     buffer
 }
 
-impl IndentPrint for HIRFunction {
+impl IndentPrint for IPRFunction {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = format!("func `{}`", self.name).indent_print(depth);
         buffer += &".returns".indent_print(depth + 1);
@@ -105,7 +105,7 @@ impl IndentPrint for HIRFunction {
     }
 }
 
-impl IndentPrint for HIRTypedIdentifier {
+impl IndentPrint for IPRTypedIdentifier {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = self.name.indent_print(depth);
         buffer += &".type".indent_print(depth + 1);
@@ -114,7 +114,7 @@ impl IndentPrint for HIRTypedIdentifier {
     }
 }
 
-impl IndentPrint for HIRBlockExpression {
+impl IndentPrint for IPRBlockExpression {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "block".indent_print(depth);
 
@@ -128,31 +128,31 @@ impl IndentPrint for HIRBlockExpression {
     }
 }
 
-impl IndentPrint for HIRStatement {
+impl IndentPrint for IPRStatement {
     fn indent_print(&self, depth: usize) -> String {
-        use HIRStatementKind;
+        use IPRStatementKind;
         match &self.kind {
-            HIRStatementKind::Return(e) => {
+            IPRStatementKind::Return(e) => {
                 "return".indent_print(depth) + &e.indent_print(depth + 1)
             }
-            HIRStatementKind::Initialization(i) => i.indent_print(depth),
-            HIRStatementKind::BlockTail(e) => {
+            IPRStatementKind::Initialization(i) => i.indent_print(depth),
+            IPRStatementKind::BlockTail(e) => {
                 "tail".indent_print(depth) + &e.indent_print(depth + 1)
             }
-            HIRStatementKind::IfThenElse(b) => b.indent_print(depth),
-            HIRStatementKind::Block(eb) => eb.indent_print(depth),
-            HIRStatementKind::FunctionCall(c) => c.indent_print(depth),
+            IPRStatementKind::IfThenElse(b) => b.indent_print(depth),
+            IPRStatementKind::Block(eb) => eb.indent_print(depth),
+            IPRStatementKind::FunctionCall(c) => c.indent_print(depth),
             _ => todo!("pretty print statement with kind {:?}", self.kind),
         }
     }
 }
-impl IndentPrint for HIRInitializationBlock {
+impl IndentPrint for IPRInitializationBlock {
     fn indent_print(&self, depth: usize) -> String {
-        use HIRInitializationKind;
+        use IPRInitializationKind;
         match &self.kind {
-            HIRInitializationKind::Packed(p) => p.indent_print(depth),
+            IPRInitializationKind::Packed(p) => p.indent_print(depth),
 
-            HIRInitializationKind::Unpacked(p) => {
+            IPRInitializationKind::Unpacked(p) => {
                 let mut buffer = "init_unpacked_block".indent_print(depth);
                 for init in p.iter() {
                     let init_str = init.indent_print(depth + 2);
@@ -164,7 +164,7 @@ impl IndentPrint for HIRInitializationBlock {
     }
 }
 
-impl IndentPrint for HIRPackedInitialization {
+impl IndentPrint for IPRPackedInitialization {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "init_packed".indent_print(depth);
         buffer += &".pattern".indent_print(depth + 1);
@@ -194,13 +194,13 @@ impl IndentPrint for bool {
     }
 }
 
-impl IndentPrint for HIRTypeSpecifier {
+impl IndentPrint for IPRTypeSpecifier {
     fn indent_print(&self, depth: usize) -> String {
         format!("{:?}", self).indent_print(depth)
     }
 }
 
-impl IndentPrint for Option<HIRTypeSpecifier> {
+impl IndentPrint for Option<IPRTypeSpecifier> {
     fn indent_print(&self, depth: usize) -> String {
         match self {
             None => String::from("@unknown").indent_print(depth),
@@ -209,7 +209,7 @@ impl IndentPrint for Option<HIRTypeSpecifier> {
     }
 }
 
-impl IndentPrint for HIRSimpleInitialization {
+impl IndentPrint for IPRSimpleInitialization {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "init".indent_print(depth);
         buffer += &".assignee".indent_print(depth + 1);
@@ -222,11 +222,11 @@ impl IndentPrint for HIRSimpleInitialization {
     }
 }
 
-impl IndentPrint for HIRAssignmentPattern {
+impl IndentPrint for IPRAssignmentPattern {
     fn indent_print(&self, depth: usize) -> String {
         match self {
-            HIRAssignmentPattern::Identifier(i) => i.indent_print(depth),
-            HIRAssignmentPattern::Tuple(tup) => {
+            IPRAssignmentPattern::Identifier(i) => i.indent_print(depth),
+            IPRAssignmentPattern::Tuple(tup) => {
                 let mut buffer = "(".indent_print(depth);
                 for pat in tup {
                     buffer += &pat.indent_print(depth + 1);
@@ -238,7 +238,7 @@ impl IndentPrint for HIRAssignmentPattern {
     }
 }
 
-impl IndentPrint for HIRBranch {
+impl IndentPrint for IPRBranch {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "branch".indent_print(depth);
 
@@ -257,43 +257,43 @@ impl IndentPrint for HIRBranch {
     }
 }
 
-impl IndentPrint for HIRExpression {
+impl IndentPrint for IPRExpression {
     fn indent_print(&self, depth: usize) -> String {
-        use HIRExpressionKind;
+        use IPRExpressionKind;
         match &self.kind {
-            HIRExpressionKind::UnScopedIdent(i) => format!("ident({i})").indent_print(depth),
-            HIRExpressionKind::IntegerLiteral(i) => format!("lit_int({i})").indent_print(depth),
-            HIRExpressionKind::FloatLiteral(i) => format!("lit_float({i})").indent_print(depth),
-            HIRExpressionKind::BinOpExpr(op, l, r) => {
+            IPRExpressionKind::UnScopedIdent(i) => format!("ident({i})").indent_print(depth),
+            IPRExpressionKind::IntegerLiteral(i) => format!("lit_int({i})").indent_print(depth),
+            IPRExpressionKind::FloatLiteral(i) => format!("lit_float({i})").indent_print(depth),
+            IPRExpressionKind::BinOpExpr(op, l, r) => {
                 let mut buffer = format!("operator`{op:?}`").indent_print(depth);
                 buffer += &l.indent_print(depth + 1);
                 buffer += &r.indent_print(depth + 1);
                 buffer
             }
-            HIRExpressionKind::UnOpExpr(op, arg) => {
+            IPRExpressionKind::UnOpExpr(op, arg) => {
                 let mut buffer = format!("operator`{op:?}`").indent_print(depth);
                 buffer += &arg.indent_print(depth + 1);
                 buffer
             }
-            HIRExpressionKind::MemberAccess(e, m) => {
+            IPRExpressionKind::MemberAccess(e, m) => {
                 let mut buffer = "expr_member".indent_print(depth);
                 buffer += &e.indent_print(depth + 1);
                 buffer += &".member".indent_print(depth + 1);
                 buffer += &m.indent_print(depth + 2);
                 buffer
             }
-            HIRExpressionKind::IfThenElse(b) => b.indent_print(depth),
+            IPRExpressionKind::IfThenElse(b) => b.indent_print(depth),
 
-            HIRExpressionKind::Block(eb) => eb.indent_print(depth),
-            HIRExpressionKind::FunctionCall(c) => c.indent_print(depth),
-            HIRExpressionKind::Unit => "@unit".indent_print(depth),
-            HIRExpressionKind::ScopedIdent(si) => si.indent_print(depth),
-            HIRExpressionKind::BoolLiteral(b) => format!("bool_lit({b})").indent_print(depth),
+            IPRExpressionKind::Block(eb) => eb.indent_print(depth),
+            IPRExpressionKind::FunctionCall(c) => c.indent_print(depth),
+            IPRExpressionKind::Unit => "@unit".indent_print(depth),
+            IPRExpressionKind::ScopedIdent(si) => si.indent_print(depth),
+            IPRExpressionKind::BoolLiteral(b) => format!("bool_lit({b})").indent_print(depth),
             _ => todo!("pretty print expression of kind {:?}", self.kind),
         }
     }
 }
-impl IndentPrint for HIRScopedIdentifier {
+impl IndentPrint for IPRScopedIdentifier {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = format!("{:?}", self.kind).indent_print(depth);
         buffer += &format!(".ident {}", self.ident).indent_print(depth + 1);
@@ -303,7 +303,7 @@ impl IndentPrint for HIRScopedIdentifier {
     }
 }
 
-impl IndentPrint for HIRFunctionCall {
+impl IndentPrint for IPRFunctionCall {
     fn indent_print(&self, depth: usize) -> String {
         let mut buffer = "call".indent_print(depth);
 

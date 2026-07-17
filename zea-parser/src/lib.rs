@@ -18,9 +18,9 @@ use zea_ast::zea::BareNodeLabeler;
 
 use zea_ast::zea::visitors::annotating::SemanticASTViolation;
 
-use zea_ast::zea::hir_nodes::*;
+use zea_ast::zea::immediate_parsed_representation::*;
 use zea_ast::zea::visitors::Transfomer;
-pub fn parse_module(src: &'_ str) -> (HIRModule, BareNodeLabeler) {
+pub fn parse_module(src: &'_ str) -> (IPRModule, BareNodeLabeler) {
     let p = ModuleParser::new();
     info!("parsing source file...");
     let mut module = match p.parse(src) {
@@ -38,20 +38,20 @@ pub fn parse_module(src: &'_ str) -> (HIRModule, BareNodeLabeler) {
     (module, labeler)
 }
 
-pub(crate) enum HIRModuleItem {
-    Init(HIRInitializationBlock),
-    Func(HIRFunction),
-    StructDef(HIRStructDataTypeDefinition),
-    EnumDef(HIRTaggedUnionDataTypeDefinition),
+pub(crate) enum IPRModuleItem {
+    Init(IPRInitializationBlock),
+    Func(IPRFunction),
+    StructDef(IPRStructDataTypeDefinition),
+    EnumDef(IPRTaggedUnionDataTypeDefinition),
 }
 
 pub(crate) fn separate_module_items(
-    items: Vec<HIRModuleItem>,
+    items: Vec<IPRModuleItem>,
 ) -> (
-    Vec<HIRInitializationBlock>,
-    Vec<HIRFunction>,
-    Vec<HIRStructDataTypeDefinition>,
-    Vec<HIRTaggedUnionDataTypeDefinition>,
+    Vec<IPRInitializationBlock>,
+    Vec<IPRFunction>,
+    Vec<IPRStructDataTypeDefinition>,
+    Vec<IPRTaggedUnionDataTypeDefinition>,
 ) {
     let mut globs = vec![];
     let mut funcs = vec![];
@@ -59,10 +59,10 @@ pub(crate) fn separate_module_items(
     let mut tagged_unions = vec![];
     for item in items {
         match item {
-            HIRModuleItem::Init(i) => globs.push(i),
-            HIRModuleItem::Func(f) => funcs.push(f),
-            HIRModuleItem::StructDef(s) => structs.push(s),
-            HIRModuleItem::EnumDef(tu) => tagged_unions.push(tu),
+            IPRModuleItem::Init(i) => globs.push(i),
+            IPRModuleItem::Func(f) => funcs.push(f),
+            IPRModuleItem::StructDef(s) => structs.push(s),
+            IPRModuleItem::EnumDef(tu) => tagged_unions.push(tu),
         }
     }
     (globs, funcs, structs, tagged_unions)
@@ -74,47 +74,47 @@ mod tests {
         AssignPatParser, ExprParser, FuncParser, InitParser, ModParser, StmtParser,
     };
 
-    use zea_ast::zea::{hir_nodes::*, BinOp, UnOp};
+    use zea_ast::zea::{immediate_parsed_representation::*, BinOp, UnOp};
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    fn parse_expr(src: &str) -> HIRExpression {
+    fn parse_expr(src: &str) -> IPRExpression {
         ExprParser::new()
             .parse(src)
             .unwrap_or_else(|e| panic!("expr parse failed for {src:?}:\n  {e}"))
     }
 
-    fn parse_stmt(src: &str) -> HIRStatement {
+    fn parse_stmt(src: &str) -> IPRStatement {
         StmtParser::new()
             .parse(src)
             .unwrap_or_else(|e| panic!("stmt parse failed for {src:?}:\n  {e}"))
     }
 
-    fn parse_func(src: &str) -> HIRFunction {
+    fn parse_func(src: &str) -> IPRFunction {
         FuncParser::new()
             .parse(src)
             .unwrap_or_else(|e| panic!("func parse failed for {src:?}:\n  {e}"))
     }
 
-    fn parse_init(src: &str) -> HIRInitializationBlock {
+    fn parse_init(src: &str) -> IPRInitializationBlock {
         InitParser::new()
             .parse(src)
             .unwrap_or_else(|e| panic!("init parse failed for {src:?}:\n  {e}"))
     }
 
-    fn parse_mod(src: &str) -> HIRModule {
+    fn parse_mod(src: &str) -> IPRModule {
         ModParser::new()
             .parse(src)
             .unwrap_or_else(|e| panic!("module parse failed for {src:?}:\n  {e}"))
     }
 
-    fn parse_pat(src: &str) -> HIRAssignmentPattern {
+    fn parse_pat(src: &str) -> IPRAssignmentPattern {
         AssignPatParser::new()
             .parse(src)
             .unwrap_or_else(|e| panic!("pattern parse failed for {src:?}:\n  {e}"))
     }
 
-    fn kind(e: &HIRExpression) -> &HIRExpressionKind {
+    fn kind(e: &IPRExpression) -> &IPRExpressionKind {
         &e.kind
     }
 
@@ -124,7 +124,7 @@ mod tests {
     fn integer_decimal() {
         assert!(matches!(
             kind(&parse_expr("42")),
-            HIRExpressionKind::IntegerLiteral(42)
+            IPRExpressionKind::IntegerLiteral(42)
         ));
     }
 
@@ -132,7 +132,7 @@ mod tests {
     fn integer_hex() {
         assert!(matches!(
             kind(&parse_expr("0xFF")),
-            HIRExpressionKind::IntegerLiteral(255)
+            IPRExpressionKind::IntegerLiteral(255)
         ));
     }
 
@@ -140,7 +140,7 @@ mod tests {
     fn integer_hex_lowercase() {
         assert!(matches!(
             kind(&parse_expr("0xff")),
-            HIRExpressionKind::IntegerLiteral(255)
+            IPRExpressionKind::IntegerLiteral(255)
         ));
     }
 
@@ -148,7 +148,7 @@ mod tests {
     fn integer_binary() {
         assert!(matches!(
             kind(&parse_expr("0b1010")),
-            HIRExpressionKind::IntegerLiteral(10)
+            IPRExpressionKind::IntegerLiteral(10)
         ));
     }
 
@@ -156,7 +156,7 @@ mod tests {
     fn integer_decimal_underscores() {
         assert!(matches!(
             kind(&parse_expr("1_000_000")),
-            HIRExpressionKind::IntegerLiteral(1_000_000)
+            IPRExpressionKind::IntegerLiteral(1_000_000)
         ));
     }
 
@@ -164,7 +164,7 @@ mod tests {
     fn integer_hex_underscores() {
         assert!(matches!(
             kind(&parse_expr("0xFF_FF")),
-            HIRExpressionKind::IntegerLiteral(0xFFFF)
+            IPRExpressionKind::IntegerLiteral(0xFFFF)
         ));
     }
 
@@ -172,42 +172,42 @@ mod tests {
     fn integer_binary_underscores() {
         assert!(matches!(
             kind(&parse_expr("0b1111_0000")),
-            HIRExpressionKind::IntegerLiteral(0b1111_0000)
+            IPRExpressionKind::IntegerLiteral(0b1111_0000)
         ));
     }
 
     #[test]
     fn identifier_simple() {
         assert!(
-            matches!(kind(&parse_expr("foo")), HIRExpressionKind::UnScopedIdent(s) if s == "foo")
+            matches!(kind(&parse_expr("foo")), IPRExpressionKind::UnScopedIdent(s) if s == "foo")
         );
     }
 
     #[test]
     fn identifier_with_digits() {
         assert!(
-            matches!(kind(&parse_expr("foo123")), HIRExpressionKind::UnScopedIdent(s) if s == "foo123")
+            matches!(kind(&parse_expr("foo123")), IPRExpressionKind::UnScopedIdent(s) if s == "foo123")
         );
     }
 
     #[test]
     fn identifier_with_hyphens() {
         assert!(
-            matches!(kind(&parse_expr("my-var")), HIRExpressionKind::UnScopedIdent(s) if s == "my-var")
+            matches!(kind(&parse_expr("my-var")), IPRExpressionKind::UnScopedIdent(s) if s == "my-var")
         );
     }
 
     #[test]
     fn identifier_question_mark() {
         assert!(
-            matches!(kind(&parse_expr("empty?")), HIRExpressionKind::UnScopedIdent(s) if s == "empty?")
+            matches!(kind(&parse_expr("empty?")), IPRExpressionKind::UnScopedIdent(s) if s == "empty?")
         );
     }
 
     #[test]
     fn identifier_bang() {
         assert!(
-            matches!(kind(&parse_expr("reset!")), HIRExpressionKind::UnScopedIdent(s) if s == "reset!")
+            matches!(kind(&parse_expr("reset!")), IPRExpressionKind::UnScopedIdent(s) if s == "reset!")
         );
     }
 
@@ -217,7 +217,7 @@ mod tests {
     fn unary_negate() {
         assert!(matches!(
             kind(&parse_expr("-1")),
-            HIRExpressionKind::UnOpExpr(UnOp::Neg, _)
+            IPRExpressionKind::UnOpExpr(UnOp::Neg, _)
         ));
     }
 
@@ -225,7 +225,7 @@ mod tests {
     fn unary_logical_not() {
         assert!(matches!(
             kind(&parse_expr("!x")),
-            HIRExpressionKind::UnOpExpr(UnOp::LogNot, _)
+            IPRExpressionKind::UnOpExpr(UnOp::LogNot, _)
         ));
     }
 
@@ -233,7 +233,7 @@ mod tests {
     fn unary_bitwise_not() {
         assert!(matches!(
             kind(&parse_expr("~x")),
-            HIRExpressionKind::UnOpExpr(UnOp::BitNot, _)
+            IPRExpressionKind::UnOpExpr(UnOp::BitNot, _)
         ));
     }
 
@@ -242,8 +242,8 @@ mod tests {
         // !!x — outer LogNot wrapping inner LogNot
         let e = parse_expr("!!x");
         assert!(matches!(kind(&e),
-            HIRExpressionKind::UnOpExpr(UnOp::LogNot, inner)
-            if matches!(kind(inner), HIRExpressionKind::UnOpExpr(UnOp::LogNot, _))
+            IPRExpressionKind::UnOpExpr(UnOp::LogNot, inner)
+            if matches!(kind(inner), IPRExpressionKind::UnOpExpr(UnOp::LogNot, _))
         ));
     }
 
@@ -255,7 +255,7 @@ mod tests {
             fn $name() {
                 assert!(matches!(
                     kind(&parse_expr($src)),
-                    HIRExpressionKind::BinOpExpr($op, _, _)
+                    IPRExpressionKind::BinOpExpr($op, _, _)
                 ));
             }
         };
@@ -287,9 +287,9 @@ mod tests {
     fn prec_mul_over_add() {
         // a + b * c  =>  Add(a, Mul(b, c))
         match kind(&parse_expr("a + b * c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Add, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::Add, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::Mul, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Mul, _, _)
             )),
             other => panic!("expected Add at root, got {other:?}"),
         }
@@ -299,9 +299,9 @@ mod tests {
     fn prec_add_over_shift() {
         // a << b + c  =>  Lsh(a, Add(b, c))
         match kind(&parse_expr("a << b + c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Lsh, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::Lsh, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::Add, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Add, _, _)
             )),
             other => panic!("expected Lsh at root, got {other:?}"),
         }
@@ -311,9 +311,9 @@ mod tests {
     fn prec_shift_over_cmp() {
         // a < b << c  =>  LT(a, Lsh(b, c))
         match kind(&parse_expr("a < b << c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::LT, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::LT, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::Lsh, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Lsh, _, _)
             )),
             other => panic!("expected LT at root, got {other:?}"),
         }
@@ -323,9 +323,9 @@ mod tests {
     fn prec_cmp_over_eq() {
         // a == b < c  =>  Eq(a, LT(b, c))
         match kind(&parse_expr("a == b < c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Eq, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::Eq, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::LT, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::LT, _, _)
             )),
             other => panic!("expected Eq at root, got {other:?}"),
         }
@@ -335,9 +335,9 @@ mod tests {
     fn prec_eq_over_bitand() {
         // a & b == c  =>  BitAnd(a, Eq(b, c))
         match kind(&parse_expr("a & b == c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::BitAnd, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::BitAnd, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::Eq, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Eq, _, _)
             )),
             other => panic!("expected BitAnd at root, got {other:?}"),
         }
@@ -347,9 +347,9 @@ mod tests {
     fn prec_bitand_over_bitxor() {
         // a ^ b & c  =>  BitXor(a, BitAnd(b, c))
         match kind(&parse_expr("a ^ b & c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::BitXor, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::BitXor, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::BitAnd, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::BitAnd, _, _)
             )),
             other => panic!("expected BitXor at root, got {other:?}"),
         }
@@ -359,9 +359,9 @@ mod tests {
     fn prec_bitxor_over_bitor() {
         // a | b ^ c  =>  BitOr(a, BitXor(b, c))
         match kind(&parse_expr("a | b ^ c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::BitOr, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::BitOr, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::BitXor, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::BitXor, _, _)
             )),
             other => panic!("expected BitOr at root, got {other:?}"),
         }
@@ -371,9 +371,9 @@ mod tests {
     fn prec_bitor_over_logand() {
         // a && b | c  =>  LogAnd(a, BitOr(b, c))
         match kind(&parse_expr("a && b | c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::LogAnd, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::LogAnd, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::BitOr, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::BitOr, _, _)
             )),
             other => panic!("expected LogAnd at root, got {other:?}"),
         }
@@ -383,9 +383,9 @@ mod tests {
     fn prec_logand_over_logxor() {
         // a ^^ b && c  =>  LogXor(a, LogAnd(b, c))
         match kind(&parse_expr("a ^^ b && c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::LogXor, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::LogXor, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::LogAnd, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::LogAnd, _, _)
             )),
             other => panic!("expected LogXor at root, got {other:?}"),
         }
@@ -395,9 +395,9 @@ mod tests {
     fn prec_logxor_over_logor() {
         // a || b ^^ c  =>  LogOr(a, LogXor(b, c))
         match kind(&parse_expr("a || b ^^ c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::LogOr, _, rhs) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::LogOr, _, rhs) => assert!(matches!(
                 kind(rhs),
-                HIRExpressionKind::BinOpExpr(BinOp::LogXor, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::LogXor, _, _)
             )),
             other => panic!("expected LogOr at root, got {other:?}"),
         }
@@ -407,10 +407,10 @@ mod tests {
     fn prec_unary_over_mul() {
         // -a * b  =>  Mul(Neg(a), b)
         match kind(&parse_expr("-a * b")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Mul, lhs, _) => {
+            IPRExpressionKind::BinOpExpr(BinOp::Mul, lhs, _) => {
                 assert!(matches!(
                     kind(lhs),
-                    HIRExpressionKind::UnOpExpr(UnOp::Neg, _)
+                    IPRExpressionKind::UnOpExpr(UnOp::Neg, _)
                 ))
             }
             other => panic!("expected Mul at root, got {other:?}"),
@@ -421,8 +421,8 @@ mod tests {
     fn prec_postfix_over_unary() {
         // -a.b  =>  Neg(MemberAccess(a, b)),  NOT  MemberAccess(Neg(a), b)
         match kind(&parse_expr("-a.b")) {
-            HIRExpressionKind::UnOpExpr(UnOp::Neg, inner) => {
-                assert!(matches!(kind(inner), HIRExpressionKind::MemberAccess(_, _)))
+            IPRExpressionKind::UnOpExpr(UnOp::Neg, inner) => {
+                assert!(matches!(kind(inner), IPRExpressionKind::MemberAccess(_, _)))
             }
             other => panic!("expected Neg at root, got {other:?}"),
         }
@@ -434,9 +434,9 @@ mod tests {
     fn left_assoc_add() {
         // a + b + c  =>  Add(Add(a, b), c)
         match kind(&parse_expr("a + b + c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Add, lhs, _) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::Add, lhs, _) => assert!(matches!(
                 kind(lhs),
-                HIRExpressionKind::BinOpExpr(BinOp::Add, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Add, _, _)
             )),
             other => panic!("expected Add(Add, _), got {other:?}"),
         }
@@ -446,9 +446,9 @@ mod tests {
     fn left_assoc_sub() {
         // a - b - c  =>  Sub(Sub(a, b), c), i.e. NOT a-(b-c)
         match kind(&parse_expr("a - b - c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Sub, lhs, _) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::Sub, lhs, _) => assert!(matches!(
                 kind(lhs),
-                HIRExpressionKind::BinOpExpr(BinOp::Sub, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Sub, _, _)
             )),
             other => panic!("expected Sub(Sub, _), got {other:?}"),
         }
@@ -457,9 +457,9 @@ mod tests {
     #[test]
     fn left_assoc_mul() {
         match kind(&parse_expr("a * b * c")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Mul, lhs, _) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::Mul, lhs, _) => assert!(matches!(
                 kind(lhs),
-                HIRExpressionKind::BinOpExpr(BinOp::Mul, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Mul, _, _)
             )),
             other => panic!("expected Mul(Mul, _), got {other:?}"),
         }
@@ -470,16 +470,16 @@ mod tests {
     #[test]
     fn member_access() {
         assert!(matches!(kind(&parse_expr("foo.bar")),
-            HIRExpressionKind::MemberAccess(_, m) if m == "bar"));
+            IPRExpressionKind::MemberAccess(_, m) if m == "bar"));
     }
 
     #[test]
     fn chained_member_access() {
         // a.b.c  =>  MemberAccess(MemberAccess(a, b), c)
         match kind(&parse_expr("a.b.c")) {
-            HIRExpressionKind::MemberAccess(inner, c) => {
+            IPRExpressionKind::MemberAccess(inner, c) => {
                 assert_eq!(c, "c");
-                assert!(matches!(kind(inner), HIRExpressionKind::MemberAccess(_, b) if b == "b"));
+                assert!(matches!(kind(inner), IPRExpressionKind::MemberAccess(_, b) if b == "b"));
             }
             other => panic!("unexpected {other:?}"),
         }
@@ -489,7 +489,7 @@ mod tests {
     fn subscript() {
         assert!(matches!(
             kind(&parse_expr("arr[0]")),
-            HIRExpressionKind::BinOpExpr(BinOp::Subscript, _, _)
+            IPRExpressionKind::BinOpExpr(BinOp::Subscript, _, _)
         ));
     }
 
@@ -497,9 +497,9 @@ mod tests {
     fn chained_subscript() {
         // a[0][1]  =>  Subscript(Subscript(a, 0), 1)
         match kind(&parse_expr("a[0][1]")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Subscript, lhs, _) => assert!(matches!(
+            IPRExpressionKind::BinOpExpr(BinOp::Subscript, lhs, _) => assert!(matches!(
                 kind(lhs),
-                HIRExpressionKind::BinOpExpr(BinOp::Subscript, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Subscript, _, _)
             )),
             other => panic!("unexpected {other:?}"),
         }
@@ -509,8 +509,8 @@ mod tests {
     fn member_then_subscript() {
         // foo.bar[0]  =>  Subscript(MemberAccess(foo, bar), 0)
         match kind(&parse_expr("foo.bar[0]")) {
-            HIRExpressionKind::BinOpExpr(BinOp::Subscript, lhs, _) => {
-                assert!(matches!(kind(lhs), HIRExpressionKind::MemberAccess(_, _)))
+            IPRExpressionKind::BinOpExpr(BinOp::Subscript, lhs, _) => {
+                assert!(matches!(kind(lhs), IPRExpressionKind::MemberAccess(_, _)))
             }
             other => panic!("unexpected {other:?}"),
         }
@@ -521,7 +521,7 @@ mod tests {
     #[test]
     fn call_no_args() {
         assert!(matches!(kind(&parse_expr("foo()")),
-            HIRExpressionKind::FunctionCall(HIRFunctionCall { args, .. }) if args.is_empty()));
+            IPRExpressionKind::FunctionCall(IPRFunctionCall { args, .. }) if args.is_empty()));
     }
 
     // Comma0 — all four trailing-comma variants
@@ -529,7 +529,7 @@ mod tests {
     #[test]
     fn call_one_arg_no_trailing() {
         match kind(&parse_expr("foo(1)")) {
-            HIRExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 1),
+            IPRExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 1),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -537,7 +537,7 @@ mod tests {
     #[test]
     fn call_one_arg_trailing_comma() {
         match kind(&parse_expr("foo(1,)")) {
-            HIRExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 1),
+            IPRExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 1),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -545,7 +545,7 @@ mod tests {
     #[test]
     fn call_many_args_no_trailing() {
         match kind(&parse_expr("add(a, b, c)")) {
-            HIRExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 3),
+            IPRExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 3),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -553,7 +553,7 @@ mod tests {
     #[test]
     fn call_many_args_trailing_comma() {
         match kind(&parse_expr("add(a, b, c,)")) {
-            HIRExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 3),
+            IPRExpressionKind::FunctionCall(fc) => assert_eq!(fc.args.len(), 3),
             other => panic!("unexpected {other:?}"),
         }
     }
@@ -561,9 +561,9 @@ mod tests {
     #[test]
     fn call_expr_arg() {
         match kind(&parse_expr("f(a + b)")) {
-            HIRExpressionKind::FunctionCall(fc) => assert!(matches!(
+            IPRExpressionKind::FunctionCall(fc) => assert!(matches!(
                 kind(&fc.args[0]),
-                HIRExpressionKind::BinOpExpr(BinOp::Add, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Add, _, _)
             )),
             other => panic!("unexpected {other:?}"),
         }
@@ -572,8 +572,8 @@ mod tests {
     #[test]
     fn call_name_recorded() {
         match kind(&parse_expr("my-func(x)")) {
-            HIRExpressionKind::FunctionCall(fc) => assert!(
-                matches!(&fc.subject.kind, HIRExpressionKind::UnScopedIdent(s) if s == "my-func")
+            IPRExpressionKind::FunctionCall(fc) => assert!(
+                matches!(&fc.subject.kind, IPRExpressionKind::UnScopedIdent(s) if s == "my-func")
             ),
             other => panic!("unexpected {other:?}"),
         }
@@ -583,25 +583,25 @@ mod tests {
 
     #[test]
     fn pat_identifier() {
-        assert!(matches!(parse_pat("x"), HIRAssignmentPattern::Identifier(s) if s == "x"));
+        assert!(matches!(parse_pat("x"), IPRAssignmentPattern::Identifier(s) if s == "x"));
     }
 
     #[test]
     fn pat_tuple_no_trailing() {
-        assert!(matches!(parse_pat("@(a, b)"), HIRAssignmentPattern::Tuple(v) if v.len() == 2));
+        assert!(matches!(parse_pat("@(a, b)"), IPRAssignmentPattern::Tuple(v) if v.len() == 2));
     }
 
     #[test]
     fn pat_tuple_trailing_comma() {
-        assert!(matches!(parse_pat("@(a, b,)"), HIRAssignmentPattern::Tuple(v) if v.len() == 2));
+        assert!(matches!(parse_pat("@(a, b,)"), IPRAssignmentPattern::Tuple(v) if v.len() == 2));
     }
 
     #[test]
     fn pat_nested_tuple() {
         match parse_pat("@((a, b), c)") {
-            HIRAssignmentPattern::Tuple(outer) => {
+            IPRAssignmentPattern::Tuple(outer) => {
                 assert_eq!(outer.len(), 2);
-                assert!(matches!(&outer[0], HIRAssignmentPattern::Tuple(_)));
+                assert!(matches!(&outer[0], IPRAssignmentPattern::Tuple(_)));
             }
             other => panic!("unexpected {other:?}"),
         }
@@ -612,52 +612,52 @@ mod tests {
     #[test]
     fn init_inferred() {
         let i = parse_init("x := 42;");
-        assert!(matches!(i.kind, HIRInitializationKind::Packed(_)));
-        let (HIRInitializationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, IPRInitializationKind::Packed(_)));
+        let (IPRInitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.assignee, HIRAssignmentPattern::Identifier(s) if s == "x"));
+        assert!(matches!(&i.assignee, IPRAssignmentPattern::Identifier(s) if s == "x"));
     }
 
     #[test]
     fn init_explicit_type() {
         let i = parse_init("x : U64 = 42;");
-        assert!(matches!(i.kind, HIRInitializationKind::Packed(_)));
-        let (HIRInitializationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, IPRInitializationKind::Packed(_)));
+        let (IPRInitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.typ, Some(HIRTypeSpecifier::NonScalar(t)) if t == "U64"));
+        assert!(matches!(&i.typ, Some(IPRTypeSpecifier::NonScalar(t)) if t == "U64"));
     }
 
     #[test]
     fn init_pointer_type() {
         let i = parse_init("p : U8* = ptr;");
-        assert!(matches!(i.kind, HIRInitializationKind::Packed(_)));
-        let (HIRInitializationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, IPRInitializationKind::Packed(_)));
+        let (IPRInitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.typ, Some(HIRTypeSpecifier::Pointer(inner))
-            if matches!(inner.as_ref(), HIRTypeSpecifier::NonScalar(t) if t == "U8")));
+        assert!(matches!(&i.typ, Some(IPRTypeSpecifier::Pointer(inner))
+            if matches!(inner.as_ref(), IPRTypeSpecifier::NonScalar(t) if t == "U8")));
     }
 
     #[test]
     fn init_array_type() {
         let i = parse_init("xs : [U32] = arr;");
-        assert!(matches!(i.kind, HIRInitializationKind::Packed(_)));
-        let (HIRInitializationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, IPRInitializationKind::Packed(_)));
+        let (IPRInitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.typ, Some(HIRTypeSpecifier::ArrayOf(_))));
+        assert!(matches!(&i.typ, Some(IPRTypeSpecifier::ArrayOf(_))));
     }
 
     #[test]
     fn init_tuple_destructure() {
         let i = parse_init("@(a, b) := pair;");
-        assert!(matches!(i.kind, HIRInitializationKind::Packed(_)));
-        let (HIRInitializationKind::Packed(i)) = i.kind else {
+        assert!(matches!(i.kind, IPRInitializationKind::Packed(_)));
+        let (IPRInitializationKind::Packed(i)) = i.kind else {
             unreachable!()
         };
-        assert!(matches!(&i.assignee, HIRAssignmentPattern::Tuple(v) if v.len() == 2));
+        assert!(matches!(&i.assignee, IPRAssignmentPattern::Tuple(v) if v.len() == 2));
     }
 
     // ── statements ────────────────────────────────────────────────────────────
@@ -666,16 +666,16 @@ mod tests {
     fn stmt_return_literal() {
         assert!(matches!(
             parse_stmt("return 0;").kind,
-            HIRStatementKind::Return(_)
+            IPRStatementKind::Return(_)
         ));
     }
 
     #[test]
     fn stmt_return_expr() {
         match parse_stmt("return a + b;").kind {
-            HIRStatementKind::Return(e) => assert!(matches!(
+            IPRStatementKind::Return(e) => assert!(matches!(
                 kind(&e),
-                HIRExpressionKind::BinOpExpr(BinOp::Add, _, _)
+                IPRExpressionKind::BinOpExpr(BinOp::Add, _, _)
             )),
             other => panic!("unexpected {other:?}"),
         }
@@ -685,7 +685,7 @@ mod tests {
     fn stmt_init() {
         assert!(matches!(
             parse_stmt("x := 1;").kind,
-            HIRStatementKind::Initialization(_)
+            IPRStatementKind::Initialization(_)
         ));
     }
 
@@ -693,7 +693,7 @@ mod tests {
     fn stmt_reassign() {
         assert!(matches!(
             parse_stmt("x = 2;").kind,
-            HIRStatementKind::Reassignment(_)
+            IPRStatementKind::Reassignment(_)
         ));
     }
 
@@ -704,7 +704,7 @@ mod tests {
         let f = parse_func("fn greet() {}");
         assert_eq!(f.name, "greet");
         assert!(f.params.is_empty());
-        assert!(matches!(&f.returns, HIRTypeSpecifier::NonScalar(s) if s == "Void"));
+        assert!(matches!(&f.returns, IPRTypeSpecifier::NonScalar(s) if s == "Void"));
     }
 
     #[test]
@@ -724,14 +724,14 @@ mod tests {
     #[test]
     fn func_return_pointer() {
         let f = parse_func("fn foo() -> U64* {}");
-        assert!(matches!(&f.returns, HIRTypeSpecifier::Pointer(inner)
-            if matches!(inner.as_ref(), HIRTypeSpecifier::NonScalar(s) if s == "U64")));
+        assert!(matches!(&f.returns, IPRTypeSpecifier::Pointer(inner)
+            if matches!(inner.as_ref(), IPRTypeSpecifier::NonScalar(s) if s == "U64")));
     }
 
     #[test]
     fn func_return_array() {
         let f = parse_func("fn foo() -> [U8] {}");
-        assert!(matches!(&f.returns, HIRTypeSpecifier::ArrayOf(_)));
+        assert!(matches!(&f.returns, IPRTypeSpecifier::ArrayOf(_)));
     }
 
     #[test]
@@ -745,7 +745,7 @@ mod tests {
         let f = parse_func("fn foo() -> U64 { x := 1; x }");
         assert!(matches!(
             f.body.statements.last().unwrap().kind,
-            HIRStatementKind::BlockTail(_)
+            IPRStatementKind::BlockTail(_)
         ));
     }
 

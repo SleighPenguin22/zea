@@ -9,20 +9,20 @@ use zea_internal_macros::{InternKey, VariantToStr};
 
 use crate::{
     visualisation::IndentPrint,
-    zea::{hir_nodes::*, BinOp, NodeId},
+    zea::{immediate_parsed_representation::*, BinOp, NodeId},
     InternTable, ZeaError,
 };
 
-const BUILTIN_SCALAR_TYPES: [HIRTypeSpecifier; 9] = [
-    HIRTypeSpecifier::t_Bool(),
-    HIRTypeSpecifier::t_I8(),
-    HIRTypeSpecifier::t_I16(),
-    HIRTypeSpecifier::t_I32(),
-    HIRTypeSpecifier::t_I64(),
-    HIRTypeSpecifier::t_U8(),
-    HIRTypeSpecifier::t_U16(),
-    HIRTypeSpecifier::t_U32(),
-    HIRTypeSpecifier::t_U64(),
+const BUILTIN_SCALAR_TYPES: [IPRTypeSpecifier; 9] = [
+    IPRTypeSpecifier::t_Bool(),
+    IPRTypeSpecifier::t_I8(),
+    IPRTypeSpecifier::t_I16(),
+    IPRTypeSpecifier::t_I32(),
+    IPRTypeSpecifier::t_I64(),
+    IPRTypeSpecifier::t_U8(),
+    IPRTypeSpecifier::t_U16(),
+    IPRTypeSpecifier::t_U32(),
+    IPRTypeSpecifier::t_U64(),
     // TypeSpecifier::t_F32(),
     // TypeSpecifier::t_F64(),
     // TypeSpecifier::t_Unit(),
@@ -30,15 +30,15 @@ const BUILTIN_SCALAR_TYPES: [HIRTypeSpecifier; 9] = [
 ];
 
 /// Determine the narrowst built-in integer type that fits this literal
-fn narrowest_int_type(literal: usize) -> HIRTypeSpecifier {
+fn narrowest_int_type(literal: usize) -> IPRTypeSpecifier {
     if literal <= u8::MAX as usize {
-        HIRTypeSpecifier::t_U8()
+        IPRTypeSpecifier::t_U8()
     } else if literal <= u16::MAX as usize {
-        HIRTypeSpecifier::t_U16()
+        IPRTypeSpecifier::t_U16()
     } else if literal <= u32::MAX as usize {
-        HIRTypeSpecifier::t_U32()
+        IPRTypeSpecifier::t_U32()
     } else if literal <= u64::MAX as usize {
-        HIRTypeSpecifier::t_U64()
+        IPRTypeSpecifier::t_U64()
     } else {
         unreachable!("too fucking big literal bra: {literal}")
     }
@@ -224,7 +224,7 @@ impl TypeVariableInterningTable {
 /// A table holding all unique types within a module.
 #[derive(Debug)]
 struct TypeInterningTable {
-    interned_types: InternTable<InternedTypeId, HIRTypeSpecifier>,
+    interned_types: InternTable<InternedTypeId, IPRTypeSpecifier>,
 }
 
 impl TypeInterningTable {
@@ -243,7 +243,7 @@ impl TypeInterningTable {
 
     /// introduce some type into the table, generating an id associated with that specifier.
     /// If the type was already introduced, return its id
-    pub fn introduce(&mut self, typ: &HIRTypeSpecifier) -> InternedTypeId {
+    pub fn introduce(&mut self, typ: &IPRTypeSpecifier) -> InternedTypeId {
         self.interned_types.intern(typ.clone())
     }
 
@@ -252,7 +252,7 @@ impl TypeInterningTable {
     pub fn get_specifier_by_id(
         &self,
         id: InternedTypeId,
-    ) -> Result<&HIRTypeSpecifier, TypeCheckError> {
+    ) -> Result<&IPRTypeSpecifier, TypeCheckError> {
         self.interned_types
             .get_by_id(id)
             .ok_or(TypeCheckError::MissingInternedType(id))
@@ -295,7 +295,7 @@ macro_rules! coercion_rule_widen {
     }};
 }
 
-pub fn typecheck_module(module: &mut HIRModule) {
+pub fn typecheck_module(module: &mut IPRModule) {
     let mut tc = ZeaTypeChecker::new();
     match tc.check_module(module) {
         Ok(_) => {}
@@ -332,7 +332,7 @@ impl ZeaTypeChecker {
             symbol_types: HashMap::new(),
         }
     }
-    pub fn check_module(&mut self, module: &mut HIRModule) -> Result<(), TypeCheckError> {
+    pub fn check_module(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
         self.introduce_module(module)?;
         let (_solved, frac, vars_solved, vars_total) = self.all_vars_solved();
         info!("\tinitially solved {frac}% ({vars_solved} of {vars_total}) of typevars");
@@ -346,7 +346,7 @@ impl ZeaTypeChecker {
         }
         Ok(())
     }
-    fn check_module_once(&mut self, module: &mut HIRModule) -> Result<(), TypeCheckError> {
+    fn check_module_once(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
         for glob in module.global_vars.iter_mut() {
             match self.check_assignment(glob) {
                 Ok(_) => {}
@@ -385,7 +385,7 @@ impl ZeaTypeChecker {
     fn solve_to_type(
         &mut self,
         inf_var: TypeVariable,
-        typ: &HIRTypeSpecifier,
+        typ: &IPRTypeSpecifier,
     ) -> Result<(), TypeCheckError> {
         let t_id = self.type_interning_table.introduce(typ);
         trace!("\tsolving type variable {inf_var:?} of literal to type {typ:?}");
@@ -393,58 +393,58 @@ impl ZeaTypeChecker {
         Ok(())
     }
 
-    fn introduce_assignment(&mut self, assigment: &HIRInitializationBlock) {
-        let HIRInitializationKind::Unpacked(inits) = &assigment.kind else {
+    fn introduce_assignment(&mut self, assigment: &IPRInitializationBlock) {
+        let IPRInitializationKind::Unpacked(inits) = &assigment.kind else {
             unreachable!("initializations should be unpacked before typechecks")
         };
         for init in inits.iter() {
             self.introduce_simple_assignment(init);
         }
     }
-    fn introduce_simple_assignment(&mut self, assignment: &HIRSimpleInitialization) {
+    fn introduce_simple_assignment(&mut self, assignment: &IPRSimpleInitialization) {
         if let Some(t) = &assignment.typ {
             let _ = self.type_interning_table.introduce(t);
         }
         self.introduce_expression(&assignment.value);
     }
 
-    fn introduce_expression(&mut self, expr: &HIRExpression) {
+    fn introduce_expression(&mut self, expr: &IPRExpression) {
         let inf_var = *self.get_inference_id(expr.id);
         match &expr.kind {
-            HIRExpressionKind::Unit => {}
-            HIRExpressionKind::IntegerLiteral(i) => {
+            IPRExpressionKind::Unit => {}
+            IPRExpressionKind::IntegerLiteral(i) => {
                 let typ = narrowest_int_type(*i);
                 self.solve_to_type(inf_var, &typ)
                     .expect("integer literals should solve just fine...")
             }
-            HIRExpressionKind::BoolLiteral(_) => {
-                self.solve_to_type(inf_var, &HIRTypeSpecifier::Bool)
+            IPRExpressionKind::BoolLiteral(_) => {
+                self.solve_to_type(inf_var, &IPRTypeSpecifier::Bool)
                     .expect("boolean literal should solve just fine...");
             }
-            HIRExpressionKind::FloatLiteral(_) => {
-                self.solve_to_type(inf_var, &HIRTypeSpecifier::t_F64())
+            IPRExpressionKind::FloatLiteral(_) => {
+                self.solve_to_type(inf_var, &IPRTypeSpecifier::t_F64())
                     .expect("float literal should solve just fine...");
             }
-            HIRExpressionKind::StringLiteral(_) => todo!(),
-            HIRExpressionKind::UnScopedIdent(_) => {
+            IPRExpressionKind::StringLiteral(_) => todo!(),
+            IPRExpressionKind::UnScopedIdent(_) => {
                 unreachable!("identifiers should be scoped before type checking")
             }
-            HIRExpressionKind::ScopedIdent(_) => todo!(),
-            HIRExpressionKind::FunctionCall(_) => todo!(),
-            HIRExpressionKind::BinOpExpr(_, l, r) => {
+            IPRExpressionKind::ScopedIdent(_) => todo!(),
+            IPRExpressionKind::FunctionCall(_) => todo!(),
+            IPRExpressionKind::BinOpExpr(_, l, r) => {
                 self.introduce_expression(l.as_ref());
                 self.introduce_expression(r.as_ref());
             }
-            HIRExpressionKind::UnOpExpr(_, arg) => {
+            IPRExpressionKind::UnOpExpr(_, arg) => {
                 self.introduce_expression(arg.as_ref());
             }
-            HIRExpressionKind::MemberAccess(_, _) => todo!(),
-            HIRExpressionKind::IfThenElse(_) => todo!(),
-            HIRExpressionKind::Block(_) => todo!(),
+            IPRExpressionKind::MemberAccess(_, _) => todo!(),
+            IPRExpressionKind::IfThenElse(_) => todo!(),
+            IPRExpressionKind::Block(_) => todo!(),
         }
     }
 
-    fn introduce_module(&mut self, module: &HIRModule) -> Result<(), TypeCheckError> {
+    fn introduce_module(&mut self, module: &IPRModule) -> Result<(), TypeCheckError> {
         for glob in module.global_vars.iter() {
             self.introduce_assignment(glob);
         }
@@ -496,18 +496,18 @@ impl ZeaTypeChecker {
     }
 
     fn try_coerce_types<'types>(
-        typ: &'types HIRTypeSpecifier,
-        to: &'types HIRTypeSpecifier,
-    ) -> Result<&'types HIRTypeSpecifier, IllegalTypeCoercionKind> {
+        typ: &'types IPRTypeSpecifier,
+        to: &'types IPRTypeSpecifier,
+    ) -> Result<&'types IPRTypeSpecifier, IllegalTypeCoercionKind> {
         match (typ, to) {
             (a, b) if a == b => Ok(to),
 
             (
-                HIRTypeSpecifier::Integer {
+                IPRTypeSpecifier::Integer {
                     width: width_a,
                     signed: signed_a,
                 },
-                HIRTypeSpecifier::Integer {
+                IPRTypeSpecifier::Integer {
                     width: width_b,
                     signed: signed_b,
                 },
@@ -535,8 +535,8 @@ impl ZeaTypeChecker {
 
             // floats may be widened
             (
-                HIRTypeSpecifier::Float { width: width_a },
-                HIRTypeSpecifier::Float { width: width_b },
+                IPRTypeSpecifier::Float { width: width_a },
+                IPRTypeSpecifier::Float { width: width_b },
             ) => {
                 if width_a > width_b {
                     Err(IllegalTypeCoercionKind::LossOfPrecision)
@@ -545,11 +545,11 @@ impl ZeaTypeChecker {
                 }
             }
             // booleans may be widened, where false => 0, true => 1
-            (HIRTypeSpecifier::Bool, HIRTypeSpecifier::Integer { .. }) => Ok(to),
+            (IPRTypeSpecifier::Bool, IPRTypeSpecifier::Integer { .. }) => Ok(to),
             // the Never type can always be cast, as it will never reach code after it anyway
-            (HIRTypeSpecifier::Never, _) => Ok(to),
+            (IPRTypeSpecifier::Never, _) => Ok(to),
 
-            (HIRTypeSpecifier::Pointer(a), HIRTypeSpecifier::Pointer(b)) if a != b => {
+            (IPRTypeSpecifier::Pointer(a), IPRTypeSpecifier::Pointer(b)) if a != b => {
                 Err(IllegalTypeCoercionKind::PointerCast)
             }
             _ => Err(IllegalTypeCoercionKind::InconvertibleTypes),
@@ -566,9 +566,9 @@ impl Default for ZeaTypeChecker {
 impl ZeaTypeChecker {
     fn check_assignment(
         &mut self,
-        assign: &mut HIRInitializationBlock,
+        assign: &mut IPRInitializationBlock,
     ) -> Result<(), TypeCheckError> {
-        let HIRInitializationKind::Unpacked(inits) = &mut assign.kind else {
+        let IPRInitializationKind::Unpacked(inits) = &mut assign.kind else {
             unreachable!("inits should be unpacked before type checking");
         };
         for init in inits.iter_mut() {
@@ -580,7 +580,7 @@ impl ZeaTypeChecker {
 
     fn check_simple_assignment(
         &mut self,
-        assign: &mut HIRSimpleInitialization,
+        assign: &mut IPRSimpleInitialization,
     ) -> Result<(), TypeCheckError> {
         if self.symbol_types.contains_key(&assign.id) {
             trace!("\t\tskipping annotated initialization");
@@ -613,34 +613,34 @@ impl ZeaTypeChecker {
         Ok(())
     }
 
-    fn infer_expression(&mut self, expr: &HIRExpression) -> Result<TypeVariable, TypeCheckError> {
+    fn infer_expression(&mut self, expr: &IPRExpression) -> Result<TypeVariable, TypeCheckError> {
         let t_var = *self.get_inference_id(expr.id);
         if self.get_solved(t_var).is_ok() {
             trace!("\tskipping solved expression");
             return Ok(t_var);
         }
         let res = match &expr.kind {
-            HIRExpressionKind::IntegerLiteral(_)
-            | HIRExpressionKind::BoolLiteral(_)
-            | HIRExpressionKind::FloatLiteral(_)
-            | HIRExpressionKind::Unit => {
+            IPRExpressionKind::IntegerLiteral(_)
+            | IPRExpressionKind::BoolLiteral(_)
+            | IPRExpressionKind::FloatLiteral(_)
+            | IPRExpressionKind::Unit => {
                 let id = *self.get_inference_id(expr.id);
                 trace!("\tinferring literal yields existing type variable");
                 Ok(id)
             }
 
-            HIRExpressionKind::BinOpExpr(op, l, r) => {
+            IPRExpressionKind::BinOpExpr(op, l, r) => {
                 trace!("\tinferring binop");
                 self.infer_expr_binop(expr.id, *op, l.as_ref(), r.as_ref())
             }
-            HIRExpressionKind::StringLiteral(_)
-            | HIRExpressionKind::ScopedIdent(_)
-            | HIRExpressionKind::FunctionCall(_)
-            | HIRExpressionKind::UnOpExpr(_, _)
-            | HIRExpressionKind::MemberAccess(_, _)
-            | HIRExpressionKind::IfThenElse(_)
-            | HIRExpressionKind::Block(_)
-            | HIRExpressionKind::UnScopedIdent(_) => todo!(),
+            IPRExpressionKind::StringLiteral(_)
+            | IPRExpressionKind::ScopedIdent(_)
+            | IPRExpressionKind::FunctionCall(_)
+            | IPRExpressionKind::UnOpExpr(_, _)
+            | IPRExpressionKind::MemberAccess(_, _)
+            | IPRExpressionKind::IfThenElse(_)
+            | IPRExpressionKind::Block(_)
+            | IPRExpressionKind::UnScopedIdent(_) => todo!(),
         }?;
 
         trace!(
@@ -652,7 +652,7 @@ impl ZeaTypeChecker {
         Ok(res)
     }
 
-    fn get_solved(&self, inf_var: TypeVariable) -> Result<&HIRTypeSpecifier, TypeCheckError> {
+    fn get_solved(&self, inf_var: TypeVariable) -> Result<&IPRTypeSpecifier, TypeCheckError> {
         let solved = self
             .typevar_interning_table
             .get_solved(inf_var)
@@ -664,8 +664,8 @@ impl ZeaTypeChecker {
         &mut self,
         id: NodeId,
         op: BinOp,
-        l: &HIRExpression,
-        r: &HIRExpression,
+        l: &IPRExpression,
+        r: &IPRExpression,
     ) -> Result<TypeVariable, TypeCheckError> {
         let var = *self.get_inference_id(id);
         let l_var = self.infer_expression(l)?;
@@ -687,11 +687,11 @@ impl ZeaTypeChecker {
             | BinOp::Rsh => {
                 self.hindley_milner_unify(l_var, r_var)?;
                 match r_t {
-                    HIRTypeSpecifier::Integer { .. } => {
+                    IPRTypeSpecifier::Integer { .. } => {
                         self.hindley_milner_unify(var, r_var)?;
                         Ok(r_var)
                     }
-                    HIRTypeSpecifier::Bool => {
+                    IPRTypeSpecifier::Bool => {
                         self.hindley_milner_unify(var, u64_t)?;
                         Ok(u64_t)
                     }
@@ -721,13 +721,13 @@ impl ZeaTypeChecker {
 
     fn bool_t(&mut self) -> TypeVariable {
         self.type_interning_table
-            .introduce(&HIRTypeSpecifier::Bool)
+            .introduce(&IPRTypeSpecifier::Bool)
             .as_typevar(&mut self.typevar_interning_table)
     }
 
     fn u64_t(&mut self) -> TypeVariable {
         self.type_interning_table
-            .introduce(&HIRTypeSpecifier::t_U64())
+            .introduce(&IPRTypeSpecifier::t_U64())
             .as_typevar(&mut self.typevar_interning_table)
     }
 }
@@ -828,15 +828,15 @@ mod tests {
 
     #[test]
     fn coercion_rules() {
-        let i64 = HIRTypeSpecifier::t_I64();
-        let i8 = HIRTypeSpecifier::t_I8();
-        let u64 = HIRTypeSpecifier::t_U64();
-        let u8 = HIRTypeSpecifier::t_U8();
-        let bool = HIRTypeSpecifier::t_Bool();
-        let unit = HIRTypeSpecifier::t_Unit();
-        let never = HIRTypeSpecifier::t_Never();
-        let f32 = HIRTypeSpecifier::t_F32();
-        let f64 = HIRTypeSpecifier::t_F64();
+        let i64 = IPRTypeSpecifier::t_I64();
+        let i8 = IPRTypeSpecifier::t_I8();
+        let u64 = IPRTypeSpecifier::t_U64();
+        let u8 = IPRTypeSpecifier::t_U8();
+        let bool = IPRTypeSpecifier::t_Bool();
+        let unit = IPRTypeSpecifier::t_Unit();
+        let never = IPRTypeSpecifier::t_Never();
+        let f32 = IPRTypeSpecifier::t_F32();
+        let f64 = IPRTypeSpecifier::t_F64();
 
         for t in BUILTIN_SCALAR_TYPES.iter() {
             assert_eq!(ZeaTypeChecker::try_coerce_types(t, t), Ok(t));

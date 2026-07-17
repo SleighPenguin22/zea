@@ -1,7 +1,7 @@
 use std::str::FromStr;
-use zea_ast::zea::hir_nodes::*;
+use zea_ast::zea::immediate_parsed_representation ::*;
 use zea_ast::zea::{BinOp, UnOp, NodeId};
-use crate::{HIRModuleItem, separate_module_items};
+use crate::{IPRModuleItem, separate_module_items};
 
 grammar<'ast>;
 
@@ -28,13 +28,13 @@ Comma1<T>: Vec<T> = {
     }
 };
 
-TTypedIdent:HIRTypedIdentifier = {
-    <i:ExprIdent> ":" <t:TType> =>HIRTypedIdentifier::new(t, i)
+TTypedIdent:IPRTypedIdentifier = {
+    <i:ExprIdent> ":" <t:TType> =>IPRTypedIdentifier::new(t, i)
 };
 
-pub Mod: HIRModule = {
+pub Mod: IPRModule = {
     <name:ModName> <imports:ModImports?> <exports:ModExports?> <(global_vars, functions, struct_definitions, tagged_unions):ModSymbols> => {
-        HIRModule {
+        IPRModule {
             id: NodeId::sentinel(),
             imports: imports.unwrap_or(vec![]),
             exports: exports.unwrap_or(vec![]),
@@ -45,12 +45,12 @@ pub Mod: HIRModule = {
  }
 };
 
-CondBranch: HIRBranch = {
+CondBranch: IPRBranch = {
     "if" <condition:Expr> <true_case:Block> => {
-        HIRBranch::if_block(condition, true_case.wrap_in_expression())
+        IPRBranch::if_block(condition, true_case.wrap_in_expression())
     },
     "if" <condition:Expr> <true_case:Block> "else" <false_case:Block> =>
-        HIRBranch::if_else_block(condition, true_case.wrap_in_expression(), false_case.wrap_in_expression())
+        IPRBranch::if_else_block(condition, true_case.wrap_in_expression(), false_case.wrap_in_expression())
 };
 
 ModName: String = {
@@ -66,38 +66,38 @@ ModExports: Vec<String> = {
 };
 #[inline]
 ModSymbols: (
-Vec<HIRInitializationBlock>,
-Vec<HIRFunction>,
-Vec<HIRStructDataTypeDefinition>,
-Vec<HIRTaggedUnionDataTypeDefinition>
+Vec<IPRInitializationBlock>,
+Vec<IPRFunction>,
+Vec<IPRStructDataTypeDefinition>,
+Vec<IPRTaggedUnionDataTypeDefinition>
 ) = {
     ModSymbolsHelper => separate_module_items(<>)
 };
 
-ModSymbolsHelper: Vec<HIRModuleItem> = {
+ModSymbolsHelper: Vec<IPRModuleItem> = {
     => vec![],
     <cur: Init> <rest:ModSymbolsHelper> => {
         let mut v = rest;
-        v.push(HIRModuleItem::Init(cur));
+        v.push(IPRModuleItem::Init(cur));
         v
     },
     <cur: Func> <rest:ModSymbolsHelper> => {
             let mut v = rest;
-                    v.push(HIRModuleItem::Func(cur));
+                    v.push(IPRModuleItem::Func(cur));
                     v
         },
 
    // <cur: StructDef> <rest:ModSymbolsHelper> => {
    //             let mut v = rest;
-   //                     v.push(HIRModuleItem::StructDef(cur));
+   //                     v.push(IPRModuleItem::StructDef(cur));
    //                     v
    //         },
 
 };
 
-// pub StructDef: HIRStructDataTypeDefinition = {
+// pub StructDef: IPRStructDataTypeDefinition = {
 //    "struct" <name:TypeIdent> "{" <members:Comma0<TTypedIdent>> "}" => {
-//        HIRStructDataTypeDefinition {
+//        IPRStructDataTypeDefinition {
 //            id: NodeId::sentinel(),
 //            name,
 //            members: vec![],
@@ -107,71 +107,71 @@ ModSymbolsHelper: Vec<HIRModuleItem> = {
 // },
 //};
 
-pub Init: HIRInitializationBlock = {
+pub Init: IPRInitializationBlock = {
     <p:AssignPat> ":" "=" <val:Expr> ";" => {
-    HIRInitializationBlock::packed (
+    IPRInitializationBlock::packed (
         None,
         p,
         val
     )
  },
     <p:AssignPat> ":" <typ:TType> "=" <val:Expr> ";" => {
-    HIRInitializationBlock::packed (
+    IPRInitializationBlock::packed (
             Some(typ),
             p,
             val
         )
  },
 }
-pub AssignPat: HIRAssignmentPattern = {
-    <i:ExprIdent> => HIRAssignmentPattern::Identifier(i),
+pub AssignPat: IPRAssignmentPattern = {
+    <i:ExprIdent> => IPRAssignmentPattern::Identifier(i),
     "@" <AssignPatInner>
 }
 
 #[inline]
-AssignPatInner: HIRAssignmentPattern = {
-    <i:ExprIdent> => HIRAssignmentPattern::Identifier(i),
-    "(" <pats:Comma1<AssignPatInner>> ")" => HIRAssignmentPattern::Tuple(pats)
+AssignPatInner: IPRAssignmentPattern = {
+    <i:ExprIdent> => IPRAssignmentPattern::Identifier(i),
+    "(" <pats:Comma1<AssignPatInner>> ")" => IPRAssignmentPattern::Tuple(pats)
 }
 
-pub Reassign: HIRReassignment = {
+pub Reassign: IPRReassignment = {
     <i:ExprIdent> "=" <v:Expr> ";" => {
-        HIRReassignment {
+        IPRReassignment {
             id: NodeId::sentinel(),
             assignee: i,
             value: v
         }
  }
 };
-pub FuncCall: HIRFunctionCall = {
+pub FuncCall: IPRFunctionCall = {
     <subject:ExprIdent> "(" <args:Comma0<Expr>> ")" => {
-        HIRFunctionCall {
+        IPRFunctionCall {
             id: NodeId::sentinel(),
-            subject: Box::new(HIRExpression::wrap_ident(subject)),
+            subject: Box::new(IPRExpression::wrap_ident(subject)),
             args
         }
     }
 };
 
 
-pub Func: HIRFunction = {
+pub Func: IPRFunction = {
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
     <body:Block> => {
-        let params: Vec<HIRFuncParam> = args.into_iter().map(HIRFuncParam::from).collect();
-        HIRFunction {
+        let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
+        IPRFunction {
             id: NodeId::sentinel(),
             name,
             params,
-            returns: HIRTypeSpecifier::NonScalar("Void".to_string()),
+            returns: IPRTypeSpecifier::NonScalar("Void".to_string()),
             body
         }
     },
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
     "->" <funcreturns:TType> <body:Block> => {
-        let params: Vec<HIRFuncParam> = args.into_iter().map(HIRFuncParam::from).collect();
-        HIRFunction {
+        let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
+        IPRFunction {
             id: NodeId::sentinel(),
             name,
             params,
@@ -180,34 +180,34 @@ pub Func: HIRFunction = {
         }
     }
 };
-TType:HIRTypeSpecifier = {
-   TypeIdent => {HIRTypeSpecifier::NonScalar(<>)},
-    <t:TType> "*" => {HIRTypeSpecifier::Pointer(Box::new(t))},
-    "[" <t:TType> "]" => {HIRTypeSpecifier::ArrayOf(Box::new(t))},
+TType:IPRTypeSpecifier = {
+   TypeIdent => {IPRTypeSpecifier::NonScalar(<>)},
+    <t:TType> "*" => {IPRTypeSpecifier::Pointer(Box::new(t))},
+    "[" <t:TType> "]" => {IPRTypeSpecifier::ArrayOf(Box::new(t))},
 };
 
-Block: HIRBlockExpression = {
+Block: IPRBlockExpression = {
     "{" <statements:(<Stmt>)*> <tail:Expr?> "}" => {
         let last = if let Some(tail) = tail {
             tail
         } else {
-            HIRExpression::unit()
+            IPRExpression::unit()
         };
-        HIRBlockExpression {
+        IPRBlockExpression {
             id: NodeId::sentinel(),
             statements,
             last
         }
     },
 };
-FuncBody: HIRBlockExpression = {
+FuncBody: IPRBlockExpression = {
     "{" <statements:(<Stmt>)*> <tail:Expr?> "}" => {
         let last = if let Some(tail) = tail {
             tail
         } else {
-            HIRExpression::unit()
+            IPRExpression::unit()
         };
-        HIRBlockExpression {
+        IPRBlockExpression {
             id: NodeId::sentinel(),
             statements,
             last
@@ -215,16 +215,16 @@ FuncBody: HIRBlockExpression = {
     },
 };
 
-pub Stmt: HIRStatement = {
+pub Stmt: IPRStatement = {
     "return" <e:Expr> ";" => {
-        HIRStatement {
+        IPRStatement {
             id: NodeId::sentinel(),
-            kind: HIRStatementKind::Return(e)
+            kind: IPRStatementKind::Return(e)
         }
     },
-    <init:Init> => HIRStatement {
+    <init:Init> => IPRStatement {
         id: NodeId::sentinel(),
-        kind: HIRStatementKind::Initialization(init)
+        kind: IPRStatementKind::Initialization(init)
     },
     <reinit:Reassign> => reinit.wrap_in_statement(),
     <block:Block> => block.wrap_in_statement(),
@@ -232,80 +232,80 @@ pub Stmt: HIRStatement = {
     <branch:CondBranch> ";" => branch.wrap_in_statement()
 };
 
-pub Expr: HIRExpression = ExprBranch;
+pub Expr: IPRExpression = ExprBranch;
 
-ExprBranch: HIRExpression = {
+ExprBranch: IPRExpression = {
     <b:CondBranch> => b.wrap_in_expression(),
     ExprOr
 };
 
-ExprOr: HIRExpression = {
-    <l:ExprXor> "||" <r:ExprOr>  => HIRExpression::binop(BinOp::LogOr, l, r),
+ExprOr: IPRExpression = {
+    <l:ExprXor> "||" <r:ExprOr>  => IPRExpression::binop(BinOp::LogOr, l, r),
     ExprXor,
 };
-ExprXor: HIRExpression = {
-    <l:ExprAnd> "^^" <r:ExprXor> => HIRExpression::binop(BinOp::LogXor, l, r),
+ExprXor: IPRExpression = {
+    <l:ExprAnd> "^^" <r:ExprXor> => IPRExpression::binop(BinOp::LogXor, l, r),
     ExprAnd,
 };
-ExprAnd: HIRExpression = {
-    <l:ExprBit> "&&" <r:ExprAnd> => HIRExpression::binop(BinOp::LogAnd, l, r),
+ExprAnd: IPRExpression = {
+    <l:ExprBit> "&&" <r:ExprAnd> => IPRExpression::binop(BinOp::LogAnd, l, r),
     ExprBit,
 };
-ExprBit: HIRExpression = {
-     <l:ExprEq> "|" <r:ExprBit> => HIRExpression::binop(BinOp::BitOr, l, r),
-    <l:ExprEq> "^" <r:ExprBit> => HIRExpression::binop(BinOp::BitXor, l, r),
-    <l:ExprEq> "&" <r:ExprBit> => HIRExpression::binop(BinOp::BitAnd, l, r),
+ExprBit: IPRExpression = {
+     <l:ExprEq> "|" <r:ExprBit> => IPRExpression::binop(BinOp::BitOr, l, r),
+    <l:ExprEq> "^" <r:ExprBit> => IPRExpression::binop(BinOp::BitXor, l, r),
+    <l:ExprEq> "&" <r:ExprBit> => IPRExpression::binop(BinOp::BitAnd, l, r),
     ExprEq,
 };
-ExprEq: HIRExpression = {
-    <l:ExprCmp> "==" <r:ExprEq> => HIRExpression::binop(BinOp::Eq, l, r),
-    <l:ExprCmp> "!=" <r:ExprEq> => HIRExpression::binop(BinOp::Neq, l, r),
+ExprEq: IPRExpression = {
+    <l:ExprCmp> "==" <r:ExprEq> => IPRExpression::binop(BinOp::Eq, l, r),
+    <l:ExprCmp> "!=" <r:ExprEq> => IPRExpression::binop(BinOp::Neq, l, r),
     ExprCmp,
 };
-ExprCmp: HIRExpression = {
-    <l:ExprShift> "<" <r:ExprCmp> => HIRExpression::binop(BinOp::LT, l, r),
-    <l:ExprShift> ">" <r:ExprCmp>  => HIRExpression::binop(BinOp::GT, l, r),
-    <l:ExprShift> "<=" <r:ExprCmp>  => HIRExpression::binop(BinOp::Leq, l, r),
-    <l:ExprShift> ">=" <r:ExprCmp>  => HIRExpression::binop(BinOp::Geq, l, r),
+ExprCmp: IPRExpression = {
+    <l:ExprShift> "<" <r:ExprCmp> => IPRExpression::binop(BinOp::LT, l, r),
+    <l:ExprShift> ">" <r:ExprCmp>  => IPRExpression::binop(BinOp::GT, l, r),
+    <l:ExprShift> "<=" <r:ExprCmp>  => IPRExpression::binop(BinOp::Leq, l, r),
+    <l:ExprShift> ">=" <r:ExprCmp>  => IPRExpression::binop(BinOp::Geq, l, r),
     ExprShift,
 };
-ExprShift: HIRExpression = {
-    <l:ExprAdd> "<<" <r:ExprShift>  => HIRExpression::binop(BinOp::Lsh, l, r),
-    <l:ExprAdd> ">>" <r:ExprShift> => HIRExpression::binop(BinOp::Rsh, l, r),
+ExprShift: IPRExpression = {
+    <l:ExprAdd> "<<" <r:ExprShift>  => IPRExpression::binop(BinOp::Lsh, l, r),
+    <l:ExprAdd> ">>" <r:ExprShift> => IPRExpression::binop(BinOp::Rsh, l, r),
     ExprAdd,
 };
-ExprAdd: HIRExpression = {
-    <l:ExprMul> "+" <r:ExprAdd>  => HIRExpression::binop(BinOp::Add, l, r),
-    <l:ExprMul> "-" <r:ExprAdd> => HIRExpression::binop(BinOp::Sub, l, r),
+ExprAdd: IPRExpression = {
+    <l:ExprMul> "+" <r:ExprAdd>  => IPRExpression::binop(BinOp::Add, l, r),
+    <l:ExprMul> "-" <r:ExprAdd> => IPRExpression::binop(BinOp::Sub, l, r),
     ExprMul,
 };
-ExprMul: HIRExpression = {
-      <l:ExprMul> "*" <r:ExprUnary> => HIRExpression::binop(BinOp::Mul, l, r),
-     <l:ExprMul> "/" <r:ExprUnary> => HIRExpression::binop(BinOp::Div, l, r),
-     <l:ExprMul> "%" <r:ExprUnary>  => HIRExpression::binop(BinOp::Mod, l, r),
+ExprMul: IPRExpression = {
+      <l:ExprMul> "*" <r:ExprUnary> => IPRExpression::binop(BinOp::Mul, l, r),
+     <l:ExprMul> "/" <r:ExprUnary> => IPRExpression::binop(BinOp::Div, l, r),
+     <l:ExprMul> "%" <r:ExprUnary>  => IPRExpression::binop(BinOp::Mod, l, r),
     ExprUnary,
 };
-ExprUnary: HIRExpression = {
-    "!" <e:ExprUnary> => HIRExpression::unop(UnOp::LogNot, e),
-    "~" <e:ExprUnary> => HIRExpression::unop(UnOp::BitNot, e),
-    "-" <e:ExprUnary> => HIRExpression::unop(UnOp::Neg, e),
+ExprUnary: IPRExpression = {
+    "!" <e:ExprUnary> => IPRExpression::unop(UnOp::LogNot, e),
+    "~" <e:ExprUnary> => IPRExpression::unop(UnOp::BitNot, e),
+    "-" <e:ExprUnary> => IPRExpression::unop(UnOp::Neg, e),
     ExprCall,
 };
-ExprCall: HIRExpression = {
+ExprCall: IPRExpression = {
     <c:FuncCall> => c.wrap_in_expression(),
     ExprPostfix
 }
 
-ExprPostfix: HIRExpression = {
-    <t:ExprPostfix> "." <m:ExprIdent> => HIRExpression::member_access(t,m),
-    <t:ExprPostfix> "[" <i:Expr> "]" => HIRExpression::binop(BinOp::Subscript, t, i),
+ExprPostfix: IPRExpression = {
+    <t:ExprPostfix> "." <m:ExprIdent> => IPRExpression::member_access(t,m),
+    <t:ExprPostfix> "[" <i:Expr> "]" => IPRExpression::binop(BinOp::Subscript, t, i),
     ExprAtom
 };
 
 
-ExprAtom: HIRExpression = {
-    <n:Num>       => HIRExpression::wrap_lit_int(n),
-    <s:ExprIdent> => HIRExpression::wrap_ident(s),
+ExprAtom: IPRExpression = {
+    <n:Num>       => IPRExpression::wrap_lit_int(n),
+    <s:ExprIdent> => IPRExpression::wrap_ident(s),
     "(" <Expr> ")"
 };
 

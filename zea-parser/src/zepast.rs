@@ -29,7 +29,7 @@
 //! All parsed nodes receive `NodeId::sentinel()`; the labeler is run afterward.
 
 use std::fmt;
-use zea_ast::zea::{BinOp, NodeId, UnOp, hir_nodes::*};
+use zea_ast::zea::{BinOp, NodeId, UnOp, immediate_parsed_representation::*};
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
@@ -134,14 +134,14 @@ fn stmt_if_then_else(ite: HIRBranch) -> HIRStatement {
     }
 }
 
-fn init_packed(packed: HIRPackedInitialization) -> HIRInitializationBlock {
-    HIRInitializationBlock {
+fn init_packed(packed: HIRPackedInitialization) -> IPRInitializationBlock {
+    IPRInitializationBlock {
         id: NodeId::sentinel(),
         kind: HIRInitializationKind::Packed(packed),
     }
 }
-fn init_unpacked(inits: Vec<HIRSimpleInitialization>) -> HIRInitializationBlock {
-    HIRInitializationBlock {
+fn init_unpacked(inits: Vec<HIRSimpleInitialization>) -> IPRInitializationBlock {
+    IPRInitializationBlock {
         id: NodeId::sentinel(),
         kind: HIRInitializationKind::Unpacked(inits),
     }
@@ -171,10 +171,10 @@ struct ZeaPrettyAstParser<'a> {
 }
 
 /// Parse a full `Module` from the pretty-printed source string.
-pub fn parse_module(src: &str) -> HIRModule {
+pub fn parse_module(src: &str) -> IPRModule {
     _parse_module(src).unwrap_or_else(|e| panic!("{e}"))
 }
-fn _parse_module(src: &str) -> Result<HIRModule, ParseError> {
+fn _parse_module(src: &str) -> Result<IPRModule, ParseError> {
     let mut p = ZeaPrettyAstParser::new(src);
     let m = p.parse_module_inner()?;
     p.expect_end()?;
@@ -368,13 +368,13 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   .globs            -- depth 1
     ///   .funcs            -- depth 1
     /// ```
-    fn parse_module_inner(&mut self) -> Result<HIRModule, ParseError> {
+    fn parse_module_inner(&mut self) -> Result<IPRModule, ParseError> {
         self.expect_line(0, "module")?;
         let imports = self.parse_field_list("imports", |p, c, _d| Ok(c.to_string()))?;
         let exports = self.parse_field_list("exports", |p, c, _d| Ok(c.to_string()))?;
         let globs = self.parse_field_list("globs", |p, c, d| p.parse_init_from_content(c, d))?;
         let funcs = self.parse_field_list("funcs", |p, c, d| p.parse_func_from_content(c, d))?;
-        Ok(HIRModule {
+        Ok(IPRModule {
             id: NodeId::sentinel(),
             imports,
             exports,
@@ -418,7 +418,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         &mut self,
         kind: &str,
         depth: usize,
-    ) -> Result<HIRInitializationBlock, ParseError> {
+    ) -> Result<IPRInitializationBlock, ParseError> {
         match kind {
             "init_packed" => Ok(init_packed(self.parse_packed_init(depth)?)),
             "init_unpacked_block" => Ok(init_unpacked(self.parse_init_unpacked_list(depth)?)),
@@ -586,7 +586,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         &mut self,
         kind: &str,
         depth: usize,
-    ) -> Result<HIRFunction, ParseError> {
+    ) -> Result<IPRFunction, ParseError> {
         let name = kind
             .strip_prefix("func `")
             .and_then(|s| s.strip_suffix('`'))
@@ -608,7 +608,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///     block           -- depth + 2
     ///       ...           -- depth + 3
     /// ```
-    fn parse_func_body(&mut self, name: String, depth: usize) -> Result<HIRFunction, ParseError> {
+    fn parse_func_body(&mut self, name: String, depth: usize) -> Result<IPRFunction, ParseError> {
         self.expect_line(depth + 1, ".returns")?;
         let returns = self
             .parse_type_opt(depth + 2)?
@@ -621,7 +621,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
         self.expect_line(depth + 2, "block")?;
         let body = self.parse_block_expr(depth + 2)?;
 
-        Ok(HIRFunction {
+        Ok(IPRFunction {
             id: NodeId::sentinel(),
             name,
             params,
@@ -633,7 +633,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
     /// Parse the parameter list of a function.
     ///
     /// Each parameter is introduced by `- .param` at the given `depth`.
-    fn parse_param_list(&mut self, depth: usize) -> Result<Vec<HIRFuncParam>, ParseError> {
+    fn parse_param_list(&mut self, depth: usize) -> Result<Vec<IPRFuncParam>, ParseError> {
         let mut items = Vec::new();
         loop {
             match self.peek() {
@@ -658,10 +658,10 @@ impl<'a> ZeaPrettyAstParser<'a> {
     ///   <name>            -- depth + 1
     ///   <type>            -- depth + 1
     /// ```
-    fn parse_func_param(&mut self, depth: usize) -> Result<HIRFuncParam, ParseError> {
+    fn parse_func_param(&mut self, depth: usize) -> Result<IPRFuncParam, ParseError> {
         let name = self.parse_string_at(depth + 1)?;
         let typ = self.parse_type_opt(depth + 1)?;
-        Ok(HIRFuncParam {
+        Ok(IPRFuncParam {
             id: NodeId::sentinel(),
             name,
             typ: typ.unwrap_or(HIRTypeSpecifier::Unit),
@@ -1095,8 +1095,8 @@ mod tests {
 
     // ---- test builder helpers ------------------------------------------------
 
-    fn module_(funcs: Vec<HIRFunction>) -> HIRModule {
-        HIRModule {
+    fn module_(funcs: Vec<IPRFunction>) -> IPRModule {
+        IPRModule {
             id: NodeId::sentinel(),
             imports: vec![],
             exports: vec![],
@@ -1108,11 +1108,11 @@ mod tests {
 
     fn function(
         name: &str,
-        params: Vec<HIRFuncParam>,
+        params: Vec<IPRFuncParam>,
         returns: HIRTypeSpecifier,
         body: HIRBlockExpression,
-    ) -> HIRFunction {
-        HIRFunction {
+    ) -> IPRFunction {
+        IPRFunction {
             id: NodeId::sentinel(),
             name: name.into(),
             params,
@@ -1121,8 +1121,8 @@ mod tests {
         }
     }
 
-    fn param(name: &str, typ: HIRTypeSpecifier) -> HIRFuncParam {
-        HIRFuncParam {
+    fn param(name: &str, typ: HIRTypeSpecifier) -> IPRFuncParam {
+        IPRFuncParam {
             id: NodeId::sentinel(),
             name: name.into(),
             typ,
@@ -1201,7 +1201,7 @@ mod tests {
     /// 1. Structural equality (ignoring `NodeId`).
     /// 2. Pretty-print idempotency (re-printing the parsed AST
     ///    produces identical text).
-    fn roundtrip(ast: HIRModule) {
+    fn roundtrip(ast: IPRModule) {
         let printed = ast.indent_print(0);
         eprintln!("=== PRINTED ===\n{}", printed);
         let parsed = parse_module(&printed);
@@ -1222,7 +1222,7 @@ mod tests {
 
     #[test]
     fn module_with_imports_exports() {
-        roundtrip(HIRModule {
+        roundtrip(IPRModule {
             id: NodeId::sentinel(),
             imports: vec!["std.io".into(), "std.math".into()],
             exports: vec!["main".into()],

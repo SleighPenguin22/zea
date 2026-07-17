@@ -1,101 +1,101 @@
 pub mod altering;
 
 use crate::zea::visitors::altering::{AssignmentSimplifier, IdentifierScoper, NodeLabeler};
-use crate::zea::{hir_nodes::*, HIRScopedIdentifier};
+use crate::zea::{immediate_parsed_representation::*, IPRScopedIdentifier};
 use std::ops::Deref;
 
 pub mod annotating;
 
-pub trait Visitor: Sized {
+pub trait IPRVisitor: Sized {
     type VisitorError;
     type VisitorOk: Default;
-    fn visit_expr(&mut self, expr: &HIRExpression) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_expr(&mut self, expr: &IPRExpression) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_expr(self, expr)
     }
-    fn visit_stmt(&mut self, stmt: &HIRStatement) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_stmt(&mut self, stmt: &IPRStatement) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_stmt(self, stmt)
     }
-    fn visit_branch(&mut self, branch: &HIRBranch) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_branch(&mut self, branch: &IPRBranch) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_branch(self, branch)
     }
     fn visit_call(
         &mut self,
-        call: &HIRFunctionCall,
+        call: &IPRFunctionCall,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_call(self, call)
     }
 
     fn visit_block(
         &mut self,
-        block: &HIRBlockExpression,
+        block: &IPRBlockExpression,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_block(self, block)
     }
     fn visit_type(
         &mut self,
-        typ: &HIRTypeSpecifier,
+        typ: &IPRTypeSpecifier,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_type(self, typ)
     }
     fn visit_initblock(
         &mut self,
-        init: &HIRInitializationBlock,
+        init: &IPRInitializationBlock,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_initblock(self, init)
     }
     fn visit_init(
         &mut self,
-        init: &HIRSimpleInitialization,
+        init: &IPRSimpleInitialization,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_unpacked_init(self, init)
     }
 
     fn visit_reassignment(
         &mut self,
-        reinit: &HIRReassignment,
+        reinit: &IPRReassignment,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_reassignment(self, reinit)
     }
 
     fn visit_init_packed(
         &mut self,
-        init: &HIRPackedInitialization,
+        init: &IPRPackedInitialization,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_packed_init(self, init)
     }
     fn visit_init_punpacked(
         &mut self,
-        init: &HIRPartiallyUnpackedInitialization,
+        init: &IPRPartiallyUnpackedInitialization,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_punpacked_init(self, init)
     }
 
     fn visit_scoped_identifier(
         &mut self,
-        _ident: &HIRScopedIdentifier,
+        _ident: &IPRScopedIdentifier,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         Ok(Self::VisitorOk::default())
     }
-    fn visit_module(&mut self, module: &HIRModule) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_module(&mut self, module: &IPRModule) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_module(self, module)
     }
 
     fn visit_funcdef(
         &mut self,
-        funcdef: &HIRFunction,
+        funcdef: &IPRFunction,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_funcdef(self, funcdef)
     }
 
     fn visit_structdef(
         &mut self,
-        structdef: &HIRStructDataTypeDefinition,
+        structdef: &IPRStructDataTypeDefinition,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_structdef(self, structdef)
     }
     fn visit_assignment_pattern(
         &mut self,
-        pattern: &HIRAssignmentPattern,
+        pattern: &IPRAssignmentPattern,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_assignpat(self, pattern)
     }
@@ -105,161 +105,161 @@ pub trait Transfomer: Sized {
     type TransformerOk: Default;
     fn visit_expr(
         &mut self,
-        expr: &mut HIRExpression,
+        expr: &mut IPRExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_expr(self, expr)
     }
     fn visit_stmt(
         &mut self,
-        stmt: &mut HIRStatement,
+        stmt: &mut IPRStatement,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_stmt(self, stmt)
     }
     fn visit_branch(
         &mut self,
-        branch: &mut HIRBranch,
+        branch: &mut IPRBranch,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_branch(self, branch)
     }
     fn visit_call(
         &mut self,
-        call: &mut HIRFunctionCall,
+        call: &mut IPRFunctionCall,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_call(self, call)
     }
 
     fn visit_block(
         &mut self,
-        block: &mut HIRBlockExpression,
+        block: &mut IPRBlockExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_block(self, block)
     }
     fn visit_type(
         &mut self,
-        typ: &mut HIRTypeSpecifier,
+        typ: &mut IPRTypeSpecifier,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_type(self, typ)
     }
     fn visit_initblock(
         &mut self,
-        init: &mut HIRInitializationBlock,
+        init: &mut IPRInitializationBlock,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_initblock(self, init)
     }
     fn visit_init(
         &mut self,
-        init: &mut HIRSimpleInitialization,
+        init: &mut IPRSimpleInitialization,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_unpacked_init(self, init)
     }
     fn visit_init_packed(
         &mut self,
-        init: &mut HIRPackedInitialization,
+        init: &mut IPRPackedInitialization,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_packed_init(self, init)
     }
     fn visit_reassignment(
         &mut self,
-        reinit: &mut HIRReassignment,
+        reinit: &mut IPRReassignment,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_reassignment(self, reinit)
     }
     fn visit_init_punpacked(
         &mut self,
-        init: &mut HIRPartiallyUnpackedInitialization,
+        init: &mut IPRPartiallyUnpackedInitialization,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_punpacked_init(self, init)
     }
 
     fn visit_scoped_identifier(
         &mut self,
-        _ident: &mut HIRScopedIdentifier,
+        _ident: &mut IPRScopedIdentifier,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         Ok(Self::TransformerOk::default())
     }
     fn visit_module(
         &mut self,
-        module: &mut HIRModule,
+        module: &mut IPRModule,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_module(self, module)
     }
 
     fn visit_funcdef(
         &mut self,
-        funcdef: &mut HIRFunction,
+        funcdef: &mut IPRFunction,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_funcdef(self, funcdef)
     }
 
     fn visit_structdef(
         &mut self,
-        structdef: &mut HIRStructDataTypeDefinition,
+        structdef: &mut IPRStructDataTypeDefinition,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_structdef(self, structdef)
     }
 
     fn visit_assignment_pattern(
         &mut self,
-        pattern: &mut HIRAssignmentPattern,
+        pattern: &mut IPRAssignmentPattern,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_assignpat(self, pattern)
     }
 }
 
-fn walk_expr<V: Visitor>(v: &mut V, e: &HIRExpression) -> Result<V::VisitorOk, V::VisitorError> {
+fn walk_expr<V: IPRVisitor>(v: &mut V, e: &IPRExpression) -> Result<V::VisitorOk, V::VisitorError> {
     match &e.kind {
-        HIRExpressionKind::Unit => {}
-        HIRExpressionKind::IntegerLiteral(_) => {}
-        HIRExpressionKind::BoolLiteral(_) => {}
-        HIRExpressionKind::FloatLiteral(_) => {}
-        HIRExpressionKind::StringLiteral(_) => {}
-        HIRExpressionKind::UnScopedIdent(_) => {}
-        HIRExpressionKind::ScopedIdent(i) => {
+        IPRExpressionKind::Unit => {}
+        IPRExpressionKind::IntegerLiteral(_) => {}
+        IPRExpressionKind::BoolLiteral(_) => {}
+        IPRExpressionKind::FloatLiteral(_) => {}
+        IPRExpressionKind::StringLiteral(_) => {}
+        IPRExpressionKind::UnScopedIdent(_) => {}
+        IPRExpressionKind::ScopedIdent(i) => {
             v.visit_scoped_identifier(i)?;
         }
-        HIRExpressionKind::FunctionCall(call) => {
+        IPRExpressionKind::FunctionCall(call) => {
             v.visit_call(call)?;
         }
-        HIRExpressionKind::BinOpExpr(_, l, r) => {
+        IPRExpressionKind::BinOpExpr(_, l, r) => {
             v.visit_expr(l)?;
             v.visit_expr(r)?;
         }
-        HIRExpressionKind::UnOpExpr(_, a) => {
+        IPRExpressionKind::UnOpExpr(_, a) => {
             v.visit_expr(a)?;
         }
-        HIRExpressionKind::MemberAccess(d, _) => {
+        IPRExpressionKind::MemberAccess(d, _) => {
             v.visit_expr(d)?;
         }
-        HIRExpressionKind::IfThenElse(ite) => {
+        IPRExpressionKind::IfThenElse(ite) => {
             v.visit_branch(ite)?;
         }
 
-        HIRExpressionKind::Block(eb) => {
+        IPRExpressionKind::Block(eb) => {
             v.visit_block(eb)?;
         }
     }
     Ok(V::VisitorOk::default())
 }
-fn walk_stmt<V: Visitor>(v: &mut V, s: &HIRStatement) -> Result<V::VisitorOk, V::VisitorError> {
+fn walk_stmt<V: IPRVisitor>(v: &mut V, s: &IPRStatement) -> Result<V::VisitorOk, V::VisitorError> {
     match &s.kind {
-        HIRStatementKind::Initialization(i) => v.visit_initblock(i),
-        HIRStatementKind::Reassignment(r) => v.visit_reassignment(r),
-        HIRStatementKind::FunctionCall(c) => v.visit_call(c),
-        HIRStatementKind::Return(e) => v.visit_expr(e),
-        HIRStatementKind::BlockTail(t) => v.visit_expr(t),
+        IPRStatementKind::Initialization(i) => v.visit_initblock(i),
+        IPRStatementKind::Reassignment(r) => v.visit_reassignment(r),
+        IPRStatementKind::FunctionCall(c) => v.visit_call(c),
+        IPRStatementKind::Return(e) => v.visit_expr(e),
+        IPRStatementKind::BlockTail(t) => v.visit_expr(t),
 
-        HIRStatementKind::Block(eb) => v.visit_block(eb),
-        HIRStatementKind::IfThenElse(ite) => v.visit_branch(ite),
+        IPRStatementKind::Block(eb) => v.visit_block(eb),
+        IPRStatementKind::IfThenElse(ite) => v.visit_branch(ite),
     }
 }
 
-fn walk_reassignment<V: Visitor>(
+fn walk_reassignment<V: IPRVisitor>(
     v: &mut V,
-    r: &HIRReassignment,
+    r: &IPRReassignment,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_expr(&r.value)
 }
-fn walk_branch<V: Visitor>(v: &mut V, b: &HIRBranch) -> Result<V::VisitorOk, V::VisitorError> {
+fn walk_branch<V: IPRVisitor>(v: &mut V, b: &IPRBranch) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_expr(b.condition.as_ref())?;
     v.visit_expr(b.true_case.as_ref())?;
     if let Some(false_case) = &b.false_case {
@@ -267,7 +267,10 @@ fn walk_branch<V: Visitor>(v: &mut V, b: &HIRBranch) -> Result<V::VisitorOk, V::
     }
     Ok(V::VisitorOk::default())
 }
-fn walk_call<V: Visitor>(v: &mut V, c: &HIRFunctionCall) -> Result<V::VisitorOk, V::VisitorError> {
+fn walk_call<V: IPRVisitor>(
+    v: &mut V,
+    c: &IPRFunctionCall,
+) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_expr(c.subject.as_ref())?;
     for a in c.args.iter() {
         v.visit_expr(a)?;
@@ -275,9 +278,9 @@ fn walk_call<V: Visitor>(v: &mut V, c: &HIRFunctionCall) -> Result<V::VisitorOk,
     Ok(V::VisitorOk::default())
 }
 
-fn walk_block<V: Visitor>(
+fn walk_block<V: IPRVisitor>(
     v: &mut V,
-    block: &HIRBlockExpression,
+    block: &IPRBlockExpression,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     for stmt in block.statements.iter() {
         v.visit_stmt(stmt)?;
@@ -285,13 +288,13 @@ fn walk_block<V: Visitor>(
     v.visit_expr(&block.last)
 }
 
-fn walk_assignpat<V: Visitor>(
+fn walk_assignpat<V: IPRVisitor>(
     v: &mut V,
-    pat: &HIRAssignmentPattern,
+    pat: &IPRAssignmentPattern,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     match pat {
-        HIRAssignmentPattern::Identifier(_) => {}
-        HIRAssignmentPattern::Tuple(t) => {
+        IPRAssignmentPattern::Identifier(_) => {}
+        IPRAssignmentPattern::Tuple(t) => {
             for pat in t.iter() {
                 v.visit_assignment_pattern(pat)?;
             }
@@ -300,30 +303,30 @@ fn walk_assignpat<V: Visitor>(
     Ok(V::VisitorOk::default())
 }
 
-fn walk_type<V: Visitor>(
+fn walk_type<V: IPRVisitor>(
     v: &mut V,
-    typ: &HIRTypeSpecifier,
+    typ: &IPRTypeSpecifier,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     match typ {
-        HIRTypeSpecifier::NonScalar(_) => {}
-        HIRTypeSpecifier::Unit => {}
-        HIRTypeSpecifier::Bool => {}
-        HIRTypeSpecifier::Integer { .. } => {}
-        HIRTypeSpecifier::Float { .. } => {}
-        HIRTypeSpecifier::Pointer(t) => {
+        IPRTypeSpecifier::NonScalar(_) => {}
+        IPRTypeSpecifier::Unit => {}
+        IPRTypeSpecifier::Bool => {}
+        IPRTypeSpecifier::Integer { .. } => {}
+        IPRTypeSpecifier::Float { .. } => {}
+        IPRTypeSpecifier::Pointer(t) => {
             v.visit_type(t.as_ref())?;
         }
-        HIRTypeSpecifier::ArrayOf(t) => {
+        IPRTypeSpecifier::ArrayOf(t) => {
             v.visit_type(t.as_ref())?;
         }
-        HIRTypeSpecifier::Never => {}
+        IPRTypeSpecifier::Never => {}
     };
     Ok(V::VisitorOk::default())
 }
 
-fn walk_packed_init<V: Visitor>(
+fn walk_packed_init<V: IPRVisitor>(
     v: &mut V,
-    init: &HIRPackedInitialization,
+    init: &IPRPackedInitialization,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_assignment_pattern(&init.assignee)?;
     v.visit_expr(&init.value)?;
@@ -333,9 +336,9 @@ fn walk_packed_init<V: Visitor>(
     Ok(V::VisitorOk::default())
 }
 
-fn walk_punpacked_init<V: Visitor>(
+fn walk_punpacked_init<V: IPRVisitor>(
     v: &mut V,
-    init: &HIRPartiallyUnpackedInitialization,
+    init: &IPRPartiallyUnpackedInitialization,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_init(&init.temporary)?;
     for init in init.unpacked_assignments.iter() {
@@ -344,9 +347,9 @@ fn walk_punpacked_init<V: Visitor>(
     Ok(V::VisitorOk::default())
 }
 
-fn walk_unpacked_init<V: Visitor>(
+fn walk_unpacked_init<V: IPRVisitor>(
     v: &mut V,
-    init: &HIRSimpleInitialization,
+    init: &IPRSimpleInitialization,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_expr(&init.value)?;
     if let Some(t) = &init.typ {
@@ -355,13 +358,13 @@ fn walk_unpacked_init<V: Visitor>(
     Ok(V::VisitorOk::default())
 }
 
-fn walk_initblock<V: Visitor>(
+fn walk_initblock<V: IPRVisitor>(
     v: &mut V,
-    init: &HIRInitializationBlock,
+    init: &IPRInitializationBlock,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     match &init.kind {
-        HIRInitializationKind::Packed(p) => v.visit_init_packed(p),
-        HIRInitializationKind::Unpacked(u) => {
+        IPRInitializationKind::Packed(p) => v.visit_init_packed(p),
+        IPRInitializationKind::Unpacked(u) => {
             for init in u.iter() {
                 v.visit_init(init)?;
             }
@@ -370,7 +373,10 @@ fn walk_initblock<V: Visitor>(
     }
 }
 
-fn walk_funcdef<V: Visitor>(v: &mut V, f: &HIRFunction) -> Result<V::VisitorOk, V::VisitorError> {
+fn walk_funcdef<V: IPRVisitor>(
+    v: &mut V,
+    f: &IPRFunction,
+) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_type(&f.returns)?;
     v.visit_block(&f.body)?;
     for param in f.params.iter() {
@@ -379,9 +385,9 @@ fn walk_funcdef<V: Visitor>(v: &mut V, f: &HIRFunction) -> Result<V::VisitorOk, 
     Ok(V::VisitorOk::default())
 }
 
-fn walk_structdef<V: Visitor>(
+fn walk_structdef<V: IPRVisitor>(
     v: &mut V,
-    s: &HIRStructDataTypeDefinition,
+    s: &IPRStructDataTypeDefinition,
 ) -> Result<V::VisitorOk, V::VisitorError> {
     for member in s.members.iter() {
         v.visit_type(&member.typ)?;
@@ -389,7 +395,10 @@ fn walk_structdef<V: Visitor>(
     Ok(V::VisitorOk::default())
 }
 
-fn walk_module<V: Visitor>(v: &mut V, module: &HIRModule) -> Result<V::VisitorOk, V::VisitorError> {
+fn walk_module<V: IPRVisitor>(
+    v: &mut V,
+    module: &IPRModule,
+) -> Result<V::VisitorOk, V::VisitorError> {
     for glob in module.global_vars.iter() {
         v.visit_initblock(glob)?;
     }
@@ -404,36 +413,36 @@ fn walk_module<V: Visitor>(v: &mut V, module: &HIRModule) -> Result<V::VisitorOk
 
 fn walk_mut_expr<V: Transfomer>(
     v: &mut V,
-    e: &mut HIRExpression,
+    e: &mut IPRExpression,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     match &mut e.kind {
-        HIRExpressionKind::Unit => {}
-        HIRExpressionKind::IntegerLiteral(_) => {}
-        HIRExpressionKind::BoolLiteral(_) => {}
-        HIRExpressionKind::FloatLiteral(_) => {}
-        HIRExpressionKind::StringLiteral(_) => {}
-        HIRExpressionKind::UnScopedIdent(_) => {}
-        HIRExpressionKind::ScopedIdent(i) => {
+        IPRExpressionKind::Unit => {}
+        IPRExpressionKind::IntegerLiteral(_) => {}
+        IPRExpressionKind::BoolLiteral(_) => {}
+        IPRExpressionKind::FloatLiteral(_) => {}
+        IPRExpressionKind::StringLiteral(_) => {}
+        IPRExpressionKind::UnScopedIdent(_) => {}
+        IPRExpressionKind::ScopedIdent(i) => {
             v.visit_scoped_identifier(i)?;
         }
-        HIRExpressionKind::FunctionCall(call) => {
+        IPRExpressionKind::FunctionCall(call) => {
             v.visit_call(call)?;
         }
-        HIRExpressionKind::BinOpExpr(_, l, r) => {
+        IPRExpressionKind::BinOpExpr(_, l, r) => {
             v.visit_expr(l)?;
             v.visit_expr(r)?;
         }
-        HIRExpressionKind::UnOpExpr(_, a) => {
+        IPRExpressionKind::UnOpExpr(_, a) => {
             v.visit_expr(a)?;
         }
-        HIRExpressionKind::MemberAccess(d, _) => {
+        IPRExpressionKind::MemberAccess(d, _) => {
             v.visit_expr(d)?;
         }
-        HIRExpressionKind::IfThenElse(ite) => {
+        IPRExpressionKind::IfThenElse(ite) => {
             v.visit_branch(ite)?;
         }
 
-        HIRExpressionKind::Block(eb) => {
+        IPRExpressionKind::Block(eb) => {
             v.visit_block(eb)?;
         }
     };
@@ -441,29 +450,29 @@ fn walk_mut_expr<V: Transfomer>(
 }
 fn walk_mut_stmt<V: Transfomer>(
     v: &mut V,
-    s: &mut HIRStatement,
+    s: &mut IPRStatement,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     match &mut s.kind {
-        HIRStatementKind::Initialization(i) => v.visit_initblock(i),
-        HIRStatementKind::Reassignment(r) => v.visit_reassignment(r),
-        HIRStatementKind::FunctionCall(c) => v.visit_call(c),
-        HIRStatementKind::Return(e) => v.visit_expr(e),
-        HIRStatementKind::BlockTail(t) => v.visit_expr(t),
-        HIRStatementKind::Block(eb) => v.visit_block(eb),
-        HIRStatementKind::IfThenElse(ite) => v.visit_branch(ite),
+        IPRStatementKind::Initialization(i) => v.visit_initblock(i),
+        IPRStatementKind::Reassignment(r) => v.visit_reassignment(r),
+        IPRStatementKind::FunctionCall(c) => v.visit_call(c),
+        IPRStatementKind::Return(e) => v.visit_expr(e),
+        IPRStatementKind::BlockTail(t) => v.visit_expr(t),
+        IPRStatementKind::Block(eb) => v.visit_block(eb),
+        IPRStatementKind::IfThenElse(ite) => v.visit_branch(ite),
     }
 }
 
 fn walk_mut_reassignment<V: Transfomer>(
     v: &mut V,
-    r: &mut HIRReassignment,
+    r: &mut IPRReassignment,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_expr(&mut r.value)
 }
 
 fn walk_mut_branch<V: Transfomer>(
     v: &mut V,
-    b: &mut HIRBranch,
+    b: &mut IPRBranch,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_expr(b.condition.as_mut())?;
     v.visit_expr(b.true_case.as_mut())?;
@@ -474,7 +483,7 @@ fn walk_mut_branch<V: Transfomer>(
 }
 fn walk_mut_call<V: Transfomer>(
     v: &mut V,
-    c: &mut HIRFunctionCall,
+    c: &mut IPRFunctionCall,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_expr(c.subject.as_mut())?;
     for a in c.args.iter_mut() {
@@ -485,7 +494,7 @@ fn walk_mut_call<V: Transfomer>(
 
 fn walk_mut_block<V: Transfomer>(
     v: &mut V,
-    block: &mut HIRBlockExpression,
+    block: &mut IPRBlockExpression,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     for stmt in block.statements.iter_mut() {
         v.visit_stmt(stmt)?;
@@ -495,11 +504,11 @@ fn walk_mut_block<V: Transfomer>(
 
 fn walk_mut_assignpat<V: Transfomer>(
     v: &mut V,
-    pat: &mut HIRAssignmentPattern,
+    pat: &mut IPRAssignmentPattern,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     match pat {
-        HIRAssignmentPattern::Identifier(_) => {}
-        HIRAssignmentPattern::Tuple(t) => {
+        IPRAssignmentPattern::Identifier(_) => {}
+        IPRAssignmentPattern::Tuple(t) => {
             for pat in t.iter_mut() {
                 v.visit_assignment_pattern(pat)?;
             }
@@ -510,28 +519,28 @@ fn walk_mut_assignpat<V: Transfomer>(
 
 fn walk_mut_type<V: Transfomer>(
     v: &mut V,
-    typ: &mut HIRTypeSpecifier,
+    typ: &mut IPRTypeSpecifier,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     match typ {
-        HIRTypeSpecifier::NonScalar(_) => {}
-        HIRTypeSpecifier::Unit => {}
-        HIRTypeSpecifier::Bool => {}
-        HIRTypeSpecifier::Integer { .. } => {}
-        HIRTypeSpecifier::Float { .. } => {}
-        HIRTypeSpecifier::Pointer(t) => {
+        IPRTypeSpecifier::NonScalar(_) => {}
+        IPRTypeSpecifier::Unit => {}
+        IPRTypeSpecifier::Bool => {}
+        IPRTypeSpecifier::Integer { .. } => {}
+        IPRTypeSpecifier::Float { .. } => {}
+        IPRTypeSpecifier::Pointer(t) => {
             v.visit_type(t.as_mut())?;
         }
-        HIRTypeSpecifier::ArrayOf(t) => {
+        IPRTypeSpecifier::ArrayOf(t) => {
             v.visit_type(t.as_mut())?;
         }
-        HIRTypeSpecifier::Never => {}
+        IPRTypeSpecifier::Never => {}
     };
     Ok(V::TransformerOk::default())
 }
 
 fn walk_mut_packed_init<V: Transfomer>(
     v: &mut V,
-    init: &mut HIRPackedInitialization,
+    init: &mut IPRPackedInitialization,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_assignment_pattern(&mut init.assignee)?;
     v.visit_expr(&mut init.value)?;
@@ -543,7 +552,7 @@ fn walk_mut_packed_init<V: Transfomer>(
 
 fn walk_mut_punpacked_init<V: Transfomer>(
     v: &mut V,
-    init: &mut HIRPartiallyUnpackedInitialization,
+    init: &mut IPRPartiallyUnpackedInitialization,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_init(&mut init.temporary)?;
     for init in init.unpacked_assignments.iter_mut() {
@@ -554,7 +563,7 @@ fn walk_mut_punpacked_init<V: Transfomer>(
 
 fn walk_mut_unpacked_init<V: Transfomer>(
     v: &mut V,
-    init: &mut HIRSimpleInitialization,
+    init: &mut IPRSimpleInitialization,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_expr(&mut init.value)?;
     if let Some(t) = &mut init.typ {
@@ -565,11 +574,11 @@ fn walk_mut_unpacked_init<V: Transfomer>(
 
 fn walk_mut_initblock<V: Transfomer>(
     v: &mut V,
-    init: &mut HIRInitializationBlock,
+    init: &mut IPRInitializationBlock,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     match &mut init.kind {
-        HIRInitializationKind::Packed(p) => v.visit_init_packed(p),
-        HIRInitializationKind::Unpacked(u) => {
+        IPRInitializationKind::Packed(p) => v.visit_init_packed(p),
+        IPRInitializationKind::Unpacked(u) => {
             for init in u.iter_mut() {
                 v.visit_init(init)?;
             }
@@ -580,7 +589,7 @@ fn walk_mut_initblock<V: Transfomer>(
 
 fn walk_mut_funcdef<V: Transfomer>(
     v: &mut V,
-    f: &mut HIRFunction,
+    f: &mut IPRFunction,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_type(&mut f.returns)?;
     v.visit_block(&mut f.body)?;
@@ -592,7 +601,7 @@ fn walk_mut_funcdef<V: Transfomer>(
 
 fn walk_mut_structdef<V: Transfomer>(
     v: &mut V,
-    s: &mut HIRStructDataTypeDefinition,
+    s: &mut IPRStructDataTypeDefinition,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     for member in s.members.iter_mut() {
         v.visit_type(&mut member.typ)?;
@@ -602,7 +611,7 @@ fn walk_mut_structdef<V: Transfomer>(
 
 fn walk_mut_module<V: Transfomer>(
     v: &mut V,
-    module: &mut HIRModule,
+    module: &mut IPRModule,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     for glob in module.global_vars.iter_mut() {
         v.visit_initblock(glob)?;
@@ -615,8 +624,8 @@ fn walk_mut_module<V: Transfomer>(
     }
     Ok(V::TransformerOk::default())
 }
-impl HIRModule {
-    pub fn visit_self_with<V: Visitor + NodeLabeler>(
+impl IPRModule {
+    pub fn visit_self_with<V: IPRVisitor + NodeLabeler>(
         &mut self,
         labeler: impl NodeLabeler,
     ) -> Result<V, V::VisitorError> {

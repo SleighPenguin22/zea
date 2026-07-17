@@ -2,10 +2,10 @@ use std::hash::{Hash, Hasher};
 
 use crate::{
     helper_impls::StructuralEq,
-    zea::{hir_nodes::*, BinOp, NodeId, UnOp},
+    zea::{immediate_parsed_representation::*, BinOp, NodeId, UnOp},
 };
 
-impl StructuralEq for HIRModule {
+impl StructuralEq for IPRModule {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.imports).eq_ignore_id(&other.imports);
@@ -16,7 +16,7 @@ impl StructuralEq for HIRModule {
         is_eq
     }
 }
-impl StructuralEq for HIRFuncParam {
+impl StructuralEq for IPRFuncParam {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.typ).eq_ignore_id(&other.typ);
@@ -24,8 +24,8 @@ impl StructuralEq for HIRFuncParam {
         is_eq
     }
 }
-impl From<HIRTypedIdentifier> for HIRFuncParam {
-    fn from(value: HIRTypedIdentifier) -> Self {
+impl From<IPRTypedIdentifier> for IPRFuncParam {
+    fn from(value: IPRTypedIdentifier) -> Self {
         Self {
             id: NodeId::sentinel(),
             typ: value.typ,
@@ -33,7 +33,7 @@ impl From<HIRTypedIdentifier> for HIRFuncParam {
         }
     }
 }
-impl StructuralEq for HIRFunction {
+impl StructuralEq for IPRFunction {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.name).eq_ignore_id(&other.name);
@@ -52,8 +52,8 @@ impl StructuralEq for HoistedFunctionSignature {
         is_eq
     }
 }
-impl From<HIRFunction> for HoistedFunctionSignature {
-    fn from(value: HIRFunction) -> Self {
+impl From<IPRFunction> for HoistedFunctionSignature {
+    fn from(value: IPRFunction) -> Self {
         HoistedFunctionSignature {
             id: value.id,
             name: value.name,
@@ -62,18 +62,18 @@ impl From<HIRFunction> for HoistedFunctionSignature {
         }
     }
 }
-impl StructuralEq for HIRStatement {
+impl StructuralEq for IPRStatement {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.kind).eq_ignore_id(&other.kind);
         is_eq
     }
 }
-impl StructuralEq for HIRStatementKind {
+impl StructuralEq for IPRStatementKind {
     // initial pass
     fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
-            (HIRStatementKind::Initialization(sf0), HIRStatementKind::Initialization(of0))
+            (IPRStatementKind::Initialization(sf0), IPRStatementKind::Initialization(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -82,7 +82,7 @@ impl StructuralEq for HIRStatementKind {
             {
                 true
             }
-            (HIRStatementKind::Reassignment(sf0), HIRStatementKind::Reassignment(of0))
+            (IPRStatementKind::Reassignment(sf0), IPRStatementKind::Reassignment(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -91,7 +91,7 @@ impl StructuralEq for HIRStatementKind {
             {
                 true
             }
-            (HIRStatementKind::FunctionCall(sf0), HIRStatementKind::FunctionCall(of0))
+            (IPRStatementKind::FunctionCall(sf0), IPRStatementKind::FunctionCall(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -100,7 +100,7 @@ impl StructuralEq for HIRStatementKind {
             {
                 true
             }
-            (HIRStatementKind::Return(sf0), HIRStatementKind::Return(of0))
+            (IPRStatementKind::Return(sf0), IPRStatementKind::Return(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -109,7 +109,7 @@ impl StructuralEq for HIRStatementKind {
             {
                 true
             }
-            (HIRStatementKind::BlockTail(sf0), HIRStatementKind::BlockTail(of0))
+            (IPRStatementKind::BlockTail(sf0), IPRStatementKind::BlockTail(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -118,7 +118,7 @@ impl StructuralEq for HIRStatementKind {
             {
                 true
             }
-            (HIRStatementKind::Block(sf0), HIRStatementKind::Block(of0))
+            (IPRStatementKind::Block(sf0), IPRStatementKind::Block(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -127,7 +127,7 @@ impl StructuralEq for HIRStatementKind {
             {
                 true
             }
-            (HIRStatementKind::IfThenElse(sf0), HIRStatementKind::IfThenElse(of0))
+            (IPRStatementKind::IfThenElse(sf0), IPRStatementKind::IfThenElse(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -140,7 +140,7 @@ impl StructuralEq for HIRStatementKind {
         }
     }
 }
-impl StructuralEq for HIRPackedInitialization {
+impl StructuralEq for IPRPackedInitialization {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.typ).eq_ignore_id(&other.typ);
@@ -149,7 +149,7 @@ impl StructuralEq for HIRPackedInitialization {
         is_eq
     }
 }
-impl StructuralEq for HIRSimpleInitialization {
+impl StructuralEq for IPRSimpleInitialization {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.typ).eq_ignore_id(&other.typ);
@@ -158,7 +158,7 @@ impl StructuralEq for HIRSimpleInitialization {
         is_eq
     }
 }
-impl StructuralEq for HIRPartiallyUnpackedInitialization {
+impl StructuralEq for IPRPartiallyUnpackedInitialization {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.temporary).eq_ignore_id(&other.temporary);
@@ -166,14 +166,14 @@ impl StructuralEq for HIRPartiallyUnpackedInitialization {
         is_eq
     }
 }
-impl StructuralEq for HIRInitializationKind {
+impl StructuralEq for IPRInitializationKind {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
-            (HIRInitializationKind::Packed(sf0), HIRInitializationKind::Packed(of0)) => {
+            (IPRInitializationKind::Packed(sf0), IPRInitializationKind::Packed(of0)) => {
                 sf0.eq_ignore_id(of0)
             }
 
-            (HIRInitializationKind::Unpacked(sf0), HIRInitializationKind::Unpacked(of0)) => {
+            (IPRInitializationKind::Unpacked(sf0), IPRInitializationKind::Unpacked(of0)) => {
                 sf0.eq_ignore_id(of0)
             }
 
@@ -181,7 +181,7 @@ impl StructuralEq for HIRInitializationKind {
         }
     }
 }
-impl StructuralEq for HIRReassignment {
+impl StructuralEq for IPRReassignment {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.assignee).eq_ignore_id(&other.assignee);
@@ -189,7 +189,7 @@ impl StructuralEq for HIRReassignment {
         is_eq
     }
 }
-impl StructuralEq for HIRFunctionCall {
+impl StructuralEq for IPRFunctionCall {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.subject).eq_ignore_id(&other.subject);
@@ -197,7 +197,7 @@ impl StructuralEq for HIRFunctionCall {
         is_eq
     }
 }
-impl StructuralEq for HIRBlockExpression {
+impl StructuralEq for IPRBlockExpression {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.statements).eq_ignore_id(&other.statements);
@@ -205,19 +205,19 @@ impl StructuralEq for HIRBlockExpression {
         is_eq
     }
 }
-impl StructuralEq for HIRExpression {
+impl StructuralEq for IPRExpression {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.kind).eq_ignore_id(&other.kind);
         is_eq
     }
 }
-impl StructuralEq for HIRExpressionKind {
+impl StructuralEq for IPRExpressionKind {
     // initial pass
     fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
-            (HIRExpressionKind::Unit, HIRExpressionKind::Unit) => true,
-            (HIRExpressionKind::IntegerLiteral(sf0), HIRExpressionKind::IntegerLiteral(of0))
+            (IPRExpressionKind::Unit, IPRExpressionKind::Unit) => true,
+            (IPRExpressionKind::IntegerLiteral(sf0), IPRExpressionKind::IntegerLiteral(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -226,7 +226,7 @@ impl StructuralEq for HIRExpressionKind {
             {
                 true
             }
-            (HIRExpressionKind::BoolLiteral(sf0), HIRExpressionKind::BoolLiteral(of0))
+            (IPRExpressionKind::BoolLiteral(sf0), IPRExpressionKind::BoolLiteral(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -235,7 +235,7 @@ impl StructuralEq for HIRExpressionKind {
             {
                 true
             }
-            (HIRExpressionKind::FloatLiteral(sf0), HIRExpressionKind::FloatLiteral(of0))
+            (IPRExpressionKind::FloatLiteral(sf0), IPRExpressionKind::FloatLiteral(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -244,7 +244,7 @@ impl StructuralEq for HIRExpressionKind {
             {
                 true
             }
-            (HIRExpressionKind::StringLiteral(sf0), HIRExpressionKind::StringLiteral(of0))
+            (IPRExpressionKind::StringLiteral(sf0), IPRExpressionKind::StringLiteral(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -253,7 +253,7 @@ impl StructuralEq for HIRExpressionKind {
             {
                 true
             }
-            (HIRExpressionKind::UnScopedIdent(sf0), HIRExpressionKind::UnScopedIdent(of0))
+            (IPRExpressionKind::UnScopedIdent(sf0), IPRExpressionKind::UnScopedIdent(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -262,7 +262,7 @@ impl StructuralEq for HIRExpressionKind {
             {
                 true
             }
-            (HIRExpressionKind::ScopedIdent(sf0), HIRExpressionKind::ScopedIdent(of0))
+            (IPRExpressionKind::ScopedIdent(sf0), IPRExpressionKind::ScopedIdent(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -271,7 +271,7 @@ impl StructuralEq for HIRExpressionKind {
             {
                 true
             }
-            (HIRExpressionKind::FunctionCall(sf0), HIRExpressionKind::FunctionCall(of0))
+            (IPRExpressionKind::FunctionCall(sf0), IPRExpressionKind::FunctionCall(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -281,8 +281,8 @@ impl StructuralEq for HIRExpressionKind {
                 true
             }
             (
-                HIRExpressionKind::BinOpExpr(sf0, sf1, sf2),
-                HIRExpressionKind::BinOpExpr(of0, of1, of2),
+                IPRExpressionKind::BinOpExpr(sf0, sf1, sf2),
+                IPRExpressionKind::BinOpExpr(of0, of1, of2),
             ) if {
                 let mut sub_items_eq = true;
                 sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -293,7 +293,7 @@ impl StructuralEq for HIRExpressionKind {
             {
                 true
             }
-            (HIRExpressionKind::UnOpExpr(sf0, sf1), HIRExpressionKind::UnOpExpr(of0, of1))
+            (IPRExpressionKind::UnOpExpr(sf0, sf1), IPRExpressionKind::UnOpExpr(of0, of1))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -304,8 +304,8 @@ impl StructuralEq for HIRExpressionKind {
                 true
             }
             (
-                HIRExpressionKind::MemberAccess(sf0, sf1),
-                HIRExpressionKind::MemberAccess(of0, of1),
+                IPRExpressionKind::MemberAccess(sf0, sf1),
+                IPRExpressionKind::MemberAccess(of0, of1),
             ) if {
                 let mut sub_items_eq = true;
                 sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -315,7 +315,7 @@ impl StructuralEq for HIRExpressionKind {
             {
                 true
             }
-            (HIRExpressionKind::IfThenElse(sf0), HIRExpressionKind::IfThenElse(of0))
+            (IPRExpressionKind::IfThenElse(sf0), IPRExpressionKind::IfThenElse(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -325,7 +325,7 @@ impl StructuralEq for HIRExpressionKind {
                 true
             }
 
-            (HIRExpressionKind::Block(sf0), HIRExpressionKind::Block(of0))
+            (IPRExpressionKind::Block(sf0), IPRExpressionKind::Block(of0))
                 if {
                     let mut sub_items_eq = true;
                     sub_items_eq &= sf0.eq_ignore_id(of0);
@@ -351,7 +351,7 @@ impl StructuralEq for UnOp {
         )
     }
 }
-impl PartialEq for HIRBranch {
+impl PartialEq for IPRBranch {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
@@ -359,44 +359,44 @@ impl PartialEq for HIRBranch {
 // This manual impl exists because deriving it
 // causes the compiler to say that the bound `&Vec<AssignmentPattern>: StructuralEq`
 // is not satisfied, even though it is???
-impl StructuralEq for HIRAssignmentPattern {
+impl StructuralEq for IPRAssignmentPattern {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
-            (HIRAssignmentPattern::Identifier(_), HIRAssignmentPattern::Identifier(_)) => true,
-            (HIRAssignmentPattern::Tuple(t1), HIRAssignmentPattern::Tuple(t2)) => {
+            (IPRAssignmentPattern::Identifier(_), IPRAssignmentPattern::Identifier(_)) => true,
+            (IPRAssignmentPattern::Tuple(t1), IPRAssignmentPattern::Tuple(t2)) => {
                 t1.iter().zip(t2).all(|(a, b)| a.eq_ignore_id(b))
             }
             _ => false,
         }
     }
 }
-impl StructuralEq for HIRMatchPattern {
+impl StructuralEq for IPRMatchPattern {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         match (self, other) {
-            (HIRMatchPattern::Identifier(_), HIRMatchPattern::Identifier(_)) => true,
-            (HIRMatchPattern::Tuple(t1), HIRMatchPattern::Tuple(t2)) => t1
+            (IPRMatchPattern::Identifier(_), IPRMatchPattern::Identifier(_)) => true,
+            (IPRMatchPattern::Tuple(t1), IPRMatchPattern::Tuple(t2)) => t1
                 .iter()
                 .zip(t2)
                 .all(|(a, b)| StructuralEq::eq_ignore_id(a, b)),
-            (HIRMatchPattern::UnionVariant(_, _, s3), HIRMatchPattern::UnionVariant(_, _, o3)) => {
+            (IPRMatchPattern::UnionVariant(_, _, s3), IPRMatchPattern::UnionVariant(_, _, o3)) => {
                 StructuralEq::eq_ignore_id(s3.as_ref(), o3.as_ref())
             }
             _ => false,
         }
     }
 }
-impl PartialEq for HIRStructDataTypeDefinition {
+impl PartialEq for IPRStructDataTypeDefinition {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
-impl Eq for HIRStructDataTypeDefinition {}
-impl Hash for HIRStructDataTypeDefinition {
+impl Eq for IPRStructDataTypeDefinition {}
+impl Hash for IPRStructDataTypeDefinition {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.id.hash(state)
     }
 }
-impl StructuralEq for HIRStructDataTypeDefinition {
+impl StructuralEq for IPRStructDataTypeDefinition {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.name).eq_ignore_id(&other.name);
@@ -406,19 +406,19 @@ impl StructuralEq for HIRStructDataTypeDefinition {
         is_eq
     }
 }
-impl StructuralEq for HIRTypeSpecifier {
+impl StructuralEq for IPRTypeSpecifier {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         self == other
     }
 }
-impl From<&str> for HIRTypeSpecifier {
+impl From<&str> for IPRTypeSpecifier {
     fn from(val: &str) -> Self {
-        HIRTypeSpecifier::NonScalar(val.into())
+        IPRTypeSpecifier::NonScalar(val.into())
     }
 }
 
-impl From<String> for HIRTypeSpecifier {
+impl From<String> for IPRTypeSpecifier {
     fn from(val: String) -> Self {
-        HIRTypeSpecifier::NonScalar(val)
+        IPRTypeSpecifier::NonScalar(val)
     }
 }
