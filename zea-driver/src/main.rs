@@ -7,8 +7,8 @@
 
 use log::{error, info, trace};
 use std::{fs::read_to_string, path::Path, process::exit as pexit};
-use zea_ipr::{visualisation::IndentPrint, zea::typecheck_module};
 use zea_config::CompilerConfig;
+use zea_ipr::{visualisation::IndentPrint, zea::typecheck_module};
 use zea_parser::parse_module;
 
 fn exit(code: i32) -> ! {
@@ -50,11 +50,15 @@ fn main() {
 
     trace!("before expansions:\n{}", module.indent_print(0));
     module.simplify_assignments_after(generator);
-    let (mut module, _) = module.scope_idents();
+    let (mut module, scopes) = module.scope_idents();
     info!("commencing typechecking...");
-    typecheck_module(&mut module);
+    let tinfo = typecheck_module(&mut module);
     info!("finished typechecking");
     if config.print_mir() {
         info!("after expansions:\n{}", module.indent_print(0));
     }
+
+    info!("lowering into THR...");
+    let lowered = zea_ipr::zea::lower_module(module, tinfo, scopes);
+    info!("Typed Highlevel Representation:\n{:?}", lowered);
 }

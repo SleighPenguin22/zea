@@ -6,7 +6,7 @@ use zea_ipr::c::{
     Expression, FunctionDeclaration, FunctionDefinition, Initialisation, Reassignment, Statement,
     StatementBlock, TypedIdentifier, VariableDeclaration,
 };
-use zea_ipr::zea::visitors::annotating::ScopedIdentifierKind;
+use zea_ipr::zea::visitors::annotating::SymbolKind;
 
 pub mod node_c_conversion;
 

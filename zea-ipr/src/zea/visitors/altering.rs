@@ -311,6 +311,7 @@ pub struct IdentifierScoper {
     /// map an Ident-expression to a BlockScope and the nearest enclosing block.
     node_to_scope: HashMap<NodeId, BlockScopeIndex>,
 }
+
 #[derive(Debug)]
 pub struct NotInScopeError {
     ident: String,

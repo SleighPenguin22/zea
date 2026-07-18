@@ -1,5 +1,5 @@
 module main
 
-b := (1+2);
-a := true;
+b := 1;
 
+a := true;

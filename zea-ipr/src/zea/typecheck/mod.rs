@@ -269,7 +269,7 @@ enum TypeCheckError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum IllegalTypeCoercionKind {
+pub enum IllegalTypeCoercionKind {
     NarrowingConversion,
     SignLossConversion,
     InconvertibleTypes,
@@ -281,8 +281,29 @@ enum IllegalTypeCoercionKind {
 struct ZeaTypeChecker {
     type_interning_table: TypeInterningTable,
     typevar_interning_table: TypeVariableInterningTable,
-    node_types: HashMap<NodeId, TypeVariable>,
-    symbol_types: HashMap<NodeId, InternedTypeId>,
+    node_variables: HashMap<NodeId, TypeVariable>,
+    node_types: HashMap<NodeId, InternedTypeId>,
+}
+
+pub struct IPRModuleTypeInfo {
+    type_interning_table: InternTable<InternedTypeId, IPRTypeSpecifier>,
+    node_types: HashMap<NodeId, InternedTypeId>,
+}
+
+impl From<ZeaTypeChecker> for IPRModuleTypeInfo {
+    fn from(value: ZeaTypeChecker) -> Self {
+        Self {
+            type_interning_table: value.type_interning_table.interned_types,
+            node_types: value.node_types,
+        }
+    }
+}
+
+impl IPRModuleTypeInfo {
+    pub fn lookup(&self, id: NodeId) -> &IPRTypeSpecifier {
+        let intern_id = self.node_types[&id];
+        self.type_interning_table.get_by_id(intern_id).unwrap()
+    }
 }
 
 macro_rules! coercion_rule_widen {
@@ -295,12 +316,8 @@ macro_rules! coercion_rule_widen {
     }};
 }
 
-pub fn typecheck_module(module: &mut IPRModule) {
-    let mut tc = ZeaTypeChecker::new();
-    match tc.check_module(module) {
-        Ok(_) => {}
-        Err(e) => panic!("{e:?}"),
-    }
+pub fn typecheck_module(module: &mut IPRModule) -> IPRModuleTypeInfo {
+    ZeaTypeChecker::new().check_module(module)
 }
 
 impl ZeaError for TypeCheckError {
@@ -328,11 +345,16 @@ impl ZeaTypeChecker {
         Self {
             type_interning_table: TypeInterningTable::with_builtin_types(),
             typevar_interning_table: TypeVariableInterningTable::new(),
-            node_types: HashMap::with_capacity(64),
-            symbol_types: HashMap::new(),
+            node_variables: HashMap::with_capacity(64),
+            node_types: HashMap::new(),
         }
     }
-    pub fn check_module(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
+
+    pub fn finish(self) -> IPRModuleTypeInfo {
+        self.into()
+    }
+
+    pub fn inner_check_module(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
         self.introduce_module(module)?;
         let (_solved, frac, vars_solved, vars_total) = self.all_vars_solved();
         info!("\tinitially solved {frac}% ({vars_solved} of {vars_total}) of typevars");
@@ -345,6 +367,10 @@ impl ZeaTypeChecker {
             }
         }
         Ok(())
+    }
+    pub fn check_module(mut self, module: &mut IPRModule) -> IPRModuleTypeInfo {
+        self.inner_check_module(module).expect("type check error");
+        self.finish()
     }
     fn check_module_once(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
         for glob in module.global_vars.iter_mut() {
@@ -378,7 +404,7 @@ impl ZeaTypeChecker {
     /// Get the type variable associated with some expression node,
     /// or generate it if it does not yet exist
     fn get_inference_id(&mut self, id: NodeId) -> &mut TypeVariable {
-        self.node_types
+        self.node_variables
             .entry(id)
             .or_insert_with(|| self.typevar_interning_table.fresh_var())
     }
@@ -414,12 +440,16 @@ impl ZeaTypeChecker {
             IPRExpressionKind::Unit => {}
             IPRExpressionKind::IntegerLiteral(i) => {
                 let typ = narrowest_int_type(*i);
+                let typ_id = self.type_interning_table.introduce(&typ);
                 self.solve_to_type(inf_var, &typ)
-                    .expect("integer literals should solve just fine...")
+                    .expect("integer literals should solve just fine...");
+                self.node_types.insert(expr.id, typ_id);
             }
             IPRExpressionKind::BoolLiteral(_) => {
+                let t_bool = self.type_interning_table.introduce(&IPRTypeSpecifier::Bool);
                 self.solve_to_type(inf_var, &IPRTypeSpecifier::Bool)
                     .expect("boolean literal should solve just fine...");
+                self.node_types.insert(expr.id, t_bool);
             }
             IPRExpressionKind::FloatLiteral(_) => {
                 self.solve_to_type(inf_var, &IPRTypeSpecifier::t_F64())
@@ -582,7 +612,7 @@ impl ZeaTypeChecker {
         &mut self,
         assign: &mut IPRSimpleInitialization,
     ) -> Result<(), TypeCheckError> {
-        if self.symbol_types.contains_key(&assign.id) {
+        if self.node_types.contains_key(&assign.id) {
             trace!("\t\tskipping annotated initialization");
             return Ok(());
         }
@@ -592,7 +622,7 @@ impl ZeaTypeChecker {
             let t_actual_id = self.type_interning_table.introduce(t_actual);
             let t_actual_as_var = t_actual_id.as_typevar(&mut self.typevar_interning_table);
             self.hindley_milner_unify(t_inferred, t_actual_as_var)?;
-            self.symbol_types.insert(assign.id, t_actual_id);
+            self.node_types.insert(assign.id, t_actual_id);
         } else {
             let t_conc_id = self
                 .typevar_interning_table
@@ -608,7 +638,7 @@ impl ZeaTypeChecker {
                 t_conc
             );
             assign.typ = Some(t_conc);
-            self.symbol_types.insert(assign.id, t_conc_id);
+            self.node_types.insert(assign.id, t_conc_id);
         }
         Ok(())
     }
@@ -648,7 +678,7 @@ impl ZeaTypeChecker {
             expr.indent_print(0),
             self.get_solved(res)
         );
-        self.node_types.insert(expr.id, res);
+        self.node_variables.insert(expr.id, res);
         Ok(res)
     }
 

@@ -29,6 +29,7 @@ mod typecheck;
 pub use typecheck::typecheck_module;
 mod impls;
 mod typed_highlevel_representation;
+pub use typed_highlevel_representation::lower_module;
 pub mod visitors;
 pub mod immediate_parsed_representation {
     use std::{fmt::Debug, fmt::Formatter, hash::Hash, hash::Hasher};

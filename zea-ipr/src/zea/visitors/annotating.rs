@@ -12,7 +12,7 @@ type NodeIdMap<T> = IndexMap<NodeId, T>;
 type NodeIdSet = IndexSet<NodeId>;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
-pub enum ScopedIdentifierKind {
+pub enum SymbolKind {
     LocalVar,
     GlobalVar,
     FunctionName,
@@ -23,7 +23,7 @@ pub enum ScopedIdentifierKind {
 pub struct IPRScopedIdentifier {
     pub ident: String,
     pub origin: NodeId,
-    pub kind: ScopedIdentifierKind,
+    pub kind: SymbolKind,
 }
 impl StructuralEq for IPRScopedIdentifier {
     fn eq_ignore_id(&self, other: &Self) -> bool {
@@ -36,28 +36,28 @@ impl IPRScopedIdentifier {
         Self {
             origin,
             ident: ident.to_string(),
-            kind: ScopedIdentifierKind::LocalVar,
+            kind: SymbolKind::LocalVar,
         }
     }
     pub fn global(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
             ident,
-            kind: ScopedIdentifierKind::GlobalVar,
+            kind: SymbolKind::GlobalVar,
         }
     }
     pub fn func_name(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
             ident,
-            kind: ScopedIdentifierKind::FunctionName,
+            kind: SymbolKind::FunctionName,
         }
     }
     pub fn func_param(origin: NodeId, ident: String) -> Self {
         Self {
             origin,
             ident,
-            kind: ScopedIdentifierKind::FunctionParam,
+            kind: SymbolKind::FunctionParam,
         }
     }
     pub fn from_func_param(func_param: &IPRFuncParam) -> Self {
@@ -77,7 +77,7 @@ impl IPRScopedIdentifier {
         Self {
             origin,
             ident,
-            kind: ScopedIdentifierKind::ImportItem,
+            kind: SymbolKind::ImportItem,
         }
     }
 }
@@ -104,7 +104,7 @@ impl ScopeAnnotations {
     pub fn globals(&self) -> IndexSet<IPRScopedIdentifier> {
         self.identifiers
             .iter()
-            .filter(|&ident| ident.kind == ScopedIdentifierKind::GlobalVar)
+            .filter(|&ident| ident.kind == SymbolKind::GlobalVar)
             .cloned()
             .collect()
     }

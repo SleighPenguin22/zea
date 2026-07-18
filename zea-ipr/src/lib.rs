@@ -28,7 +28,6 @@ impl<Key: From<usize> + Into<usize> + Debug, Value: Hash + Eq + Debug> Debug
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InternTable")
             .field("set", &self.set)
-            .field("phantom", &self.phantom)
             .finish()
     }
 }
