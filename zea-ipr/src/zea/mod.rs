@@ -20,7 +20,7 @@
 ///
 /// The [`visitors::altering::BareNodeLabeler`] visitor
 /// grants a unique ID to node with a sentinel ID.
-use crate::helper_impls::StructuralEq;
+use crate::traits::StructuralEq;
 use crate::zea::immediate_parsed_representation::IPRASTNode;
 use crate::zea::immediate_parsed_representation::IPRModule;
 use crate::zea::visitors::IPRVisitor;
@@ -37,7 +37,7 @@ pub mod immediate_parsed_representation {
     use zea_internal_macros::{ASTStructuralEq, VariantToStr};
 
     use crate::{
-        helper_impls::StructuralEq,
+        traits::StructuralEq,
         zea::{BinOp, IPRScopedIdentifier, UnOp},
     };
 

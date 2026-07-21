@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
 
 use crate::{
-    helper_impls::StructuralEq,
+    traits::StructuralEq,
     zea::{immediate_parsed_representation::*, BinOp, NodeId, UnOp},
 };
 

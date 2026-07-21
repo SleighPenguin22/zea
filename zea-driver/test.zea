@@ -1,5 +1,7 @@
 module main
 
-b := 1;
+b := {v := 3;v};
 
 a := true;
+
+fn main() {y := {5};}

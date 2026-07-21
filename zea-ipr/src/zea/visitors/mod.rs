@@ -1,9 +1,8 @@
-pub mod altering;
-
 use crate::zea::visitors::altering::{AssignmentSimplifier, IdentifierScoper, NodeLabeler};
 use crate::zea::{immediate_parsed_representation::*, IPRScopedIdentifier};
 use std::ops::Deref;
 
+pub mod altering;
 pub mod annotating;
 
 pub trait IPRVisitor: Sized {

@@ -1090,7 +1090,7 @@ fn parse_unop(s: &str) -> Result<UnOp, ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zea_ipr::helper_impls::StructuralEq;
+    use zea_ipr::traits::StructuralEq;
     use zea_ipr::visualisation::IndentPrint;
 
     // ---- test builder helpers ------------------------------------------------

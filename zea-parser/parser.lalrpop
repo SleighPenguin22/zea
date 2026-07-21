@@ -1,19 +1,13 @@
 use std::str::FromStr;
-use zea_ast::zea::immediate_parsed_representation ::*;
-use zea_ast::zea::{BinOp, UnOp, NodeId};
+use zea_ipr::zea::immediate_parsed_representation::*;
+use zea_ipr::zea::{BinOp, UnOp, NodeId};
 use crate::{IPRModuleItem, separate_module_items};
 
 grammar<'ast>;
 
 Comma0<T>: Vec<T> = {
-    <items:(<T> ",")*> <last:T?> => {
-        let mut items = items;
-        items.extend(last);
-        items
-    }
-};
-Comma0NoTrail<T>: Vec<T> = {
-    <first:T> <items:(","<T> )*> => {
+    => vec![],
+    <first:T> <items:("," <T>)*> => {
         let mut first = vec![first];
         first.extend(items);
         first
@@ -21,7 +15,7 @@ Comma0NoTrail<T>: Vec<T> = {
 };
 
 Comma1<T>: Vec<T> = {
-    <first:T> <rest:("," <T>)*> ","? => {
+    <first:T> <rest:("," <T>)*>  => {
         let mut items = vec![first];
         items.extend(rest);
         items
@@ -107,7 +101,7 @@ ModSymbolsHelper: Vec<IPRModuleItem> = {
 // },
 //};
 
-pub Init: IPRInitializationBlock = {
+Init: IPRInitializationBlock = {
     <p:AssignPat> ":" "=" <val:Expr> ";" => {
     IPRInitializationBlock::packed (
         None,
@@ -123,7 +117,7 @@ pub Init: IPRInitializationBlock = {
         )
  },
 }
-pub AssignPat: IPRAssignmentPattern = {
+AssignPat: IPRAssignmentPattern = {
     <i:ExprIdent> => IPRAssignmentPattern::Identifier(i),
     "@" <AssignPatInner>
 }
@@ -134,7 +128,7 @@ AssignPatInner: IPRAssignmentPattern = {
     "(" <pats:Comma1<AssignPatInner>> ")" => IPRAssignmentPattern::Tuple(pats)
 }
 
-pub Reassign: IPRReassignment = {
+Reassign: IPRReassignment = {
     <i:ExprIdent> "=" <v:Expr> ";" => {
         IPRReassignment {
             id: NodeId::sentinel(),
@@ -143,7 +137,7 @@ pub Reassign: IPRReassignment = {
         }
  }
 };
-pub FuncCall: IPRFunctionCall = {
+FuncCall: IPRFunctionCall = {
     <subject:ExprIdent> "(" <args:Comma0<Expr>> ")" => {
         IPRFunctionCall {
             id: NodeId::sentinel(),
@@ -154,7 +148,7 @@ pub FuncCall: IPRFunctionCall = {
 };
 
 
-pub Func: IPRFunction = {
+Func: IPRFunction = {
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
     <body:Block> => {
@@ -163,7 +157,7 @@ pub Func: IPRFunction = {
             id: NodeId::sentinel(),
             name,
             params,
-            returns: IPRTypeSpecifier::NonScalar("Void".to_string()),
+            returns: IPRTypeSpecifier::Unit,
             body
         }
     },
@@ -215,7 +209,7 @@ FuncBody: IPRBlockExpression = {
     },
 };
 
-pub Stmt: IPRStatement = {
+Stmt: IPRStatement = {
     "return" <e:Expr> ";" => {
         IPRStatement {
             id: NodeId::sentinel(),
@@ -227,7 +221,7 @@ pub Stmt: IPRStatement = {
         kind: IPRStatementKind::Initialization(init)
     },
     <reinit:Reassign> => reinit.wrap_in_statement(),
-    <block:Block> => block.wrap_in_statement(),
+    <block:Block> ";" => block.wrap_in_statement(),
     <call:FuncCall> ";" => call.wrap_in_statement(),
     <branch:CondBranch> ";" => branch.wrap_in_statement()
 };
@@ -236,7 +230,8 @@ pub Expr: IPRExpression = ExprBranch;
 
 ExprBranch: IPRExpression = {
     <b:CondBranch> => b.wrap_in_expression(),
-    ExprOr
+    ExprOr,
+     <b:Block> => b.wrap_in_expression(),
 };
 
 ExprOr: IPRExpression = {
@@ -306,7 +301,7 @@ ExprPostfix: IPRExpression = {
 ExprAtom: IPRExpression = {
     <n:Num>       => IPRExpression::wrap_lit_int(n),
     <s:ExprIdent> => IPRExpression::wrap_ident(s),
-    "(" <Expr> ")"
+    "(" <Expr> ")",
 };
 
 Num: usize = {

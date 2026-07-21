@@ -1,4 +1,5 @@
 #![allow(clippy::new_without_default)]
+use crate::visualisation::IndentPrint;
 use crate::zea::visitors::annotating::IPRScopedIdentifier;
 use crate::zea::visitors::{
     walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef,
@@ -6,12 +7,13 @@ use crate::zea::visitors::{
     walk_mut_unpacked_init, IPRTransfomer,
 };
 use crate::zea::{immediate_parsed_representation::*, NodeId};
-use crate::ZeaError;
+use crate::{InternTable, ZeaError};
 use indexmap::set::MutableValues;
 use indexmap::IndexSet;
+use log::trace;
 use std::collections::HashMap;
 use std::process::exit;
-use zea_internal_macros::VariantToStr;
+use zea_internal_macros::{InternKey, VariantToStr};
 
 pub trait NodeLabeler: Sized {
     /// Start `Self`'s id-generator with the last id that `other_generator` used,
@@ -241,7 +243,7 @@ impl AssignmentSimplifier {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, InternKey)]
 pub struct BlockScopeIndex(u32);
 
 impl BlockScopeIndex {
@@ -296,7 +298,7 @@ impl BlockScope {
         self.introductions.iter().find(|p| p.ident == ident)
     }
     pub fn is_module_root(&self) -> bool {
-        self.parent.is_sentinel()
+        self.parent.is_sentinel() && self.kind == ScopeKind::Global
     }
 }
 
@@ -306,8 +308,8 @@ impl BlockScope {
 pub struct IdentifierScoper {
     /// The scope-path to the currently analyzed scope
     scope_stack: Vec<BlockScopeIndex>,
-    /// A set of all unique within the program
-    scope_arena: IndexSet<BlockScope>,
+    /// A set of all unique scopes within the program
+    scope_arena: InternTable<BlockScopeIndex, BlockScope>,
     /// map an Ident-expression to a BlockScope and the nearest enclosing block.
     node_to_scope: HashMap<NodeId, BlockScopeIndex>,
 }
@@ -361,6 +363,7 @@ impl IPRTransfomer for IdentifierScoper {
         expr: &mut IPRExpression,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         if let IPRExpressionKind::UnScopedIdent(i) = &mut expr.kind {
+            trace!("resolving identifier: {i}");
             if i == "true" {
                 expr.kind = IPRExpressionKind::BoolLiteral(true);
             } else if i == "false" {
@@ -372,6 +375,17 @@ impl IPRTransfomer for IdentifierScoper {
             return Ok(());
         }
         walk_mut_expr(self, expr)?;
+        Ok(())
+    }
+
+    fn visit_init(
+        &mut self,
+        init: &mut IPRSimpleInitialization,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
+        let ident = IPRScopedIdentifier::local(init.id, init.assignee.clone());
+        let cs = self.current_scope();
+        cs.add_introduction(ident);
+        walk_mut_unpacked_init(self, init)?;
         Ok(())
     }
     fn visit_block(
@@ -434,7 +448,7 @@ impl IPRTransfomer for IdentifierScoper {
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.visit_expr(branch.condition.as_mut())?;
 
-        self.visit_branch_twig(&mut branch.true_case)?;
+        self.visit_branch_twig(branch.true_case.as_mut())?;
 
         if let Some(false_case) = branch.false_case.as_mut() {
             self.visit_branch_twig(false_case.as_mut())?;
@@ -451,10 +465,11 @@ fn branch_twig_as_block(twig: &mut IPRExpression) -> Option<&mut IPRBlockExpress
 }
 
 impl IdentifierScoper {
+    const GLOBAL_SCOPE_IDX: BlockScopeIndex = BlockScopeIndex(1);
     pub fn new(module: &IPRModule) -> Self {
         let mut new = Self {
             scope_stack: Vec::with_capacity(16),
-            scope_arena: IndexSet::with_capacity(128),
+            scope_arena: InternTable::new(),
             node_to_scope: HashMap::with_capacity(128),
         };
         new.build_global_scope_skeleton(module);
@@ -476,27 +491,25 @@ impl IdentifierScoper {
             children: vec![],
             kind: ScopeKind::Global,
         };
-        self.scope_arena.insert(dummy_scope);
-        self.scope_arena.insert(global_scope);
+        self.scope_arena.intern(dummy_scope);
+        let global_scope_id = self.scope_arena.intern(global_scope);
 
-        self.scope_stack.push(BlockScopeIndex(1));
-        self.scope_arena
-            .get_index_mut2(1)
-            .expect("global scope at scope_arena[1] should exist")
+        self.scope_stack.push(global_scope_id);
+        self.get_scope_mut(global_scope_id)
     }
     fn get(&self, idx: BlockScopeIndex) -> &BlockScope {
         self.scope_arena
-            .get_index(idx.0 as usize)
+            .get_by_id(idx)
             .expect("invalid block scope index")
     }
     fn get_scope_mut(&mut self, idx: BlockScopeIndex) -> &mut BlockScope {
         self.scope_arena
-            .get_index_mut2(idx.0 as usize)
+            .get_mut_by_id(idx)
             .expect("invalid block scope index")
     }
 
     fn enter_scope(&mut self, origin: NodeId, kind: ScopeKind) -> &mut BlockScope {
-        let parent = BlockScopeIndex(self.scope_stack.len() as u32 - 1);
+        let parent = self.current_scope_idx();
         let scope = BlockScope {
             origin,
             parent,
@@ -504,8 +517,7 @@ impl IdentifierScoper {
             children: Vec::with_capacity(4),
             kind,
         };
-        let (idx, _duplicate) = self.scope_arena.insert_full(scope);
-        let idx = BlockScopeIndex(idx as u32);
+        let idx = self.scope_arena.intern(scope);
         self.scope_stack.push(idx);
         self.get_scope_mut(parent).add_child(idx);
         self.get_scope_mut(idx)
@@ -524,7 +536,7 @@ impl IdentifierScoper {
     fn current_scope_idx(&self) -> BlockScopeIndex {
         self.scope_stack
             .last()
-            .cloned()
+            .copied()
             .expect("scope stack should not be empty")
     }
     fn resolve(&mut self, ident: &str) -> Result<IPRScopedIdentifier, NotInScopeError> {
@@ -558,7 +570,7 @@ impl IdentifierScoper {
     fn visit_branch_twig(&mut self, twig: &mut IPRExpression) -> Result<(), NotInScopeError> {
         if let Some(twig) = branch_twig_as_block(twig) {
             self.enter_scope(twig.id, ScopeKind::BranchTwig);
-            self.visit_block(twig)?;
+            walk_mut_block(self, twig)?;
             self.exit_scope();
         } else {
             self.visit_expr(twig)?;

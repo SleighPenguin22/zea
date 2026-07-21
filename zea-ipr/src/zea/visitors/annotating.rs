@@ -1,7 +1,7 @@
 #![allow(clippy::new_without_default)]
 use std::ops::BitAnd;
 
-use crate::helper_impls::StructuralEq;
+use crate::traits::StructuralEq;
 use crate::zea::visitors::{
     walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init, IPRVisitor,
 };
