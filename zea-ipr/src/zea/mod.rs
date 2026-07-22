@@ -711,6 +711,24 @@ pub mod immediate_parsed_representation {
         pub const fn t_Never() -> Self {
             IPRTypeSpecifier::Never
         }
+        pub fn inner_from_str(s: &str) -> Self {
+            match s {
+                "U8" => Self::t_U8(),
+                "I8" => Self::t_I8(),
+                "U16" => Self::t_U16(),
+                "I16" => Self::t_I16(),
+                "U32" => Self::t_U32(),
+                "I32" => Self::t_I32(),
+                "U64" => Self::t_U64(),
+                "I64" => Self::t_I64(),
+                "F32" => Self::t_F32(),
+                "F64" => Self::t_F64(),
+                "()" => Self::t_Unit(),
+                "!" => Self::t_Never(),
+                "Bool" => Self::t_Bool(),
+                s => Self::NonScalar(s.to_string()),
+            }
+        }
     }
     #[derive(Debug, Eq, PartialEq, Hash, Clone, ASTStructuralEq)]
     pub struct IPRTypedIdentifier {

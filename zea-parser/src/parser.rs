@@ -1,5 +1,5 @@
 // auto-generated: "lalrpop 0.23.1"
-// sha3: 4743ede218c5b9ba04501d14a39b2fd3d168fd50f4026811de1d931f388aa618
+// sha3: 7ce0555508aa27ed342e08e16eef226356ae3f8223ca8784452f31aff92fadb8
 use std::str::FromStr;
 use zea_ipr::zea::immediate_parsed_representation::*;
 use zea_ipr::zea::{BinOp, UnOp, NodeId};
@@ -11634,7 +11634,7 @@ fn __action23<
     (_, __0, _): (usize, String, usize),
 ) -> IPRTypeSpecifier
 {
-    {IPRTypeSpecifier::NonScalar(__0)}
+    {IPRTypeSpecifier::inner_from_str(&__0)}
 }
 
 #[allow(unused_variables)]

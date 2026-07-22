@@ -175,7 +175,7 @@ Func: IPRFunction = {
     }
 };
 TType:IPRTypeSpecifier = {
-   TypeIdent => {IPRTypeSpecifier::NonScalar(<>)},
+   TypeIdent => {IPRTypeSpecifier::inner_from_str(&<>)},
     <t:TType> "*" => {IPRTypeSpecifier::Pointer(Box::new(t))},
     "[" <t:TType> "]" => {IPRTypeSpecifier::ArrayOf(Box::new(t))},
 };
