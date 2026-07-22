@@ -369,7 +369,13 @@ impl ZeaTypeChecker {
         Ok(())
     }
     pub fn check_module(mut self, module: &mut IPRModule) -> IPRModuleTypeInfo {
-        self.inner_check_module(module).expect("type check error");
+        match self.inner_check_module(module) {
+            Ok(_) => {}
+            Err(_) => {
+                error!("exiting...");
+                exit(1)
+            }
+        }
         self.finish()
     }
     fn check_module_once(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
@@ -380,7 +386,7 @@ impl ZeaTypeChecker {
                     trace!("\tinsufficient information to solve type variable {t:?}, moving on...");
                 }
                 Err(other) => {
-                    error!("{}", other.zea_error_format(self));
+                    error!("TYPE ERROR: {}", other.zea_error_format(self));
                     return Err(other);
                 }
             }
@@ -777,7 +783,9 @@ impl ZeaTypeChecker {
             | IPRExpressionKind::UnOpExpr(_, _)
             | IPRExpressionKind::MemberAccess(_, _)
             | IPRExpressionKind::IfThenElse(_) => todo!(),
-            IPRExpressionKind::UnScopedIdent(i) => unreachable!("unexpected ident {i}"),
+            IPRExpressionKind::UnScopedIdent(_) => {
+                unreachable!("identifiers should be scoped before typechecking")
+            }
         }?;
 
         trace!(

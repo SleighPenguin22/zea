@@ -30,3 +30,34 @@ impl CompilerConfig {
         &self.path
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompilerError {
+    stage: CompilerStage,
+    kind: CompilerErrorKind,
+}
+impl CompilerError {
+    pub const fn new(stage: CompilerStage, kind: CompilerErrorKind) -> Self {
+        Self { stage, kind }
+    }
+    pub fn pretty(&self) -> String {
+        let s = self.stage;
+        let k = self.kind;
+        format!("INTERNAL COMPILER ERROR: {s:?} : {k:?}")
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompilerStage {
+    Parse = 0,
+    ExpandInit = 1,
+    TypeCheck = 2,
+    IPRtoTHR,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CompilerErrorKind {
+    IntegerOverflow = 0,
+
+    StrayUnscopedIdent = 1,
+    StrayPackedInit = 2,
+}

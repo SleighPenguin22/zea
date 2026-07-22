@@ -42,6 +42,26 @@
 use indexmap::Equivalent;
 use zea_internal_macros::{InternKey, VariantToStr};
 
+use zea_common::{CompilerError, CompilerErrorKind, CompilerStage};
+macro_rules! internal_compiler_error {
+    (spi) => {
+        unreachable!(
+            "{}",
+            CompilerError::new(CompilerStage::IPRtoTHR, CompilerErrorKind::StrayPackedInit)
+                .pretty()
+        )
+    };
+    (sui) => {
+        unreachable!(
+            "{}",
+            CompilerError::new(
+                CompilerStage::IPRtoTHR,
+                CompilerErrorKind::StrayUnscopedIdent
+            )
+            .pretty()
+        )
+    };
+}
 use crate::{
     zea::{
         immediate_parsed_representation::{
@@ -520,7 +540,7 @@ impl THRInternTables {
                 todo!()
             }
             IPRExpressionKind::Block(_b) => todo!(),
-            IPRExpressionKind::UnScopedIdent(_) => todo!(),
+            IPRExpressionKind::UnScopedIdent(_) => internal_compiler_error!(sui),
         };
         self.expressions.intern(node)
     }
@@ -565,7 +585,7 @@ impl THRInternTables {
         kind: SymbolKind,
     ) -> Vec<THRStatementID> {
         let IPRInitializationKind::Unpacked(inits) = &init_block.kind else {
-            unreachable!()
+            internal_compiler_error!(spi)
         };
         inits
             .iter()

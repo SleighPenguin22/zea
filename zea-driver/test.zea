@@ -1,7 +1,6 @@
 module main
 
-b := {v := 3;v};
 
 a := true;
 
-fn main() {y := {5};}
+fn main() -> U8 {1}

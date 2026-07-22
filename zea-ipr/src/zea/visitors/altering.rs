@@ -38,6 +38,19 @@ pub trait NodeLabeler: Sized {
         }
     }
 }
+use zea_common::{CompilerError, CompilerErrorKind, CompilerStage};
+fn stray_packed_init() -> CompilerError {
+    CompilerError::new(
+        CompilerStage::ExpandInit,
+        CompilerErrorKind::StrayPackedInit,
+    )
+}
+macro_rules! internal_compiler_error {
+    (spi) => {
+        unreachable!("{}", stray_packed_init().pretty())
+    };
+}
+
 pub struct BareNodeLabeler {
     label: usize,
 }
@@ -405,7 +418,7 @@ impl IPRTransfomer for IdentifierScoper {
         // global variables may not be initialized with function calls; they should be constants.
         for glob in module.global_vars.iter_mut() {
             let IPRInitializationKind::Unpacked(u) = &mut glob.kind else {
-                unreachable!("assignment should be unpacked before scope analysis")
+                internal_compiler_error!(spi)
             };
             for init in u {
                 walk_mut_unpacked_init(self, init)?;
