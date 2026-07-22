@@ -136,9 +136,6 @@ impl IndentPrint for IPRStatement {
                 "return".indent_print(depth) + &e.indent_print(depth + 1)
             }
             IPRStatementKind::Initialization(i) => i.indent_print(depth),
-            IPRStatementKind::BlockTail(e) => {
-                "tail".indent_print(depth) + &e.indent_print(depth + 1)
-            }
             IPRStatementKind::IfThenElse(b) => b.indent_print(depth),
             IPRStatementKind::Block(eb) => eb.indent_print(depth),
             IPRStatementKind::FunctionCall(c) => c.indent_print(depth),

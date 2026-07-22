@@ -109,15 +109,6 @@ impl StructuralEq for IPRStatementKind {
             {
                 true
             }
-            (IPRStatementKind::BlockTail(sf0), IPRStatementKind::BlockTail(of0))
-                if {
-                    let mut sub_items_eq = true;
-                    sub_items_eq &= sf0.eq_ignore_id(of0);
-                    sub_items_eq
-                } =>
-            {
-                true
-            }
             (IPRStatementKind::Block(sf0), IPRStatementKind::Block(of0))
                 if {
                     let mut sub_items_eq = true;

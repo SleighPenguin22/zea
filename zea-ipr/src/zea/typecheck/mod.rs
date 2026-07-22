@@ -664,7 +664,6 @@ impl ZeaTypeChecker {
             IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
             IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
             IPRStatementKind::Return(_iprexpression) => todo!(),
-            IPRStatementKind::BlockTail(_iprexpression) => todo!(),
             IPRStatementKind::Block(_iprblock_expression) => todo!(),
             IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
         }
@@ -677,7 +676,6 @@ impl ZeaTypeChecker {
             IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
             IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
             IPRStatementKind::Return(_iprexpression) => todo!(),
-            IPRStatementKind::BlockTail(_iprexpression) => todo!(),
             IPRStatementKind::Block(_iprblock_expression) => todo!(),
             IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
         }
@@ -775,7 +773,7 @@ impl ZeaTypeChecker {
                 self.hindley_milner_unify(t_var, last_id)?;
                 Ok(t_var)
             }
-            IPRExpressionKind::ScopedIdent(i) => {
+            IPRExpressionKind::ScopedIdent(_) => {
                 todo!("implement identifier type resolution")
             }
             IPRExpressionKind::StringLiteral(_)

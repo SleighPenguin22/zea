@@ -245,7 +245,6 @@ fn walk_stmt<V: IPRVisitor>(v: &mut V, s: &IPRStatement) -> Result<V::VisitorOk,
         IPRStatementKind::Reassignment(r) => v.visit_reassignment(r),
         IPRStatementKind::FunctionCall(c) => v.visit_call(c),
         IPRStatementKind::Return(e) => v.visit_expr(e),
-        IPRStatementKind::BlockTail(t) => v.visit_expr(t),
 
         IPRStatementKind::Block(eb) => v.visit_block(eb),
         IPRStatementKind::IfThenElse(ite) => v.visit_branch(ite),
@@ -456,7 +455,6 @@ fn walk_mut_stmt<V: IPRTransfomer>(
         IPRStatementKind::Reassignment(r) => v.visit_reassignment(r),
         IPRStatementKind::FunctionCall(c) => v.visit_call(c),
         IPRStatementKind::Return(e) => v.visit_expr(e),
-        IPRStatementKind::BlockTail(t) => v.visit_expr(t),
         IPRStatementKind::Block(eb) => v.visit_block(eb),
         IPRStatementKind::IfThenElse(ite) => v.visit_branch(ite),
     }

@@ -5,8 +5,9 @@ edition = "2024"
 
 [dependencies]
 zea-ipr = {path = "../zea-ipr"}
-#zea-internal-macros = { path = "../zea-internal-macros" }
-#qbe = "4.0.0"
+zea-internal-macros = { path = "../zea-internal-macros" }
+qbe = "4.0.0"
+indexmap = "2.14.0"
 
 [lib]
 doctest = false

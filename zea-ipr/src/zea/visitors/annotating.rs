@@ -157,7 +157,6 @@ impl ScopeAnnotations {
             IPRStatementKind::Reassignment(reinit) => self.gather_idents_expr(&reinit.value),
             IPRStatementKind::FunctionCall(call) => self.gather_idents_call(call),
             IPRStatementKind::Return(e) => self.gather_idents_expr(e),
-            IPRStatementKind::BlockTail(e) => self.gather_idents_expr(e),
             IPRStatementKind::Block(eb) => self.gather_idents_block(eb),
             IPRStatementKind::IfThenElse(ite) => self.gather_idents_branch(ite),
         }

@@ -148,6 +148,44 @@ pub struct THRModule {
     entry_point: THRFunctionID,
 }
 
+impl THRModule {
+    pub fn global_data_block(&self) -> THRBlockID {
+        self.global_data_block
+    }
+
+    pub fn entry_point(&self) -> THRFunctionID {
+        self.entry_point
+    }
+
+    pub fn get_block(&self, block: THRBlockID) -> &THRBlock {
+        self.interned.blocks.get_by_id(block).unwrap()
+    }
+    pub fn get_type(&self, typ: THRTypeID) -> &THRTypeSpecifier {
+        self.interned.types.get_by_id(typ).unwrap()
+    }
+    pub fn get_function(&self, func: THRFunctionID) -> &THRFunction {
+        self.interned.functions.get_by_id(func).unwrap()
+    }
+    pub fn functions(&self) -> &InternTable<THRFunctionID, THRFunction> {
+        &self.interned.functions
+    }
+    pub fn get_symbol(&self, symbol: THRSymbolID) -> &THRSymbol {
+        self.interned.symbols.get_by_id(symbol).unwrap()
+    }
+    pub fn get_statement(&self, stmt: THRStatementID) -> &THRStatement {
+        self.interned.statements.get_by_id(stmt).unwrap()
+    }
+    pub fn get_expr(&self, expr: THRExprID) -> &THRExpression {
+        self.interned.expressions.get_by_id(expr).unwrap()
+    }
+    pub fn alignment_of(&self, typ: &THRStructLayout) -> usize {
+        typ.alignment(&self.interned)
+    }
+    pub fn width_of(&self, typ: &THRStructLayout) -> usize {
+        typ.width(&self.interned)
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Default)]
 pub struct THRInternTables {
     expressions: InternTable<THRExprID, THRExpression>,
@@ -222,11 +260,11 @@ impl THRTypeSpecifier {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct THRStructLayout {
-    ordering: StructOrdering,
-    fields: Vec<THRStructField>,
+    pub ordering: StructOrdering,
+    pub fields: Vec<THRStructField>,
 }
 impl THRStructLayout {
-    fn alignment(&self, ctx: &THRInternTables) -> usize {
+    pub fn alignment(&self, ctx: &THRInternTables) -> usize {
         self.fields
             .iter()
             .map(|field| field.typ.alignment(ctx))
@@ -234,7 +272,7 @@ impl THRStructLayout {
             .unwrap_or(0)
     }
 
-    fn width(&self, ctx: &THRInternTables) -> usize {
+    pub fn width(&self, ctx: &THRInternTables) -> usize {
         let struct_alignment = self.alignment(ctx);
         let summed_fields = self.fields.iter().map(|f| f.typ.width(ctx)).sum();
         Self::next_aligned_offset(summed_fields, struct_alignment)
@@ -260,7 +298,7 @@ impl THRStructLayout {
     }
 }
 
-pub fn div_rem(x: usize, y: usize) -> (usize, usize) {
+fn div_rem(x: usize, y: usize) -> (usize, usize) {
     let quot = x.checked_div_euclid(y).unwrap_or(0);
     let rem = x.checked_rem_euclid(y).unwrap_or(0);
     (quot, rem)
@@ -276,9 +314,9 @@ pub enum StructOrdering {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct THRStructField {
-    name: String,
-    typ: THRTypeID,
-    offset: usize,
+    pub name: String,
+    pub typ: THRTypeID,
+    pub offset: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -329,8 +367,8 @@ impl NumericLiteral for bool {
 
 #[derive(Debug, Clone, Copy)]
 pub struct TypedLiteral<T: NumericLiteral> {
-    typ: THRTypeID,
-    value: T,
+    pub typ: THRTypeID,
+    pub value: T,
 }
 
 impl<T: NumericLiteral> PartialEq for TypedLiteral<T> {
@@ -355,10 +393,10 @@ impl std::hash::Hash for TypedLiteral<u64> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct THRBlock {
-    items: Vec<THRStatementID>,
+    pub items: Vec<THRStatementID>,
 }
 
-pub enum THRLoweredStatement {
+enum THRLoweredStatement {
     Single(THRStatementID),
     Multiple(THRBlockID),
 }
@@ -378,20 +416,25 @@ pub enum THRStatement {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct THRSymbolDecl {
-    symbol: THRSymbolID,
-    typ: THRTypeID,
+    pub symbol: THRSymbolID,
+    pub typ: THRTypeID,
+}
+impl THRSymbolDecl {
+    fn new(symbol: THRSymbolID, typ: THRTypeID) -> Self {
+        Self { symbol, typ }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct THRFunction {
-    name: String,
-    params: Vec<THRFuncParam>,
-    body: THRBlockID,
-    ret: THRTypeID,
+    pub name: String,
+    pub params: Vec<THRSymbolDecl>,
+    pub body: THRBlockID,
+    pub ret: THRTypeID,
 }
 
 impl THRFunction {
-    pub fn new(name: String, params: Vec<THRFuncParam>, body: THRBlockID, ret: THRTypeID) -> Self {
+    pub fn new(name: String, params: Vec<THRSymbolDecl>, body: THRBlockID, ret: THRTypeID) -> Self {
         Self {
             name,
             params,
@@ -400,22 +443,11 @@ impl THRFunction {
         }
     }
 }
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct THRFuncParam {
-    symbol: THRSymbolID,
-    typ: THRTypeID,
-}
-
-impl THRFuncParam {
-    pub fn new(symbol: THRSymbolID, typ: THRTypeID) -> Self {
-        Self { symbol, typ }
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct THRSymbol {
-    name: String,
-    kind: SymbolKind,
+    pub name: String,
+    pub kind: SymbolKind,
 }
 
 impl THRSymbol {
@@ -566,9 +598,6 @@ impl THRInternTables {
             IPRStatementKind::Return(_iprexpression) => {
                 todo!()
             }
-            IPRStatementKind::BlockTail(_iprexpression) => {
-                todo!()
-            }
             IPRStatementKind::Block(_iprblock_expression) => {
                 todo!()
             }
@@ -652,7 +681,7 @@ impl THRInternTables {
 
             let typ = self.lower_type(ipr_ctx, &param.typ);
 
-            let param = THRFuncParam::new(symbol, typ);
+            let param = THRSymbolDecl::new(symbol, typ);
             params.push(param);
         }
         let body: THRBlockID = self.lower_block(ipr_ctx, &f.body);

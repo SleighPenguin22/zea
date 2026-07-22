@@ -27,10 +27,16 @@ use crate::zea::visitors::IPRVisitor;
 
 mod typecheck;
 pub use typecheck::typecheck_module;
+
 mod impls;
-mod typed_highlevel_representation;
-pub use typed_highlevel_representation::lower_module;
 pub mod visitors;
+
+pub mod typed_highlevel_representation;
+pub use typed_highlevel_representation::{
+    lower_module, THRBlock, THRBlockID, THRExprID, THRExpression, THRFunction, THRFunctionID,
+    THRInternTables, THRModule, THRStatement, THRStatementID, THRStructField, THRStructLayout,
+    THRSymbol, THRSymbolDecl, THRSymbolID, THRTypeID, THRTypeSpecifier,
+};
 pub mod immediate_parsed_representation {
     use std::{fmt::Debug, fmt::Formatter, hash::Hash, hash::Hasher};
 
@@ -86,22 +92,6 @@ pub mod immediate_parsed_representation {
         pub struct_definitions: Vec<IPRStructDataTypeDefinition>,
     }
 
-    impl IPRModule {
-        pub fn find_entry_point(&self) -> Option<&IPRFunction> {
-            self.iter_functions().find(|func| func.name == "main")
-        }
-
-        pub fn iter_functions(&self) -> impl Iterator<Item = &IPRFunction> {
-            self.functions.iter()
-        }
-        pub fn iter_global_vars(&self) -> impl Iterator<Item = &IPRInitializationBlock> {
-            self.global_vars.iter()
-        }
-        pub fn iter_structs(&self) -> impl Iterator<Item = &IPRStructDataTypeDefinition> {
-            self.struct_definitions.iter()
-        }
-    }
-
     #[derive(Debug, Clone)]
     pub struct IPRFuncParam {
         pub id: NodeId,
@@ -146,8 +136,6 @@ pub mod immediate_parsed_representation {
         FunctionCall(IPRFunctionCall),
         /// Control-flow return
         Return(IPRExpression),
-        /// A tailing expression in a block
-        BlockTail(IPRExpression),
 
         // CondMatch(Box<ConditionMatch>),
 
@@ -350,13 +338,6 @@ pub mod immediate_parsed_representation {
             IPRStatement {
                 id: NodeId::sentinel(),
                 kind: IPRStatementKind::Return(self),
-            }
-        }
-
-        pub fn wrap_in_block_tail_statement(self) -> IPRStatement {
-            IPRStatement {
-                id: NodeId::sentinel(),
-                kind: IPRStatementKind::BlockTail(self),
             }
         }
 
