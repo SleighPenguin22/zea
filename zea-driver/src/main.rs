@@ -7,7 +7,7 @@
 
 use log::{error, info, trace};
 use std::{fs::read_to_string, path::Path, process::exit as pexit};
-use zea_config::CompilerConfig;
+use zea_common::CompilerConfig;
 use zea_ipr::{visualisation::IndentPrint, zea::typecheck_module};
 use zea_parser::parse_module;
 

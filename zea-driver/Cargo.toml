@@ -6,6 +6,6 @@ edition = "2024"
 [dependencies]
 zea-parser = {path = "../zea-parser"}
 zea-ipr = {path = "../zea-ipr", features = ["visualisation"]}
-zea-config = {path = "../zea-config"}
+zea-common = {path = "../zea-common"}
 log = { version = "0.4.33", features = ["std"] }
 colog = "1.4.0"
