@@ -3,14 +3,14 @@ use std::{
     ops::ControlFlow, process::exit, thread::sleep, time::Duration,
 };
 
-use indexmap::{map::raw_entry_v1::RawEntryBuilderMut, Equivalent, IndexMap, IndexSet};
+use indexmap::{Equivalent, IndexMap, IndexSet, map::raw_entry_v1::RawEntryBuilderMut};
 use log::{error, info, trace};
 use zea_internal_macros::{InternKey, VariantToStr};
 
 use crate::{
-    visualisation::IndentPrint,
-    zea::{immediate_parsed_representation::*, BinOp, NodeId},
     InternTable, ZeaError,
+    visualisation::IndentPrint,
+    zea::{BinOp, NodeId, immediate_parsed_representation::*},
 };
 pub fn typecheck_module(module: &mut IPRModule) -> IPRModuleTypeInfo {
     ZeaTypeChecker::new().check_module(module)
@@ -356,10 +356,10 @@ impl ZeaTypeChecker {
     pub fn inner_check_module(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
         self.introduce_module(module)?;
         let (_solved, frac, vars_solved, vars_total) = self.all_vars_solved();
-        info!("\tinitially solved {frac}% ({vars_solved} of {vars_total}) of typevars");
+        trace!("\tinitially solved {frac}% ({vars_solved} of {vars_total}) of typevars");
         while self.check_module_once(module).is_ok() {
             let (solved, frac, vars_solved, vars_total) = self.all_vars_solved();
-            info!("\tsolved {frac}% ({vars_solved} of {vars_total}) of typevars");
+            trace!("\tsolved {frac}% ({vars_solved} of {vars_total}) of typevars");
             if solved {
                 self.check_module_once(module)?;
                 break;
@@ -499,7 +499,7 @@ impl ZeaTypeChecker {
                 for stmt in b.statements.iter() {
                     self.introduce_stmt(stmt);
                 }
-                self.introduce_expression(&b.last);
+                self.introduce_expression(&b.tail);
             }
         }
     }
@@ -634,7 +634,7 @@ impl ZeaTypeChecker {
         for s in b.statements.iter() {
             self.introduce_stmt(s);
         }
-        self.introduce_expression(&b.last);
+        self.introduce_expression(&b.tail);
     }
 
     fn check_block(
@@ -645,14 +645,14 @@ impl ZeaTypeChecker {
         for stmt in body.statements.iter_mut() {
             self.check_stmt(stmt)?;
         }
-        let tvar = self.infer_expression(&body.last)?;
+        let tvar = self.infer_expression(&body.tail)?;
         let block_rets = self
             .typevar_interning_table
             .get_solved(tvar)
             .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(tvar))?;
         self.hindley_milner_unify(tvar_block, tvar)?;
         self.node_types.insert(body.id, block_rets);
-        self.node_types.insert(body.last.id, block_rets);
+        self.node_types.insert(body.tail.id, block_rets);
         Ok(tvar)
     }
 
@@ -740,8 +740,7 @@ impl ZeaTypeChecker {
                 .clone();
             trace!(
                 "\tannotating symbol `{:?}` with type {:?}",
-                assign.assignee,
-                t_conc
+                assign.assignee, t_conc
             );
             assign.typ = Some(t_conc);
             self.node_types.insert(assign.id, t_conc_id);
@@ -769,7 +768,7 @@ impl ZeaTypeChecker {
                 self.infer_expr_binop(expr.id, *op, l.as_ref(), r.as_ref())
             }
             IPRExpressionKind::Block(b) => {
-                let last_id = self.infer_expression(&b.last)?;
+                let last_id = self.infer_expression(&b.tail)?;
                 self.hindley_milner_unify(t_var, last_id)?;
                 Ok(t_var)
             }

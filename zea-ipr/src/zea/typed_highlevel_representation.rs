@@ -39,6 +39,8 @@
 //! This is done by a later visitor pass, which provides a way to get the pred- and successors of a [`THRBlock`],
 //! which is then used by QBE or some other backend to generate its CFG.
 
+use std::alloc::Layout;
+
 use indexmap::Equivalent;
 use zea_internal_macros::{InternKey, VariantToStr};
 
@@ -96,14 +98,14 @@ pub fn lower_module(
 pub struct THRTypeID(usize);
 
 impl THRTypeID {
-    fn alignment(self, ctx: &THRInternTables) -> usize {
+    fn alignment(self, ctx: &THRInternTables) -> u64 {
         let ty = ctx
             .types
             .get_by_id(self)
             .expect("struct field name should be interned at this point");
         match ty {
-            THRTypeSpecifier::Integer { width, signed: _ } => *width as usize,
-            THRTypeSpecifier::Float { width } => *width as usize,
+            THRTypeSpecifier::Integer { width, signed: _ } => *width as u64,
+            THRTypeSpecifier::Float { width } => *width as u64,
             THRTypeSpecifier::Pointer(inner) => inner.alignment(ctx),
             THRTypeSpecifier::Boolean => 1,
             THRTypeSpecifier::Unit => 0,
@@ -113,14 +115,14 @@ impl THRTypeID {
         }
     }
 
-    fn width(self, ctx: &THRInternTables) -> usize {
+    fn width(self, ctx: &THRInternTables) -> u64 {
         let ty = ctx
             .types
             .get_by_id(self)
             .expect("struct field name should be interned at this point");
         match ty {
-            THRTypeSpecifier::Integer { width, signed: _ } => *width as usize,
-            THRTypeSpecifier::Float { width } => *width as usize,
+            THRTypeSpecifier::Integer { width, signed: _ } => *width as u64,
+            THRTypeSpecifier::Float { width } => *width as u64,
             THRTypeSpecifier::Pointer(inner) => inner.width(ctx),
             THRTypeSpecifier::Boolean => 1,
             THRTypeSpecifier::Unit => 0,
@@ -146,6 +148,7 @@ pub struct THRModule {
     interned: THRInternTables,
     global_data_block: THRBlockID,
     entry_point: THRFunctionID,
+    pub name: String,
 }
 
 impl THRModule {
@@ -178,11 +181,15 @@ impl THRModule {
     pub fn get_expr(&self, expr: THRExprID) -> &THRExpression {
         self.interned.expressions.get_by_id(expr).unwrap()
     }
-    pub fn alignment_of(&self, typ: &THRStructLayout) -> usize {
+    pub fn alignment_of_layout(&self, typ: &THRStructLayout) -> u64 {
         typ.alignment(&self.interned)
     }
-    pub fn width_of(&self, typ: &THRStructLayout) -> usize {
+    pub fn width_of(&self, typ: THRTypeID) -> u64 {
         typ.width(&self.interned)
+    }
+
+    pub fn alignment_of(&self, typ: THRTypeID) -> u64 {
+        typ.alignment(&self.interned)
     }
 }
 
@@ -264,7 +271,7 @@ pub struct THRStructLayout {
     pub fields: Vec<THRStructField>,
 }
 impl THRStructLayout {
-    pub fn alignment(&self, ctx: &THRInternTables) -> usize {
+    pub fn alignment(&self, ctx: &THRInternTables) -> u64 {
         self.fields
             .iter()
             .map(|field| field.typ.alignment(ctx))
@@ -272,14 +279,14 @@ impl THRStructLayout {
             .unwrap_or(0)
     }
 
-    pub fn width(&self, ctx: &THRInternTables) -> usize {
+    pub fn width(&self, ctx: &THRInternTables) -> u64 {
         let struct_alignment = self.alignment(ctx);
         let summed_fields = self.fields.iter().map(|f| f.typ.width(ctx)).sum();
         Self::next_aligned_offset(summed_fields, struct_alignment)
     }
 
     /// calculate the closest multiple `m` of `required_alignment` s.t. `m >= cur_offset` && `m % required_alignment == 0`
-    fn next_aligned_offset(cur_offset: usize, required_alignment: usize) -> usize {
+    fn next_aligned_offset(cur_offset: u64, required_alignment: u64) -> u64 {
         match (cur_offset, required_alignment) {
             (0, _) => 0,
             (c, a) => {
@@ -298,7 +305,7 @@ impl THRStructLayout {
     }
 }
 
-fn div_rem(x: usize, y: usize) -> (usize, usize) {
+fn div_rem(x: u64, y: u64) -> (u64, u64) {
     let quot = x.checked_div_euclid(y).unwrap_or(0);
     let rem = x.checked_rem_euclid(y).unwrap_or(0);
     (quot, rem)
@@ -670,6 +677,7 @@ impl THRInternTables {
             interned: self,
             global_data_block,
             entry_point: entry_point.expect("missing entry point"),
+            name: ipr_ctx.module.name.clone(),
         }
     }
 
@@ -709,6 +717,10 @@ impl THRInternTables {
                 }
             }
         }
+        let tail = self.lower_expression(ipr_ctx, &body.tail);
+        let tail = THRStatement::Ret(tail);
+        let tail = self.statements.intern(tail);
+        items.push(tail);
         let b = THRBlock { items };
         self.blocks.intern(b)
     }
@@ -769,7 +781,7 @@ impl THRInternTables {
                 }
             }
         }
-        let last = self.lower_expression(ipr_ctx, &block.last);
+        let last = self.lower_expression(ipr_ctx, &block.tail);
         let segment = THRStatement::SegmentReturn(target_symbol, last);
         let segment = self.statements.intern(segment);
         items.push(segment);

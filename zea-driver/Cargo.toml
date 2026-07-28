@@ -7,5 +7,7 @@ edition = "2024"
 zea-parser = {path = "../zea-parser"}
 zea-ipr = {path = "../zea-ipr", features = ["visualisation"]}
 zea-common = {path = "../zea-common"}
+zea-codegen = {path="../zea-codegen"}
 log = { version = "0.4.33", features = ["std"] }
 colog = "1.4.0"
+tempfile = "3.27.0"

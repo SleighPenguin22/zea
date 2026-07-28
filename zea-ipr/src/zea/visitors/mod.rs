@@ -283,7 +283,7 @@ fn walk_block<V: IPRVisitor>(
     for stmt in block.statements.iter() {
         v.visit_stmt(stmt)?;
     }
-    v.visit_expr(&block.last)
+    v.visit_expr(&block.tail)
 }
 
 fn walk_assignpat<V: IPRVisitor>(
@@ -496,7 +496,7 @@ fn walk_mut_block<V: IPRTransfomer>(
     for stmt in block.statements.iter_mut() {
         v.visit_stmt(stmt)?;
     }
-    v.visit_expr(&mut block.last)
+    v.visit_expr(&mut block.tail)
 }
 
 fn walk_mut_assignpat<V: IPRTransfomer>(
@@ -620,35 +620,4 @@ fn walk_mut_module<V: IPRTransfomer>(
         v.visit_structdef(datatype)?;
     }
     Ok(V::TransformerOk::default())
-}
-impl IPRModule {
-    pub fn visit_self_with<V: IPRVisitor + NodeLabeler>(
-        &mut self,
-        labeler: impl NodeLabeler,
-    ) -> Result<V, V::VisitorError> {
-        let mut v: V = labeler.labeler_into();
-        v.visit_module(self).map(|_| v)
-    }
-
-    pub fn transform_self_with<V: IPRTransfomer + NodeLabeler>(
-        &mut self,
-        labeler: impl NodeLabeler,
-    ) -> Result<V, V::TransformerError> {
-        let mut v: V = labeler.labeler_into();
-        v.visit_module(self).map(|_| v)
-    }
-
-    pub fn simplify_assignments_after(
-        &mut self,
-        labeler: impl NodeLabeler,
-    ) -> AssignmentSimplifier {
-        self.transform_self_with(labeler).unwrap()
-    }
-    pub fn scope_idents(mut self) -> (Self, IdentifierScoper) {
-        let mut scoper = IdentifierScoper::new(&self);
-        match scoper.visit_module(&mut self) {
-            Ok(_) => (self, scoper),
-            Err(e) => panic!("{e:?}"),
-        }
-    }
 }

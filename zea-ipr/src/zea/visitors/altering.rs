@@ -4,10 +4,10 @@ use crate::zea::visitors::annotating::IPRScopedIdentifier;
 use crate::zea::visitors::{
     walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef,
     walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef,
-    walk_mut_unpacked_init, IPRTransfomer,
+    walk_mut_unpacked_init, IPRTransfomer, IPRVisitor,
 };
 use crate::zea::{immediate_parsed_representation::*, NodeId};
-use crate::{InternTable, ZeaError};
+use crate::{impl_nodelabeler, InternTable, ZeaError};
 use indexmap::set::MutableValues;
 use indexmap::IndexSet;
 use log::trace;
@@ -38,6 +38,7 @@ pub trait NodeLabeler: Sized {
         }
     }
 }
+
 use zea_common::{CompilerError, CompilerErrorKind, CompilerStage};
 fn stray_packed_init() -> CompilerError {
     CompilerError::new(
@@ -164,22 +165,8 @@ impl AssignmentSimplifier {
         Self { label: 1 }
     }
 }
-impl NodeLabeler for AssignmentSimplifier {
-    fn labeler_from(mut other_generator: impl NodeLabeler) -> Self {
-        Self {
-            label: other_generator.next_id().0,
-        }
-    }
-    fn next_id(&mut self) -> NodeId {
-        let label = self.label;
-        self.label += 1;
-        NodeId(label)
-    }
-    fn next_label_with_ident_string(&mut self) -> (NodeId, String) {
-        let label = self.next_id();
-        (label, format!("__unpack{}", label))
-    }
-}
+
+crate::impl_nodelabeler!(AssignmentSimplifier, "unpack");
 
 impl IPRTransfomer for AssignmentSimplifier {
     type TransformerError = ();
@@ -587,6 +574,29 @@ impl IdentifierScoper {
             self.exit_scope();
         } else {
             self.visit_expr(twig)?;
+        }
+        Ok(())
+    }
+}
+
+pub struct InsertImplicitMainReturn {
+    label: usize,
+}
+
+impl_nodelabeler!(InsertImplicitMainReturn, "mainreturns");
+
+impl IPRTransfomer for InsertImplicitMainReturn {
+    type TransformerError = ();
+    type TransformerOk = ();
+    fn visit_module(
+        &mut self,
+        module: &mut IPRModule,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
+        if let Some(main) = module.get_main() {
+            let kind = &mut main.body.tail.kind;
+            if let IPRExpressionKind::Unit = kind {
+                *kind = IPRExpressionKind::IntegerLiteral(0)
+            }
         }
         Ok(())
     }

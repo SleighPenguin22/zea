@@ -6,11 +6,22 @@ use std::path::PathBuf;
 pub struct CompilerConfig {
     path: PathBuf,
 
-    #[arg(long = "loglevel", default_value_t = log::LevelFilter::Error)]
+    #[arg(long = "loglevel", default_value_t = log::LevelFilter::Info)]
     log_level: LevelFilter,
 
-    #[arg(long = "print-mir", default_value_t = false)]
-    print_mir: bool,
+    #[arg(long = "print-thr", default_value_t = false)]
+    print_thr: bool,
+    #[arg(long = "print-ipr", default_value_t = false)]
+    print_ipr: bool,
+    #[arg(long = "print-qbe-il", default_value_t = false)]
+    print_qbe_il: bool,
+
+    #[arg(short, long = "output")]
+    out_file: Option<PathBuf>,
+    #[arg(short, long = "save-asm")]
+    asm_file: Option<PathBuf>,
+    #[arg(short, long = "save-qbe")]
+    qbe_file: Option<PathBuf>,
 }
 
 impl CompilerConfig {
@@ -22,12 +33,32 @@ impl CompilerConfig {
         self.log_level
     }
 
-    pub fn print_mir(&self) -> bool {
-        self.print_mir
+    pub fn print_thr(&self) -> bool {
+        self.print_thr
     }
 
     pub fn path(&self) -> &PathBuf {
         &self.path
+    }
+
+    pub fn asm_file(&self) -> Option<&PathBuf> {
+        self.asm_file.as_ref()
+    }
+
+    pub fn out_file(&self) -> Option<&PathBuf> {
+        self.out_file.as_ref()
+    }
+
+    pub fn qbe_file(&self) -> Option<&PathBuf> {
+        self.qbe_file.as_ref()
+    }
+
+    pub fn print_ipr(&self) -> bool {
+        self.print_ipr
+    }
+
+    pub fn print_qbe_il(&self) -> bool {
+        self.print_qbe_il
     }
 }
 

@@ -8,6 +8,7 @@ zea-ipr = {path = "../zea-ipr"}
 zea-internal-macros = { path = "../zea-internal-macros" }
 qbe = "4.0.0"
 indexmap = "2.14.0"
+log = { version = "0.4.33", features = ["std"] }
 
 [lib]
 doctest = false

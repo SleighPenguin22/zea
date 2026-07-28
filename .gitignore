@@ -29,3 +29,9 @@ zea-driver/test.zea
 flamegraph.svg
 perf.data
 perf.data.old
+bob*
+
+*.o
+*.s
+*.out
+*.qbe

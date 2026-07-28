@@ -122,7 +122,7 @@ impl IndentPrint for IPRBlockExpression {
             let stmt_str = s.indent_print(depth + 2);
             buffer += &add_prefix(&stmt_str, depth + 1);
         }
-        buffer += &self.last.indent_print(depth + 1);
+        buffer += &self.tail.indent_print(depth + 1);
 
         buffer
     }

@@ -30,6 +30,7 @@ pub Mod: IPRModule = {
     <name:ModName> <imports:ModImports?> <exports:ModExports?> <(global_vars, functions, struct_definitions, tagged_unions):ModSymbols> => {
         IPRModule {
             id: NodeId::sentinel(),
+            name,
             imports: imports.unwrap_or(vec![]),
             exports: exports.unwrap_or(vec![]),
             global_vars,
@@ -182,7 +183,7 @@ TType:IPRTypeSpecifier = {
 
 Block: IPRBlockExpression = {
     "{" <statements:(<Stmt>)*> <tail:Expr?> "}" => {
-        let last = if let Some(tail) = tail {
+        let tail = if let Some(tail) = tail {
             tail
         } else {
             IPRExpression::unit()
@@ -190,13 +191,13 @@ Block: IPRBlockExpression = {
         IPRBlockExpression {
             id: NodeId::sentinel(),
             statements,
-            last
+            tail
         }
     },
 };
 FuncBody: IPRBlockExpression = {
     "{" <statements:(<Stmt>)*> <tail:Expr?> "}" => {
-        let last = if let Some(tail) = tail {
+        let tail = if let Some(tail) = tail {
             tail
         } else {
             IPRExpression::unit()
@@ -204,7 +205,7 @@ FuncBody: IPRBlockExpression = {
         IPRBlockExpression {
             id: NodeId::sentinel(),
             statements,
-            last
+            tail
         }
     },
 };

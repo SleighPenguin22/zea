@@ -70,3 +70,42 @@ impl<Key: From<usize> + Into<usize>, Value: Hash + Eq> Default for InternTable<K
         Self::new()
     }
 }
+macro_rules! impl_nodelabeler {
+    ($typ:ident, $label:literal) => {
+        impl NodeLabeler for $typ {
+            fn labeler_from(mut other_generator: impl NodeLabeler) -> Self {
+                Self {
+                    label: other_generator.next_id().0,
+                }
+            }
+            fn next_id(&mut self) -> NodeId {
+                let label = self.label;
+                self.label += 1;
+                NodeId(label)
+            }
+            fn next_label_with_ident_string(&mut self) -> (NodeId, String) {
+                let label = self.next_id();
+                (label, format!(concat!("__", $label, "{}"), label))
+            }
+        }
+    };
+    ($typ:ident) => {
+        impl NodeLabeler for $typ {
+            fn labeler_from(mut other_generator: impl NodeLabeler) -> Self {
+                Self {
+                    label: other_generator.next_id().0,
+                }
+            }
+            fn next_id(&mut self) -> NodeId {
+                let label = self.label;
+                self.label += 1;
+                NodeId(label)
+            }
+            fn next_label_with_ident_string(&mut self) -> (NodeId, String) {
+                let label = self.next_id();
+                (label, format!("__synthetic{}", label))
+            }
+        }
+    };
+}
+pub(crate) use impl_nodelabeler;

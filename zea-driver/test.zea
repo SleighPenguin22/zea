@@ -2,5 +2,6 @@ module main
 
 
 a := true;
+b:= false;
 
-fn main() -> U8 {1}
+fn main() -> U8 { 67}

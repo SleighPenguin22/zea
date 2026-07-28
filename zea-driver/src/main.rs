@@ -6,11 +6,94 @@
 // }
 
 use log::{error, info, trace};
-use std::{fs::read_to_string, path::Path, process::exit as pexit};
+use std::{
+    fs::{File, read_to_string},
+    io::Write,
+    path::{Path, PathBuf},
+    process::exit as pexit,
+};
+use tempfile::NamedTempFile;
+use zea_codegen::THRtoQBE;
 use zea_common::CompilerConfig;
-use zea_ipr::{visualisation::IndentPrint, zea::typecheck_module};
+use zea_ipr::{
+    visualisation::IndentPrint,
+    zea::{THRModule, typecheck_module},
+};
 use zea_parser::parse_module;
 
+fn out_path(ccfg: &CompilerConfig, module: &THRModule) -> PathBuf {
+    if let Some(file) = ccfg.out_file().cloned() {
+        file
+    } else {
+        PathBuf::from(format!("{}.out", module.name))
+    }
+}
+fn invoke_asm(ccfg: &CompilerConfig, module: &THRModule, asm_path: &Path) -> PathBuf {
+    let out_path = out_path(ccfg, module);
+    let status = std::process::Command::new("gcc")
+        .arg(asm_path)
+        .arg("-o")
+        .arg(&out_path)
+        .arg("-Wall")
+        .status()
+        .unwrap();
+
+    if !status.success()
+        && let Some(code) = status.code()
+    {
+        error!("GCC returned error code {code}");
+    }
+    trace!("saved compiled binary to {}", out_path.display());
+    out_path
+}
+fn invoke_qbe(ccfg: &CompilerConfig, module: &THRModule, qbe_path: &Path) -> PathBuf {
+    let path = if let Some(path) = ccfg.asm_file().cloned() {
+        info!("saving assembly to {}", path.display());
+        path
+    } else {
+        let asm_temp = NamedTempFile::with_suffix_in(format!("_{}.s", module.name), "./").unwrap();
+        let (_, asm_temp) = asm_temp.keep().unwrap();
+        asm_temp
+    };
+    let status = std::process::Command::new("qbe")
+        .arg(qbe_path)
+        .arg("-o")
+        .arg(&path)
+        .status()
+        .unwrap();
+
+    if !status.success()
+        && let Some(code) = status.code()
+    {
+        error!("QBE returned error code {code}");
+    }
+    trace!("saved compiled QBE module assembly to {}", path.display());
+    path
+}
+fn write_qbe_il(ccfg: &CompilerConfig, module: &THRModule, il: &str) -> PathBuf {
+    let (mut f, path) = if let Some(path) = ccfg.qbe_file().cloned() {
+        info!("saving QBE IL to {}", path.display());
+        let f = File::create(path.as_path()).unwrap();
+        (f, path)
+    } else {
+        let temp = NamedTempFile::with_suffix_in(format!("_{}.qbe", module.name), "./").unwrap();
+        temp.keep().unwrap()
+    };
+    f.write_all(il.as_bytes()).unwrap();
+    path
+}
+
+fn cleanup_temp_files(ccfg: &CompilerConfig, qbe_il: &Path, asm: &Path) {
+    if ccfg.asm_file().is_none() {
+        trace!("cleaning up {}", asm.display());
+        std::fs::remove_file(asm).unwrap()
+    }
+
+    if ccfg.qbe_file().is_none() {
+        trace!("cleaning up {}", qbe_il.display());
+        std::fs::remove_file(qbe_il).unwrap()
+    }
+}
 fn exit(code: i32) -> ! {
     error!("exiting...");
     pexit(code)
@@ -19,7 +102,7 @@ fn exit(code: i32) -> ! {
 fn read_to_string_wrapper(p: &Path) -> String {
     use std::io::ErrorKind;
     let p_disp = p.display();
-    info!("attempting read of file `{p_disp}`");
+    trace!("attempting read of file `{p_disp}`");
     match p.canonicalize().and_then(|pc| read_to_string(&pc)) {
         Ok(s) => s,
         Err(e) => {
@@ -41,24 +124,43 @@ fn read_to_string_wrapper(p: &Path) -> String {
 }
 
 fn main() {
-    let config = CompilerConfig::parse_args();
-    colog::basic_builder()
-        .filter_level(config.log_level())
-        .init();
-    let src = read_to_string_wrapper(config.path());
+    let ccfg = CompilerConfig::parse_args();
+    colog::basic_builder().filter_level(ccfg.log_level()).init();
+    let src = read_to_string_wrapper(ccfg.path());
     let (mut module, generator) = parse_module(&src);
 
-    trace!("before expansions:\n{}", module.indent_print(0));
-    module.simplify_assignments_after(generator);
+    let a = module.simplify_assignments_after(generator);
+    module.insert_implicit_main_return(a);
+
     let (mut module, scopes) = module.scope_idents();
     info!("commencing typechecking...");
     let tinfo = typecheck_module(&mut module);
     info!("finished typechecking");
-    if config.print_mir() {
+    if ccfg.print_ipr() {
         info!("after expansions:\n{}", module.indent_print(0));
     }
 
     info!("lowering into THR...");
     let lowered = zea_ipr::zea::lower_module(module, tinfo, scopes);
-    info!("Typed Highlevel Representation:\n{:?}", lowered);
+    if ccfg.print_thr() {
+        info!("Typed Highlevel Representation:\n{:?}", lowered);
+    }
+
+    let mut codegen = THRtoQBE::new(&lowered);
+    let qbe = codegen.lower();
+    let il = format!("{qbe}");
+    if ccfg.print_qbe_il() {
+        info!("Generated QBE IL:\n{il}");
+    }
+
+    let qbe_path = write_qbe_il(&ccfg, &lowered, &il);
+
+    let asm_path = invoke_qbe(&ccfg, &lowered, &qbe_path);
+    let _out_path = invoke_asm(&ccfg, &lowered, &asm_path);
+
+    info!(
+        "saved compiled binary to {}",
+        _out_path.canonicalize().unwrap().display()
+    );
+    cleanup_temp_files(&ccfg, &qbe_path, &asm_path);
 }

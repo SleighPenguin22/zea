@@ -44,7 +44,13 @@ pub mod immediate_parsed_representation {
 
     use crate::{
         traits::StructuralEq,
-        zea::{BinOp, IPRScopedIdentifier, UnOp},
+        zea::{
+            visitors::{
+                altering::{AssignmentSimplifier, IdentifierScoper, InsertImplicitMainReturn},
+                IPRTransfomer, IPRVisitor,
+            },
+            BinOp, IPRScopedIdentifier, NodeLabeler, UnOp,
+        },
     };
 
     use super::NodeId;
@@ -90,8 +96,47 @@ pub mod immediate_parsed_representation {
         pub global_vars: Vec<IPRInitializationBlock>,
         pub functions: Vec<IPRFunction>,
         pub struct_definitions: Vec<IPRStructDataTypeDefinition>,
+        pub name: String,
     }
+    impl IPRModule {
+        pub(crate) fn get_main(&mut self) -> Option<&mut IPRFunction> {
+            self.functions.iter_mut().find(|f| f.name == "main")
+        }
+        pub fn insert_implicit_main_return(&mut self, labeler: impl NodeLabeler) {
+            let mut transformer = InsertImplicitMainReturn::labeler_from(labeler);
+            transformer.visit_module(self).unwrap();
+        }
 
+        pub fn visit_self_with<V: IPRVisitor + NodeLabeler>(
+            &mut self,
+            labeler: impl NodeLabeler,
+        ) -> Result<V, V::VisitorError> {
+            let mut v: V = labeler.labeler_into();
+            v.visit_module(self).map(|_| v)
+        }
+
+        pub fn transform_self_with<V: IPRTransfomer + NodeLabeler>(
+            &mut self,
+            labeler: impl NodeLabeler,
+        ) -> Result<V, V::TransformerError> {
+            let mut v: V = labeler.labeler_into();
+            v.visit_module(self).map(|_| v)
+        }
+
+        pub fn simplify_assignments_after(
+            &mut self,
+            labeler: impl NodeLabeler,
+        ) -> AssignmentSimplifier {
+            self.transform_self_with(labeler).unwrap()
+        }
+        pub fn scope_idents(mut self) -> (Self, IdentifierScoper) {
+            let mut scoper = IdentifierScoper::new(&self);
+            match scoper.visit_module(&mut self) {
+                Ok(_) => (self, scoper),
+                Err(e) => panic!("{e:?}"),
+            }
+        }
+    }
     #[derive(Debug, Clone)]
     pub struct IPRFuncParam {
         pub id: NodeId,
@@ -282,7 +327,7 @@ pub mod immediate_parsed_representation {
         /// This label must be unique to the scope of the function in which it exists
         pub id: NodeId,
         pub statements: Vec<IPRStatement>,
-        pub last: IPRExpression,
+        pub tail: IPRExpression,
     }
 
     impl IPRBlockExpression {

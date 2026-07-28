@@ -200,7 +200,7 @@ impl ScopeAnnotations {
         for stmt in block.statements.iter() {
             self.gather_idents_stmt(stmt);
         }
-        self.gather_idents_expr(&block.last);
+        self.gather_idents_expr(&block.tail);
     }
 }
 
@@ -295,7 +295,7 @@ impl IPRVisitor for ZeaNodeQuery {
                     .iter()
                     .find_map(|stmt| self.visit_stmt(stmt).ok())
             })
-            .or_else(|| self.visit_expr(&block.last).ok())
+            .or_else(|| self.visit_expr(&block.tail).ok())
             .ok_or(())
     }
     fn visit_module(&mut self, module: &IPRModule) -> Result<Self::VisitorOk, Self::VisitorError> {

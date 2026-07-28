@@ -1,5 +1,5 @@
 // auto-generated: "lalrpop 0.23.1"
-// sha3: 7ce0555508aa27ed342e08e16eef226356ae3f8223ca8784452f31aff92fadb8
+// sha3: 3a5c6e42765df0a44477f05fbb8d48c6be67c80db9e3a44fba1faccf57297b21
 use std::str::FromStr;
 use zea_ipr::zea::immediate_parsed_representation::*;
 use zea_ipr::zea::{BinOp, UnOp, NodeId};
@@ -11270,6 +11270,7 @@ fn __action3<
     {
         IPRModule {
             id: NodeId::sentinel(),
+            name,
             imports: imports.unwrap_or(vec![]),
             exports: exports.unwrap_or(vec![]),
             global_vars,
@@ -11680,7 +11681,7 @@ fn __action26<
 ) -> IPRBlockExpression
 {
     {
-        let last = if let Some(tail) = tail {
+        let tail = if let Some(tail) = tail {
             tail
         } else {
             IPRExpression::unit()
@@ -11688,7 +11689,7 @@ fn __action26<
         IPRBlockExpression {
             id: NodeId::sentinel(),
             statements,
-            last
+            tail
         }
     }
 }
@@ -11707,7 +11708,7 @@ fn __action27<
 ) -> IPRBlockExpression
 {
     {
-        let last = if let Some(tail) = tail {
+        let tail = if let Some(tail) = tail {
             tail
         } else {
             IPRExpression::unit()
@@ -11715,7 +11716,7 @@ fn __action27<
         IPRBlockExpression {
             id: NodeId::sentinel(),
             statements,
-            last
+            tail
         }
     }
 }

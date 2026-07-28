@@ -192,7 +192,7 @@ impl StructuralEq for IPRBlockExpression {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;
         is_eq &= (self.statements).eq_ignore_id(&other.statements);
-        is_eq &= (self.last).eq_ignore_id(&other.last);
+        is_eq &= (self.tail).eq_ignore_id(&other.tail);
         is_eq
     }
 }

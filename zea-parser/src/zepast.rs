@@ -97,12 +97,6 @@ fn stmt_ret(expr: IPRExpression) -> IPRStatement {
         kind: IPRStatementKind::Return(expr),
     }
 }
-fn stmt_tail(expr: IPRExpression) -> IPRStatement {
-    IPRStatement {
-        id: NodeId::sentinel(),
-        kind: IPRStatementKind::BlockTail(expr),
-    }
-}
 fn stmt_block(block: IPRBlockExpression) -> IPRStatement {
     IPRStatement {
         id: NodeId::sentinel(),
@@ -853,7 +847,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
                     return Ok(IPRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
-                        last: expr,
+                        tail: expr,
                     });
                 }
                 // Content ended (shallower depth or EOF) → implicit unit
@@ -861,7 +855,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
                     return Ok(IPRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
-                        last: IPRExpression::unit(),
+                        tail: IPRExpression::unit(),
                     });
                 }
                 Some(_) => {
@@ -876,7 +870,7 @@ impl<'a> ZeaPrettyAstParser<'a> {
                     return Ok(IPRBlockExpression {
                         id: NodeId::sentinel(),
                         statements,
-                        last: IPRExpression::unit(),
+                        tail: IPRExpression::unit(),
                     });
                 }
             }
@@ -1133,7 +1127,7 @@ mod tests {
         IPRBlockExpression {
             id: NodeId::sentinel(),
             statements: stmts,
-            last,
+            tail: last,
         }
     }
 
@@ -1385,7 +1379,7 @@ mod tests {
     fn parse_bare_block() {
         let block = parse_block("block\n  - return\n    lit_int(1)\n  @unit\n");
         assert_eq!(block.statements.len(), 1);
-        assert!(matches!(block.last.kind, IPRExpressionKind::Unit));
+        assert!(matches!(block.tail.kind, IPRExpressionKind::Unit));
     }
 
     #[test]
