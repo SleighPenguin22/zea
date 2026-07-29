@@ -29,7 +29,7 @@
 //! All parsed nodes receive `NodeId::sentinel()`; the labeler is run afterward.
 
 use std::fmt;
-use zea_ipr::zea::{BinOp, NodeId, UnOp, immediate_parsed_representation::*};
+use zea_ipr::zea::{BinOp, NodeId, UnOp, ipr::*};
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
@@ -990,20 +990,24 @@ fn parse_type_string(s: &str) -> IPRTypeSpecifier {
         return IPRTypeSpecifier::ArrayOf(Box::new(inner));
     }
     if let Some(w) = s.strip_prefix('i')
-        && let Ok(width) = w.parse::<usize>() {
-            return IPRTypeSpecifier::Integer {
-                width,
-                signed: true,
-            };
-        }
+        && let Ok(width) = w.parse::<usize>()
+    {
+        return IPRTypeSpecifier::Integer {
+            width,
+            signed: true,
+        };
+    }
     if let Some(w) = s.strip_prefix('u')
-        && let Ok(width) = w.parse::<usize>() {
-            return IPRTypeSpecifier::Integer {
-                width,
-                signed: false,
-            };
-        }
-    if let Some(w) = s.strip_prefix('f') && let Ok(width) = w.parse::<usize>() {
+        && let Ok(width) = w.parse::<usize>()
+    {
+        return IPRTypeSpecifier::Integer {
+            width,
+            signed: false,
+        };
+    }
+    if let Some(w) = s.strip_prefix('f')
+        && let Ok(width) = w.parse::<usize>()
+    {
         return IPRTypeSpecifier::Float { width };
     }
     IPRTypeSpecifier::NonScalar(s.to_string())

@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::{
     traits::StructuralEq,
-    zea::{immediate_parsed_representation::*, BinOp, NodeId, UnOp},
+    zea::{ipr::*, BinOp, NodeId, UnOp},
 };
 
 impl StructuralEq for IPRModule {

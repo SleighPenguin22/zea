@@ -5,13 +5,14 @@ use crate::traits::StructuralEq;
 use crate::zea::visitors::{
     IPRVisitor, walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init,
 };
-use crate::zea::{NodeId, ZeaNodeQuery, immediate_parsed_representation::*};
+use crate::zea::{NodeId, ZeaNodeQuery, ipr::*};
+use arbitrary::Arbitrary;
 use indexmap::{IndexMap, IndexSet};
 
 type NodeIdMap<T> = IndexMap<NodeId, T>;
 type NodeIdSet = IndexSet<NodeId>;
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Arbitrary)]
 pub enum SymbolKind {
     LocalVar,
     GlobalVar,
@@ -19,7 +20,7 @@ pub enum SymbolKind {
     FunctionParam,
     ImportItem,
 }
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug, Arbitrary)]
 pub struct IPRScopedIdentifier {
     pub ident: String,
     pub origin: NodeId,

@@ -1,5 +1,5 @@
-use crate::zea::immediate_parsed_representation::*;
 use crate::zea::IPRScopedIdentifier;
+use crate::zea::ipr::*;
 use std::fmt::Debug;
 
 pub trait IndentPrint: Debug {
@@ -139,10 +139,22 @@ impl IndentPrint for IPRStatement {
             IPRStatementKind::IfThenElse(b) => b.indent_print(depth),
             IPRStatementKind::Block(eb) => eb.indent_print(depth),
             IPRStatementKind::FunctionCall(c) => c.indent_print(depth),
-            _ => todo!("pretty print statement with kind {:?}", self.kind),
+            IPRStatementKind::Reassignment(r) => r.indent_print(depth),
         }
     }
 }
+
+impl IndentPrint for IPRReassignment {
+    fn indent_print(&self, depth: usize) -> String {
+        let mut buffer = "reassign".indent_print(depth);
+        buffer += &".symbol".indent_print(depth + 1);
+        buffer += &self.assignee.indent_print(depth + 1);
+        buffer += &".value".indent_print(depth + 1);
+        buffer += &self.value.indent_print(depth + 1);
+        buffer
+    }
+}
+
 impl IndentPrint for IPRInitializationBlock {
     fn indent_print(&self, depth: usize) -> String {
         use IPRInitializationKind;
@@ -286,7 +298,7 @@ impl IndentPrint for IPRExpression {
             IPRExpressionKind::Unit => "@unit".indent_print(depth),
             IPRExpressionKind::ScopedIdent(si) => si.indent_print(depth),
             IPRExpressionKind::BoolLiteral(b) => format!("bool_lit({b})").indent_print(depth),
-            _ => todo!("pretty print expression of kind {:?}", self.kind),
+            IPRExpressionKind::StringLiteral(s) => format!("string_lit({s:?})").indent_print(depth),
         }
     }
 }

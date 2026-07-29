@@ -1,5 +1,5 @@
 [package]
-name = "zea-ipr-fuzz"
+name = "zea-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2024"
@@ -11,11 +11,22 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 
 [dependencies.zea-ipr]
-path = ".."
+path = "../zea-ipr"
+
+[dependencies.arbitrary]
+version = "1"
+features = ["derive"]
 
 [[bin]]
-name = "fuzz_target_1"
-path = "fuzz_targets/fuzz_target_1.rs"
+name = "label_ast_nodes"
+path = "fuzz_targets/label_ast_nodes"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "scope_idents"
+path = "fuzz_targets/scope_idents.rs"
 test = false
 doc = false
 bench = false

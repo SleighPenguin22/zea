@@ -4,9 +4,11 @@ use zea_internal_macros::InternKey;
 use zea_ipr::{
     InternTable,
     zea::{
-        BinOp, THRBlock, THRExpression, THRFunction, THRModule, THRStatement, THRSymbol,
-        THRTypeSpecifier,
-        typed_highlevel_representation::{FloatWidth, IntegerWidth},
+        BinOp,
+        thr::{
+            FloatWidth, IntegerWidth, THRBlock, THRExpression, THRFunction, THRModule,
+            THRStatement, THRSymbol, THRTypeSpecifier,
+        },
     },
 };
 #[derive(Copy, Clone, Debug, PartialEq, Eq, InternKey)]

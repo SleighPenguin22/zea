@@ -10,7 +10,7 @@ use zea_internal_macros::{InternKey, VariantToStr};
 use crate::{
     InternTable, ZeaError,
     visualisation::IndentPrint,
-    zea::{BinOp, NodeId, immediate_parsed_representation::*},
+    zea::{BinOp, NodeId, ipr::*},
 };
 pub fn typecheck_module(module: &mut IPRModule) -> IPRModuleTypeInfo {
     ZeaTypeChecker::new().check_module(module)

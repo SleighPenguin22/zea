@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 zea-ipr = { path = "../zea-ipr" }
 lalrpop-util = { version = "0.23.1", features = ["lexer", "unicode"], optional = true }
-log = "0.4.31"
+log = {version="0.4.33",features = ["std"]}
 clap = { version = "4.6.2", features = ["derive"] }
 
 [build-dependencies]
@@ -15,7 +15,7 @@ lalrpop = { version = "0.23.1", optional = true }
 
 [features]
 lalrpop_parser = ["dep:lalrpop", "dep:lalrpop-util"]
-zepast = ["zea-ipr/visualisation"]
+zepast = []
 default = ["lalrpop_parser"]
 
 

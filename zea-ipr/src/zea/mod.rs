@@ -21,9 +21,10 @@
 /// The [`visitors::altering::BareNodeLabeler`] visitor
 /// grants a unique ID to node with a sentinel ID.
 use crate::traits::StructuralEq;
-use crate::zea::immediate_parsed_representation::IPRASTNode;
-use crate::zea::immediate_parsed_representation::IPRModule;
+use crate::zea::ipr::IPRASTNode;
+use crate::zea::ipr::IPRModule;
 use crate::zea::visitors::IPRVisitor;
+use arbitrary::{Arbitrary, Unstructured};
 
 mod typecheck;
 pub use typecheck::typecheck_module;
@@ -31,13 +32,9 @@ pub use typecheck::typecheck_module;
 mod impls;
 pub mod visitors;
 
-pub mod typed_highlevel_representation;
-pub use typed_highlevel_representation::{
-    THRBlock, THRBlockID, THRExprID, THRExpression, THRFunction, THRFunctionID, THRInternTables,
-    THRModule, THRStatement, THRStatementID, THRStructField, THRStructLayout, THRSymbol,
-    THRSymbolDecl, THRSymbolID, THRTypeID, THRTypeSpecifier, lower_module,
-};
-pub mod immediate_parsed_representation {
+pub mod thr;
+pub mod ipr {
+    use arbitrary::{Arbitrary, Unstructured};
     use std::{fmt::Debug, fmt::Formatter, hash::Hash, hash::Hasher};
 
     use zea_internal_macros::{ASTStructuralEq, VariantToStr};
@@ -45,7 +42,7 @@ pub mod immediate_parsed_representation {
     use crate::{
         traits::StructuralEq,
         zea::{
-            BinOp, IPRScopedIdentifier, NodeLabeler, UnOp,
+            BareNodeLabeler, BinOp, IPRScopedIdentifier, NodeLabeler, UnOp,
             visitors::{
                 IPRTransfomer, IPRVisitor,
                 altering::{AssignmentSimplifier, IdentifierScoper, InsertImplicitMainReturn},
@@ -54,6 +51,8 @@ pub mod immediate_parsed_representation {
     };
 
     use super::NodeId;
+
+    #[derive(Arbitrary)]
     pub enum IPRASTNode {
         Module(IPRModule),
         Function(IPRFunction),
@@ -193,7 +192,7 @@ pub mod immediate_parsed_representation {
         }
     }
 
-    #[derive(Default, Debug, Clone)]
+    #[derive(Default, Debug, Clone, Arbitrary)]
     pub struct IPRModule {
         pub id: NodeId,
         pub imports: Vec<String>,
@@ -207,6 +206,13 @@ pub mod immediate_parsed_representation {
         pub(crate) fn get_main(&mut self) -> Option<&mut IPRFunction> {
             self.functions.iter_mut().find(|f| f.name == "main")
         }
+
+        pub fn label_nodes(&mut self) -> BareNodeLabeler {
+            let mut l = BareNodeLabeler::new();
+            l.visit_module(self).unwrap();
+            l
+        }
+
         pub fn insert_implicit_main_return(&mut self, labeler: impl NodeLabeler) {
             let mut transformer = InsertImplicitMainReturn::labeler_from(labeler);
             transformer.visit_module(self).unwrap();
@@ -242,7 +248,7 @@ pub mod immediate_parsed_representation {
             }
         }
     }
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRFuncParam {
         pub id: NodeId,
         pub typ: IPRTypeSpecifier,
@@ -253,7 +259,7 @@ pub mod immediate_parsed_representation {
     ///
     /// Function may be defined only once within a module.
     /// Functions may be imported as many times as needed.
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRFunction {
         pub id: NodeId,
         pub name: String,
@@ -270,13 +276,13 @@ pub mod immediate_parsed_representation {
         pub returns: IPRTypeSpecifier,
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRStatement {
         pub id: NodeId,
         pub kind: IPRStatementKind,
     }
 
-    #[derive(Debug, Clone, VariantToStr)]
+    #[derive(Debug, Clone, VariantToStr, Arbitrary)]
     pub enum IPRStatementKind {
         // initial pass
         /// Variable initialization
@@ -295,7 +301,7 @@ pub mod immediate_parsed_representation {
     }
 
     /// A packed or unpacked initialisation
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRInitializationBlock {
         pub id: NodeId,
         pub kind: IPRInitializationKind,
@@ -333,7 +339,7 @@ pub mod immediate_parsed_representation {
     ///
     /// NOTE:
     /// Support for enum destructuring to be added later
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRPackedInitialization {
         pub typ: Option<IPRTypeSpecifier>,
         pub assignee: IPRAssignmentPattern,
@@ -355,7 +361,7 @@ pub mod immediate_parsed_representation {
     /// Has one of the forms
     /// - `var := value`
     /// - `var: type = value`
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRSimpleInitialization {
         pub id: NodeId,
         pub typ: Option<IPRTypeSpecifier>,
@@ -374,19 +380,19 @@ pub mod immediate_parsed_representation {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRPartiallyUnpackedInitialization {
         pub temporary: IPRSimpleInitialization,
         pub unpacked_assignments: Vec<IPRInitializationBlock>,
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub enum IPRInitializationKind {
         Packed(IPRPackedInitialization),
         Unpacked(Vec<IPRSimpleInitialization>),
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRReassignment {
         pub id: NodeId,
         pub assignee: String,
@@ -402,7 +408,7 @@ pub mod immediate_parsed_representation {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRFunctionCall {
         pub id: NodeId,
         pub subject: Box<IPRExpression>,
@@ -425,7 +431,7 @@ pub mod immediate_parsed_representation {
         }
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Arbitrary)]
     pub struct IPRBlockExpression {
         /// The label that the block expression has its value assigned to
         /// i.e. `__block0`, `__block1` etc.
@@ -450,7 +456,7 @@ pub mod immediate_parsed_representation {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRExpression {
         pub id: NodeId,
         pub kind: IPRExpressionKind,
@@ -519,7 +525,7 @@ pub mod immediate_parsed_representation {
         }
     }
 
-    #[derive(Debug, Clone, VariantToStr)]
+    #[derive(Debug, Clone, VariantToStr, Arbitrary)]
     pub enum IPRExpressionKind {
         // initial pass
         Unit,
@@ -585,7 +591,7 @@ pub mod immediate_parsed_representation {
         subject: Box<IPRExpression>,
     }
 
-    #[derive(Clone, Debug)]
+    #[derive(Clone, Debug, Arbitrary)]
     pub struct IPRBranch {
         pub id: NodeId,
         pub condition: Box<IPRExpression>,
@@ -658,7 +664,7 @@ pub mod immediate_parsed_representation {
     /// the left hand side of an assignment
     ///
     /// The simplest is a basic identifier
-    #[derive(Debug, PartialEq, Clone, Eq, Hash)]
+    #[derive(Debug, PartialEq, Clone, Eq, Hash, Arbitrary)]
     pub enum IPRAssignmentPattern {
         /// the pattern
         ///
@@ -701,7 +707,7 @@ pub mod immediate_parsed_representation {
     }
 
     /// The Zea named Struct type / product type
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, Arbitrary)]
     pub struct IPRStructDataTypeDefinition {
         pub id: NodeId,
         pub name: String,
@@ -728,7 +734,7 @@ pub mod immediate_parsed_representation {
     /// The Type that is bundled with a:
     /// - function parameter
     /// - identifier in declaration(-assignments)
-    #[derive(PartialEq, Eq, Clone, Hash)]
+    #[derive(PartialEq, Eq, Clone, Hash, Arbitrary)]
     pub enum IPRTypeSpecifier {
         /// An aggregate DataType
         NonScalar(String),
@@ -861,7 +867,7 @@ pub mod immediate_parsed_representation {
             }
         }
     }
-    #[derive(Debug, Eq, PartialEq, Hash, Clone, ASTStructuralEq)]
+    #[derive(Debug, Eq, PartialEq, Hash, Clone, ASTStructuralEq, Arbitrary)]
     pub struct IPRTypedIdentifier {
         pub name: String,
         pub typ: IPRTypeSpecifier,
@@ -877,7 +883,7 @@ pub mod immediate_parsed_representation {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr, Arbitrary)]
 pub enum BinOp {
     Add,
     Sub,
@@ -901,7 +907,7 @@ pub enum BinOp {
     GT,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr, Arbitrary)]
 pub enum UnOp {
     Neg,
     LogNot,
@@ -1220,6 +1226,12 @@ use zea_internal_macros::{ASTStructuralEq, VariantToStr};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub struct NodeId(usize);
+impl<'a> Arbitrary<'a> for NodeId {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        let _ = u;
+        Ok(NodeId::sentinel())
+    }
+}
 
 impl NodeId {
     pub const fn sentinel() -> Self {
@@ -1243,7 +1255,7 @@ struct ZeaNodeQuery {
     id: NodeId,
 }
 impl ZeaNodeQuery {
-    pub fn query_hir_node_with_id(id: NodeId, module: &IPRModule) -> Option<IPRASTNode> {
+    pub fn query_ipr_node(id: NodeId, module: &IPRModule) -> Option<IPRASTNode> {
         let mut s = Self { id };
         match s.visit_module(module) {
             Ok(Some(n)) => Some(n),

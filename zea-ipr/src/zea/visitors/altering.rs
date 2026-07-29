@@ -6,7 +6,7 @@ use crate::zea::visitors::{
     walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef,
     walk_mut_unpacked_init, IPRTransfomer, IPRVisitor,
 };
-use crate::zea::{immediate_parsed_representation::*, NodeId};
+use crate::zea::{ipr::*, NodeId};
 use crate::{impl_nodelabeler, InternTable, ZeaError};
 use indexmap::set::MutableValues;
 use indexmap::IndexSet;

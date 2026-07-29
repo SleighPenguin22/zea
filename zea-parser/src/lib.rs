@@ -16,7 +16,8 @@ use zea_ipr::zea::BareNodeLabeler;
 
 use zea_ipr::zea::visitors::annotating::SemanticASTViolation;
 
-use zea_ipr::zea::immediate_parsed_representation::*;
+pub use lalrpop_util::ParseError;
+use zea_ipr::zea::ipr::*;
 use zea_ipr::zea::visitors::IPRTransfomer;
 pub fn parse_module(src: &'_ str) -> (IPRModule, BareNodeLabeler) {
     let p = ModuleParser::new();
@@ -29,9 +30,8 @@ pub fn parse_module(src: &'_ str) -> (IPRModule, BareNodeLabeler) {
         }
     };
     info!("\tparsed source file succesfully");
-    let mut labeler = BareNodeLabeler::new();
     info!("starting node-labeling...");
-    labeler.visit_module(&mut module);
+    let labeler = module.label_nodes();
     info!("\tnode-labeling successful");
     (module, labeler)
 }

@@ -6,15 +6,14 @@ edition = "2024"
 [dependencies]
 zea-internal-macros = { path = "../zea-internal-macros" }
 indexmap = "2.14.0"
-log = "0.4.33"
+log = {version="0.4.33",features = ["std"]}
 zea-common = {path = "../zea-common"}
+arbitrary = { version = "1.4.2", features = ["derive"] }
 
 [dev-dependencies]
 zea-parser = {path = "../zea-parser", features = ["zepast"]}
 
 [features]
-visualisation = []
-#default = ["visualisation"]
 
 [lib]
 doctest = false

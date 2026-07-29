@@ -2,14 +2,13 @@
 use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 
 use indexmap::{
-    set::{Iter, MutableValues},
     IndexSet,
+    set::{Iter, MutableValues},
 };
 /// The AST's for the ZEA language
 pub mod zea;
 
 pub mod traits;
-#[cfg(feature = "visualisation")]
 pub mod visualisation;
 
 pub trait ZeaError {

@@ -1,12 +1,15 @@
 [workspace]
 resolver = "3"
 edition = 2024
-members = ["zea-ipr", "zea-driver", "zea-parser", "zea-codegen", "zea-internal-macros", "zea-common"]
+members = ["zea-ipr", "zea-driver", "zea-parser", "zea-codegen", "zea-internal-macros", "zea-common", "fuzz"]
+
 
 [workspace.lints.rust]
 dead_code = "allow"
 unsafe_code = "forbid"
 unused_imports = "allow"
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+
 
 [profile.release]
 debug = true

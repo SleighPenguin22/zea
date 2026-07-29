@@ -66,7 +66,7 @@ macro_rules! internal_compiler_error {
 }
 use crate::{
     zea::{
-        immediate_parsed_representation::{
+        ipr::{
             IPRBlockExpression, IPRExpression, IPRExpressionKind, IPRFunction,
             IPRInitializationBlock, IPRInitializationKind, IPRModule, IPRSimpleInitialization,
             IPRStatement, IPRStatementKind, IPRTypeSpecifier, IPRTypedIdentifier,
@@ -77,7 +77,7 @@ use crate::{
     InternTable,
 };
 
-use super::{immediate_parsed_representation, typecheck::IPRModuleTypeInfo};
+use super::{ipr, typecheck::IPRModuleTypeInfo};
 
 pub fn lower_module(
     module: IPRModule,

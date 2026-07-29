@@ -1,5 +1,5 @@
 use crate::zea::visitors::altering::{AssignmentSimplifier, IdentifierScoper, NodeLabeler};
-use crate::zea::{IPRScopedIdentifier, immediate_parsed_representation::*};
+use crate::zea::{IPRScopedIdentifier, ipr::*};
 use std::ops::Deref;
 
 pub mod altering;
