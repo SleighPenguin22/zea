@@ -3,9 +3,9 @@ use std::ops::BitAnd;
 
 use crate::traits::StructuralEq;
 use crate::zea::visitors::{
-    walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init, IPRVisitor,
+    IPRVisitor, walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init,
 };
-use crate::zea::{immediate_parsed_representation::*, NodeId, ZeaNodeQuery};
+use crate::zea::{NodeId, ZeaNodeQuery, immediate_parsed_representation::*};
 use indexmap::{IndexMap, IndexSet};
 
 type NodeIdMap<T> = IndexMap<NodeId, T>;
@@ -331,19 +331,77 @@ impl IPRVisitor for ZeaNodeQuery {
                 | IPRExpressionKind::BoolLiteral(_)
                 | IPRExpressionKind::FloatLiteral(_)
                 | IPRExpressionKind::StringLiteral(_)
-                | IPRExpressionKind::UnScopedIdent(_) => Ok(None),
-                IPRExpressionKind::ScopedIdent(_) => Ok(None),
-                IPRExpressionKind::FunctionCall(function_call) => self.visit_call(function_call),
-                IPRExpressionKind::BinOpExpr(_, expression, expression1) => self
-                    .visit_expr(expression)
+                | IPRExpressionKind::UnScopedIdent(_)
+                | IPRExpressionKind::ScopedIdent(_) => Ok(None),
+                IPRExpressionKind::FunctionCall(call) => self.visit_call(call),
+                IPRExpressionKind::BinOpExpr(_, l, r) => self
+                    .visit_expr(l)
                     .ok()
-                    .or_else(|| self.visit_expr(expression1).ok())
+                    .or_else(|| self.visit_expr(r).ok())
                     .ok_or(()),
-                IPRExpressionKind::UnOpExpr(_, expression) => self.visit_expr(expression),
-                IPRExpressionKind::MemberAccess(expression, _) => self.visit_expr(expression),
-                IPRExpressionKind::IfThenElse(if_then_else) => self.visit_branch(if_then_else),
-                IPRExpressionKind::Block(block_expression) => self.visit_block(block_expression),
+                IPRExpressionKind::UnOpExpr(_, expression)
+                | IPRExpressionKind::MemberAccess(expression, _) => self.visit_expr(expression),
+                IPRExpressionKind::IfThenElse(b) => self.visit_branch(b),
+                IPRExpressionKind::Block(b) => self.visit_block(b),
             }
         }
+    }
+    fn visit_stmt(&mut self, stmt: &IPRStatement) -> Result<Self::VisitorOk, Self::VisitorError> {
+        if self.id == stmt.id {
+            Ok(Some(stmt.clone().into()))
+        } else {
+            match &stmt.kind {
+                IPRStatementKind::Initialization(init) => self.visit_initblock(init),
+                IPRStatementKind::Reassignment(reinit) => self.visit_reassignment(reinit),
+                IPRStatementKind::FunctionCall(call) => self.visit_call(call),
+                IPRStatementKind::Return(e) => self.visit_expr(e),
+                IPRStatementKind::Block(block) => self.visit_block(block),
+                IPRStatementKind::IfThenElse(branch) => self.visit_branch(branch),
+            }
+        }
+    }
+    fn visit_call(
+        &mut self,
+        call: &IPRFunctionCall,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        (self.id == call.id)
+            .then_some(Some(IPRASTNode::Call(call.clone())))
+            .or_else(|| self.visit_expr(call.subject.as_ref()).ok())
+            .or_else(|| call.args.iter().find_map(|e| self.visit_expr(e).ok()))
+            .ok_or(())
+    }
+    fn visit_funcdef(
+        &mut self,
+        funcdef: &IPRFunction,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        (funcdef.id == self.id)
+            .then_some(Some(IPRASTNode::Function(funcdef.clone())))
+            .or_else(|| {
+                funcdef
+                    .params
+                    .iter()
+                    .find_map(|p| self.visit_funcparam(p).ok())
+            })
+            .or_else(|| self.visit_block(&funcdef.body).ok())
+            .ok_or(())
+    }
+    fn visit_funcparam(
+        &mut self,
+        param: &IPRFuncParam,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        if self.id == param.id {
+            Ok(Some(IPRASTNode::FuncParam(param.clone())))
+        } else {
+            Err(())
+        }
+    }
+    fn visit_init(
+        &mut self,
+        init: &IPRSimpleInitialization,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        (self.id == init.id)
+            .then_some(Some(IPRASTNode::Init(init.clone())))
+            .or_else(|| self.visit_expr(&init.value).ok())
+            .ok_or(())
     }
 }

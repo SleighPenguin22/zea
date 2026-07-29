@@ -1,5 +1,5 @@
 use crate::zea::visitors::altering::{AssignmentSimplifier, IdentifierScoper, NodeLabeler};
-use crate::zea::{immediate_parsed_representation::*, IPRScopedIdentifier};
+use crate::zea::{IPRScopedIdentifier, immediate_parsed_representation::*};
 use std::ops::Deref;
 
 pub mod altering;
@@ -85,6 +85,12 @@ pub trait IPRVisitor: Sized {
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         walk_funcdef(self, funcdef)
     }
+    fn visit_funcparam(
+        &mut self,
+        param: &IPRFuncParam,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        walk_funcparam(self, param)
+    }
 
     fn visit_structdef(
         &mut self,
@@ -99,6 +105,7 @@ pub trait IPRVisitor: Sized {
         walk_assignpat(self, pattern)
     }
 }
+
 pub trait IPRTransfomer: Sized {
     type TransformerError;
     type TransformerOk: Default;
@@ -188,6 +195,12 @@ pub trait IPRTransfomer: Sized {
         funcdef: &mut IPRFunction,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         walk_mut_funcdef(self, funcdef)
+    }
+    fn visit_funcparam(
+        &mut self,
+        param: &mut IPRFuncParam,
+    ) -> Result<Self::TransformerOk, Self::TransformerError> {
+        walk_mut_funcparam(self, param)
     }
 
     fn visit_structdef(
@@ -383,6 +396,12 @@ fn walk_funcdef<V: IPRVisitor>(
     Ok(V::VisitorOk::default())
 }
 
+fn walk_funcparam<V: IPRVisitor>(
+    v: &mut V,
+    f: &IPRFuncParam,
+) -> Result<V::VisitorOk, V::VisitorError> {
+    v.visit_type(&f.typ)
+}
 fn walk_structdef<V: IPRVisitor>(
     v: &mut V,
     s: &IPRStructDataTypeDefinition,
@@ -596,6 +615,12 @@ fn walk_mut_funcdef<V: IPRTransfomer>(
     Ok(V::TransformerOk::default())
 }
 
+fn walk_mut_funcparam<V: IPRTransfomer>(
+    v: &mut V,
+    f: &mut IPRFuncParam,
+) -> Result<V::TransformerOk, V::TransformerError> {
+    v.visit_type(&mut f.typ)
+}
 fn walk_mut_structdef<V: IPRTransfomer>(
     v: &mut V,
     s: &mut IPRStructDataTypeDefinition,

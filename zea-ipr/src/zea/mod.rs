@@ -33,9 +33,9 @@ pub mod visitors;
 
 pub mod typed_highlevel_representation;
 pub use typed_highlevel_representation::{
-    lower_module, THRBlock, THRBlockID, THRExprID, THRExpression, THRFunction, THRFunctionID,
-    THRInternTables, THRModule, THRStatement, THRStatementID, THRStructField, THRStructLayout,
-    THRSymbol, THRSymbolDecl, THRSymbolID, THRTypeID, THRTypeSpecifier,
+    THRBlock, THRBlockID, THRExprID, THRExpression, THRFunction, THRFunctionID, THRInternTables,
+    THRModule, THRStatement, THRStatementID, THRStructField, THRStructLayout, THRSymbol,
+    THRSymbolDecl, THRSymbolID, THRTypeID, THRTypeSpecifier, lower_module,
 };
 pub mod immediate_parsed_representation {
     use std::{fmt::Debug, fmt::Formatter, hash::Hash, hash::Hasher};
@@ -45,11 +45,11 @@ pub mod immediate_parsed_representation {
     use crate::{
         traits::StructuralEq,
         zea::{
-            visitors::{
-                altering::{AssignmentSimplifier, IdentifierScoper, InsertImplicitMainReturn},
-                IPRTransfomer, IPRVisitor,
-            },
             BinOp, IPRScopedIdentifier, NodeLabeler, UnOp,
+            visitors::{
+                IPRTransfomer, IPRVisitor,
+                altering::{AssignmentSimplifier, IdentifierScoper, InsertImplicitMainReturn},
+            },
         },
     };
 
@@ -60,31 +60,136 @@ pub mod immediate_parsed_representation {
         Block(IPRBlockExpression),
         Branch(IPRBranch),
         Expression(IPRExpression),
+        Statement(IPRStatement),
+        Call(IPRFunctionCall),
+        FuncParam(IPRFuncParam),
+        Init(IPRSimpleInitialization),
     }
 
-    macro_rules! variant_to_some {
-        ($selfT:ident, $self:ident, $variantname:ident) => {
-            match $self {
-                $selfT::$variantname(var) => Some(var),
-                _ => None,
-            }
-        };
-    }
     impl IPRASTNode {
-        pub fn as_module(self) -> Option<IPRModule> {
-            variant_to_some!(Self, self, Module)
+        fn id(&self) -> NodeId {
+            match self {
+                IPRASTNode::Module(m) => m.id,
+                IPRASTNode::Function(f) => f.id,
+                IPRASTNode::Block(b) => b.id,
+                IPRASTNode::Branch(b) => b.id,
+                IPRASTNode::Expression(e) => e.id,
+                IPRASTNode::Statement(s) => s.id,
+                IPRASTNode::Call(c) => c.id,
+                IPRASTNode::FuncParam(p) => p.id,
+                IPRASTNode::Init(i) => i.id,
+            }
         }
-        pub fn as_block(self) -> Option<IPRBlockExpression> {
-            variant_to_some!(Self, self, Block)
+    }
+    impl From<IPRSimpleInitialization> for IPRASTNode {
+        fn from(v: IPRSimpleInitialization) -> Self {
+            Self::Init(v)
         }
-        pub fn as_function(self) -> Option<IPRFunction> {
-            variant_to_some!(Self, self, Function)
+    }
+
+    impl From<IPRFuncParam> for IPRASTNode {
+        fn from(v: IPRFuncParam) -> Self {
+            Self::FuncParam(v)
         }
-        pub fn as_branch(self) -> Option<IPRBranch> {
-            variant_to_some!(Self, self, Branch)
+    }
+
+    impl From<IPRFunctionCall> for IPRASTNode {
+        fn from(v: IPRFunctionCall) -> Self {
+            Self::Call(v)
         }
-        pub fn as_expr(self) -> Option<IPRExpression> {
-            variant_to_some!(Self, self, Expression)
+    }
+
+    impl From<IPRStatement> for IPRASTNode {
+        fn from(v: IPRStatement) -> Self {
+            Self::Statement(v)
+        }
+    }
+
+    impl From<IPRExpression> for IPRASTNode {
+        fn from(v: IPRExpression) -> Self {
+            Self::Expression(v)
+        }
+    }
+
+    impl From<IPRBranch> for IPRASTNode {
+        fn from(v: IPRBranch) -> Self {
+            Self::Branch(v)
+        }
+    }
+
+    impl From<IPRBlockExpression> for IPRASTNode {
+        fn from(v: IPRBlockExpression) -> Self {
+            Self::Block(v)
+        }
+    }
+
+    impl From<IPRFunction> for IPRASTNode {
+        fn from(v: IPRFunction) -> Self {
+            Self::Function(v)
+        }
+    }
+
+    impl From<IPRModule> for IPRASTNode {
+        fn from(v: IPRModule) -> Self {
+            Self::Module(v)
+        }
+    }
+
+    impl IPRASTNode {
+        pub fn as_module(&self) -> Option<&IPRModule> {
+            if let Self::Module(v) = self {
+                Some(v)
+            } else {
+                None
+            }
+        }
+
+        pub fn as_function(&self) -> Option<&IPRFunction> {
+            if let Self::Function(v) = self {
+                Some(v)
+            } else {
+                None
+            }
+        }
+
+        pub fn as_block(&self) -> Option<&IPRBlockExpression> {
+            if let Self::Block(v) = self {
+                Some(v)
+            } else {
+                None
+            }
+        }
+
+        pub fn as_branch(&self) -> Option<&IPRBranch> {
+            if let Self::Branch(v) = self {
+                Some(v)
+            } else {
+                None
+            }
+        }
+
+        pub fn as_expression(&self) -> Option<&IPRExpression> {
+            if let Self::Expression(v) = self {
+                Some(v)
+            } else {
+                None
+            }
+        }
+
+        pub fn as_statement(&self) -> Option<&IPRStatement> {
+            if let Self::Statement(v) = self {
+                Some(v)
+            } else {
+                None
+            }
+        }
+
+        pub fn as_call(&self) -> Option<&IPRFunctionCall> {
+            if let Self::Call(v) = self {
+                Some(v)
+            } else {
+                None
+            }
         }
     }
 
@@ -806,8 +911,8 @@ pub enum UnOp {
 pub(crate) mod test_ast_macros {
     macro_rules! label_ast {
         (fresh $ast:expr) => {{
-            use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
             use crate::zea::Module;
+            use crate::zea::visitors::altering::{BareNodeLabeler, NodeLabeler};
 
             let mut node_labeler = BareNodeLabeler::new();
             let mut ast = $ast;
@@ -1131,6 +1236,9 @@ impl Display for NodeId {
     }
 }
 
+/// This visitor provides a way to query a node by its id, the returned node is of type [`IPRASTNode`],
+/// which provides methods to destructure it into its inner node.
+/// This visitor is really only useful if you know the type of the node beforehands.
 struct ZeaNodeQuery {
     id: NodeId,
 }
