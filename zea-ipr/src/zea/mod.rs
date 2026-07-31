@@ -35,14 +35,18 @@ pub mod visitors;
 pub mod thr;
 pub mod ipr {
     use arbitrary::{Arbitrary, Unstructured};
-    use std::{fmt::Debug, fmt::Formatter, hash::Hash, hash::Hasher};
+    use std::{
+        char,
+        fmt::{Debug, Formatter},
+        hash::{Hash, Hasher},
+    };
 
     use zea_internal_macros::{ASTStructuralEq, VariantToStr};
 
     use crate::{
         traits::StructuralEq,
         zea::{
-            BareNodeLabeler, BinOp, IPRScopedIdentifier, NodeLabeler, UnOp,
+            BareNodeLabeler, BinOp, IPRScopedIdentifier, NodeLabeler, UnOp, ZeaNodeQuery,
             visitors::{
                 IPRTransfomer, IPRVisitor,
                 altering::{AssignmentSimplifier, IdentifierScoper, InsertImplicitMainReturn},
@@ -52,7 +56,7 @@ pub mod ipr {
 
     use super::NodeId;
 
-    #[derive(Arbitrary)]
+    #[derive(Debug, Arbitrary)]
     pub enum IPRASTNode {
         Module(IPRModule),
         Function(IPRFunction),
@@ -213,9 +217,13 @@ pub mod ipr {
             l
         }
 
-        pub fn insert_implicit_main_return(&mut self, labeler: impl NodeLabeler) {
+        pub fn insert_implicit_main_return(
+            &mut self,
+            labeler: impl NodeLabeler,
+        ) -> impl NodeLabeler {
             let mut transformer = InsertImplicitMainReturn::labeler_from(labeler);
             transformer.visit_module(self).unwrap();
+            transformer
         }
 
         pub fn visit_self_with<V: IPRVisitor + NodeLabeler>(
@@ -223,7 +231,8 @@ pub mod ipr {
             labeler: impl NodeLabeler,
         ) -> Result<V, V::VisitorError> {
             let mut v: V = labeler.labeler_into();
-            v.visit_module(self).map(|_| v)
+            v.visit_module(self)?;
+            Ok(v)
         }
 
         pub fn transform_self_with<V: IPRTransfomer + NodeLabeler>(
@@ -377,6 +386,11 @@ pub mod ipr {
                 value,
                 typ: None,
             }
+        }
+
+        pub fn with_id(mut self, id: NodeId) -> IPRSimpleInitialization {
+            self.id = id;
+            self
         }
     }
 
@@ -664,7 +678,7 @@ pub mod ipr {
     /// the left hand side of an assignment
     ///
     /// The simplest is a basic identifier
-    #[derive(Debug, PartialEq, Clone, Eq, Hash, Arbitrary)]
+    #[derive(Debug, PartialEq, Clone, Eq, Hash)]
     pub enum IPRAssignmentPattern {
         /// the pattern
         ///
@@ -683,6 +697,38 @@ pub mod ipr {
         /// `var (a,b,c) := ...`
         Tuple(Vec<IPRAssignmentPattern>),
     }
+    fn arbitrary_ascii_printable_string<'a>(u: &mut Unstructured<'a>) -> arbitrary::Result<String> {
+        let count = u.arbitrary_len::<char>()?.max(1);
+        let mut buffer = String::with_capacity(count);
+        for _ in 0..count {
+            let s = u.int_in_range('!' as u32..='~' as u32)?;
+            let s: char = char::from_u32(s).unwrap();
+            buffer.push(s);
+        }
+        Ok(buffer)
+    }
+    impl<'a> Arbitrary<'a> for IPRAssignmentPattern {
+        fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+            let choice = u.choose_index(2)?;
+            if choice == 0 {
+                let s = arbitrary_ascii_printable_string(u)?;
+                Ok(IPRAssignmentPattern::Identifier(s))
+            } else {
+                let item_count = u.arbitrary_len::<IPRAssignmentPattern>()?.max(2);
+                let mut v = Vec::with_capacity(item_count);
+                for _ in 0..item_count {
+                    v.push(IPRAssignmentPattern::arbitrary(u)?);
+                }
+                Ok(IPRAssignmentPattern::Tuple(v))
+            }
+        }
+        fn try_size_hint(
+            depth: usize,
+        ) -> arbitrary::Result<(usize, Option<usize>), arbitrary::MaxRecursionReached> {
+            String::try_size_hint(depth)
+        }
+    }
+
     #[derive(Debug, PartialEq, Clone, Eq, Hash)]
     pub enum IPRMatchPattern {
         /// the pattern `a => ...`
@@ -1251,7 +1297,7 @@ impl Display for NodeId {
 /// This visitor provides a way to query a node by its id, the returned node is of type [`IPRASTNode`],
 /// which provides methods to destructure it into its inner node.
 /// This visitor is really only useful if you know the type of the node beforehands.
-struct ZeaNodeQuery {
+pub struct ZeaNodeQuery {
     id: NodeId,
 }
 impl ZeaNodeQuery {

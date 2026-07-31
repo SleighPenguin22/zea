@@ -2,14 +2,14 @@
 use crate::visualisation::IndentPrint;
 use crate::zea::visitors::annotating::IPRScopedIdentifier;
 use crate::zea::visitors::{
-    walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr, walk_mut_funcdef,
-    walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt, walk_mut_structdef,
-    walk_mut_unpacked_init, IPRTransfomer, IPRVisitor,
+    IPRTransfomer, IPRVisitor, walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr,
+    walk_mut_funcdef, walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt,
+    walk_mut_structdef, walk_mut_unpacked_init,
 };
-use crate::zea::{ipr::*, NodeId};
-use crate::{impl_nodelabeler, InternTable, ZeaError};
-use indexmap::set::MutableValues;
+use crate::zea::{NodeId, ipr::*};
+use crate::{InternTable, ZeaError, impl_nodelabeler};
 use indexmap::IndexSet;
+use indexmap::set::MutableValues;
 use log::trace;
 use std::collections::HashMap;
 use std::process::exit;
@@ -160,11 +160,6 @@ impl IPRTransfomer for BareNodeLabeler {
 pub struct AssignmentSimplifier {
     label: usize,
 }
-impl AssignmentSimplifier {
-    pub fn new() -> Self {
-        Self { label: 1 }
-    }
-}
 
 crate::impl_nodelabeler!(AssignmentSimplifier, "unpack");
 
@@ -186,6 +181,9 @@ impl IPRTransfomer for AssignmentSimplifier {
 }
 
 impl AssignmentSimplifier {
+    pub fn new() -> Self {
+        Self { label: 1 }
+    }
     /// synthesize a [`SimpleInitialization`] for use in assignment expansion.
     ///
     /// Also generates an expression referencing that initialization.
@@ -193,12 +191,11 @@ impl AssignmentSimplifier {
         &mut self,
         value: IPRExpression,
     ) -> (IPRSimpleInitialization, IPRExpression) {
-        let (id, label) = self.next_label_with_ident_string();
-        let mut init = IPRSimpleInitialization::untyped(&label, value);
-        init.id = id;
-        let ident_expr =
-            IPRExpression::scoped_local(init.assignee.clone(), id).with_id(self.next_id());
-        (init, ident_expr)
+        let (synthetic_init_id, label) = self.next_label_with_ident_string();
+        let init = IPRSimpleInitialization::untyped(&label, value).with_id(synthetic_init_id);
+
+        let referrant_expr = IPRExpression::scoped_local(label, synthetic_init_id);
+        (init, referrant_expr)
     }
     fn synthesize_unpacking_tuple_item(
         &mut self,
@@ -206,8 +203,9 @@ impl AssignmentSimplifier {
         value: IPRExpression,
         index: usize,
     ) -> IPRPackedInitialization {
-        let mut member_access = IPRExpression::member_access(value, format!("_{index}"));
-        member_access.id = self.next_id();
+        let member_access_id = self.next_id();
+        let member_access =
+            IPRExpression::member_access(value, format!("_{index}")).with_id(member_access_id);
         IPRPackedInitialization::untyped(assignee, member_access)
     }
     fn expand_assignment(&mut self, init: IPRInitializationBlock) -> Vec<IPRSimpleInitialization> {
@@ -222,8 +220,9 @@ impl AssignmentSimplifier {
     ) -> Vec<IPRSimpleInitialization> {
         match init.assignee {
             IPRAssignmentPattern::Identifier(i) => {
-                let mut simple = IPRSimpleInitialization::untyped(&i, init.value);
-                simple.id = self.next_id();
+                let simple_init_id = self.next_id();
+                let simple =
+                    IPRSimpleInitialization::untyped(&i, init.value).with_id(simple_init_id);
                 vec![simple]
             }
             IPRAssignmentPattern::Tuple(t) => {
@@ -231,8 +230,12 @@ impl AssignmentSimplifier {
 
                 let mut res = vec![temp];
                 for (index, assignee) in t.into_iter().enumerate() {
-                    let sub_init =
-                        self.synthesize_unpacking_tuple_item(assignee, ident_expr.clone(), index);
+                    let referrant_id = self.next_id();
+                    let sub_init = self.synthesize_unpacking_tuple_item(
+                        assignee,
+                        ident_expr.clone().with_id(referrant_id),
+                        index,
+                    );
 
                     let recursive_unpacked = self.expand_packed_init(sub_init);
                     res.extend(recursive_unpacked)

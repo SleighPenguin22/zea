@@ -1,9 +1,12 @@
 #![allow(clippy::new_without_default)]
+use std::collections::HashSet;
 use std::ops::BitAnd;
 
 use crate::traits::StructuralEq;
 use crate::zea::visitors::{
-    IPRVisitor, walk_block, walk_expr, walk_initblock, walk_mut_funcdef, walk_unpacked_init,
+    IPRVisitor, walk_block, walk_branch, walk_call, walk_expr, walk_funcdef, walk_funcparam,
+    walk_initblock, walk_module, walk_mut_funcdef, walk_reassignment, walk_stmt, walk_structdef,
+    walk_unpacked_init,
 };
 use crate::zea::{NodeId, ZeaNodeQuery, ipr::*};
 use arbitrary::Arbitrary;
@@ -205,29 +208,105 @@ impl ScopeAnnotations {
     }
 }
 
-/// This visitor will be called after each of the expansion-visitors
-/// to ensure a correct AST before moving on to static analysis.
-pub struct ASTValidator {}
-pub enum SemanticASTViolation<'ast> {
-    UntypedGlobalVar(&'ast IPRInitializationBlock),
-    UnexpandedBlock(&'ast IPRStatement),
-    StrayPackedAssignment(&'ast IPRPackedInitialization),
+/// this visitor checks that each node has a unique ID, upon finding a duplicate ID, it will return that ID.
+#[derive(Default)]
+pub struct IPRHasUniqueIDs {
+    found: HashSet<NodeId>,
+    duplicates: HashSet<NodeId>,
 }
-impl ASTValidator {
-    pub fn blocks_expanded_in_module(module: &IPRModule) -> Result<(), NodeId> {
-        let mut validator = Self {};
-        validator.visit_module(module)
+impl IPRHasUniqueIDs {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    fn add(&mut self, id: NodeId) -> Result<(), NodeId> {
+        if self.found.contains(&id) {
+            self.duplicates.insert(id);
+            Err(id)
+        } else {
+            self.found.insert(id);
+            Ok(())
+        }
+    }
+    pub fn reset(&mut self) {
+        self.found.clear();
+        self.duplicates.clear();
     }
 }
 
-impl IPRVisitor for ASTValidator {
+impl IPRVisitor for IPRHasUniqueIDs {
     type VisitorOk = ();
     type VisitorError = NodeId;
+    fn visit_expr(&mut self, expr: &IPRExpression) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(expr.id)?;
+        walk_expr(self, expr)
+    }
+    fn visit_stmt(&mut self, stmt: &IPRStatement) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(stmt.id)?;
+        walk_stmt(self, stmt)
+    }
+    fn visit_branch(&mut self, branch: &IPRBranch) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(branch.id)?;
+        walk_branch(self, branch)
+    }
+    fn visit_call(
+        &mut self,
+        call: &IPRFunctionCall,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(call.id)?;
+        walk_call(self, call)
+    }
     fn visit_block(
         &mut self,
         block: &IPRBlockExpression,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(block.id)?;
         walk_block(self, block)
+    }
+    fn visit_initblock(
+        &mut self,
+        init: &IPRInitializationBlock,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(init.id)?;
+        walk_initblock(self, init)
+    }
+    fn visit_init(
+        &mut self,
+        init: &IPRSimpleInitialization,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(init.id)?;
+        walk_unpacked_init(self, init)
+    }
+    fn visit_reassignment(
+        &mut self,
+        reinit: &IPRReassignment,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(reinit.id)?;
+        walk_reassignment(self, reinit)
+    }
+    fn visit_module(&mut self, module: &IPRModule) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(module.id)?;
+        walk_module(self, module)
+    }
+    fn visit_funcdef(
+        &mut self,
+        funcdef: &IPRFunction,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(funcdef.id)?;
+        walk_funcdef(self, funcdef)
+    }
+    fn visit_funcparam(
+        &mut self,
+        param: &IPRFuncParam,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(param.id)?;
+        walk_funcparam(self, param)
+    }
+    fn visit_structdef(
+        &mut self,
+        structdef: &IPRStructDataTypeDefinition,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
+        self.add(structdef.id)?;
+        walk_structdef(self, structdef)
     }
 }
 

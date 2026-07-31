@@ -19,7 +19,7 @@ features = ["derive"]
 
 [[bin]]
 name = "label_ast_nodes"
-path = "fuzz_targets/label_ast_nodes"
+path = "fuzz_targets/label_ast_nodes.rs"
 test = false
 doc = false
 bench = false

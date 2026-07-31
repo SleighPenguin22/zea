@@ -559,11 +559,10 @@ fn walk_mut_packed_init<V: IPRTransfomer>(
     init: &mut IPRPackedInitialization,
 ) -> Result<V::TransformerOk, V::TransformerError> {
     v.visit_assignment_pattern(&mut init.assignee)?;
-    v.visit_expr(&mut init.value)?;
     if let Some(t) = &mut init.typ {
         v.visit_type(t)?;
     }
-    Ok(V::TransformerOk::default())
+    v.visit_expr(&mut init.value)
 }
 
 fn walk_mut_punpacked_init<V: IPRTransfomer>(
@@ -581,11 +580,10 @@ fn walk_mut_unpacked_init<V: IPRTransfomer>(
     v: &mut V,
     init: &mut IPRSimpleInitialization,
 ) -> Result<V::TransformerOk, V::TransformerError> {
-    v.visit_expr(&mut init.value)?;
     if let Some(t) = &mut init.typ {
         v.visit_type(t)?;
     }
-    Ok(V::TransformerOk::default())
+    v.visit_expr(&mut init.value)
 }
 
 fn walk_mut_initblock<V: IPRTransfomer>(

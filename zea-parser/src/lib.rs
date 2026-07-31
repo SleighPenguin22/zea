@@ -14,8 +14,6 @@ pub use parser::ModParser as ModuleParser;
 use std::process::exit;
 use zea_ipr::zea::BareNodeLabeler;
 
-use zea_ipr::zea::visitors::annotating::SemanticASTViolation;
-
 pub use lalrpop_util::ParseError;
 use zea_ipr::zea::ipr::*;
 use zea_ipr::zea::visitors::IPRTransfomer;
