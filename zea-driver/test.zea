@@ -1,7 +1,0 @@
-module main
-
-
-a := true;
-b:= false;
-
-fn main() -> U8 { 67}

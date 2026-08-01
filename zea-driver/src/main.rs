@@ -39,7 +39,8 @@ fn invoke_asm(ccfg: &CompilerConfig, module: &THRModule, asm_path: &Path) -> Pat
     if !status.success()
         && let Some(code) = status.code()
     {
-        error!("GCC returned error code {code}");
+        error!("GCC returned error code {code}, exiting...");
+        exit(code)
     }
     trace!("saved compiled binary to {}", out_path.display());
     out_path
@@ -63,7 +64,8 @@ fn invoke_qbe(ccfg: &CompilerConfig, module: &THRModule, qbe_path: &Path) -> Pat
     if !status.success()
         && let Some(code) = status.code()
     {
-        error!("QBE returned error code {code}");
+        error!("QBE returned error code {code}, exiting...");
+        exit(code)
     }
     trace!("saved compiled QBE module assembly to {}", path.display());
     path
