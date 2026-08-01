@@ -323,7 +323,7 @@ pub struct NotInScopeError {
     scope_stack_top: BlockScopeIndex,
 }
 
-impl ZeaError for NotInScopeError {
+impl<'m> ZeaError<'m> for NotInScopeError {
     type ErrContext = (IdentifierScoper, IPRModule);
     fn zea_error_format(&self, ctx: &Self::ErrContext) -> String {
         let (scope_ctx, _module) = ctx;

@@ -9,15 +9,18 @@ use zea_ipr::{
             FloatWidth, IntegerWidth, THRBlock, THRExpression, THRFunction, THRModule,
             THRStatement, THRSymbol, THRTypeSpecifier,
         },
+        visitors::annotating::SymbolKind,
     },
 };
 #[derive(Copy, Clone, Debug, PartialEq, Eq, InternKey)]
 pub struct QBETypeID(u32);
 
+#[derive(Debug)]
 pub struct THRtoQBE<'m> {
     thr_module: &'m THRModule,
     types: InternTable<QBETypeID, Q::Type>,
     temp_generator: usize,
+    block_label_generator: usize,
 }
 #[allow(unused)]
 struct BlockContext<'b> {
@@ -37,6 +40,7 @@ impl<'m> THRtoQBE<'m> {
             thr_module: module,
             types: InternTable::new(),
             temp_generator: 0,
+            block_label_generator: 0,
         }
     }
 
@@ -67,8 +71,11 @@ impl<'m> THRtoQBE<'m> {
                 let value = self.thr_module.get_expr(*expr);
                 self.emit_stmt_init(bctx, symb, typ, value);
             }
-            THRStatement::Jmp(_thrblock_id) => {
-                todo!()
+            THRStatement::Jmp(b) => {
+                let b = self.thr_module.get_block(*b);
+                let label = self.fresh_blocklabel(bctx);
+                bctx.sig.add_instr(Q::Instr::Jmp(label.clone()));
+                self.emit_block(bctx, b, &label);
             }
             THRStatement::Ret(e) => {
                 let expr = self.thr_module.get_expr(*e);
@@ -99,7 +106,7 @@ impl<'m> THRtoQBE<'m> {
             }
             _ => {
                 let q_typ = self.emit_lvalue_type_and_get(typ);
-                let temp = self.fresh_temporary(&symb.name);
+                let temp = Q::Value::Temporary(self.disambiguate_nonglobal_symbol(bctx, symb));
                 bctx.sig
                     .assign_instr(temp.clone(), q_typ, Q::Instr::Copy(q_val));
                 Some(temp)
@@ -107,7 +114,7 @@ impl<'m> THRtoQBE<'m> {
         }
     }
     /// Recursively emit instructions necessary to compute the given expression, then return the temporary it is saved to.
-    fn emit_expr(&mut self, _bctx: &mut BlockContext, expr: &THRExpression) -> Q::Value {
+    fn emit_expr(&mut self, bctx: &mut BlockContext, expr: &THRExpression) -> Q::Value {
         match expr {
             THRExpression::ConstInt(lit_i) => Q::Value::Const(lit_i.value),
             THRExpression::ConstFloat(lit_f) => Q::Value::Const(lit_f.value.to_bits()),
@@ -115,10 +122,14 @@ impl<'m> THRtoQBE<'m> {
             THRExpression::Binop(_op, _l, _r) => {
                 let l = self.thr_module.get_expr(*_l);
                 let r = self.thr_module.get_expr(*_r);
-                self.emit_expr_binop(_bctx, *_op, l, r)
+                self.emit_expr_binop(bctx, *_op, l, r)
             }
             THRExpression::Unop(..) => todo!(),
-            THRExpression::Ident(_) => todo!(),
+            THRExpression::Ident(i) => {
+                let symbol = self.thr_module.get_symbol(*i);
+                let disamb = self.disambiguate_nonglobal_symbol(bctx, symbol);
+                Q::Value::Temporary(disamb)
+            }
         }
     }
     /// Recursively emit instructions necessary to compute the given binary expression, then return the temporary it is saved to.
@@ -218,10 +229,49 @@ impl<'m> THRtoQBE<'m> {
     }
 
     fn fresh_temporary(&mut self, name: &str) -> Q::Value {
-        let temp = Q::Value::Temporary(format!("_{}_{name}", self.temp_generator));
+        let temp = Q::Value::Temporary(format!("t{}_{name}", self.temp_generator));
         self.temp_generator += 1;
         temp
     }
+    fn fresh_blocklabel(&mut self, bctx: &BlockContext) -> String {
+        let temp = format!(
+            "{}B{}",
+            self.get_module_func_prefix(bctx),
+            self.block_label_generator
+        );
+        self.block_label_generator += 1;
+        temp
+    }
+
+    fn get_module_func_prefix(&self, bctx: &BlockContext) -> String {
+        format!("{}_{}_", self.thr_module.name, bctx.sig.name)
+    }
+    fn disambiguate_nonglobal_symbol(&self, bctx: &BlockContext, ident: &THRSymbol) -> String {
+        let prefix = self.get_module_func_prefix(bctx);
+        let demangle = match ident.kind {
+            SymbolKind::LocalVar => "local_",
+            SymbolKind::GlobalVar => "global_",
+            SymbolKind::FunctionName => "func_",
+            SymbolKind::FunctionParam => "param_",
+            SymbolKind::ImportItem => todo!(),
+        };
+
+        format!("{prefix}{demangle}{}", ident.name)
+    }
+    fn disambiguate_global_symbol(&self, ident: &THRSymbol) -> String {
+        let prefix = self.get_module_prefix();
+        let demangle = match ident.kind {
+            SymbolKind::GlobalVar => "global_",
+            SymbolKind::FunctionName => "func_",
+            SymbolKind::ImportItem => todo!(),
+            _ => unreachable!(
+                "only funcnames and globals can be disambiguated without a block context"
+            ),
+        };
+
+        format!("{prefix}{demangle}{}", ident.name)
+    }
+
     #[allow(unused)]
     fn fresh_prelude_block(&mut self) -> Q::Block {
         let label = format!("_{}_predule", self.temp_generator);
@@ -236,7 +286,8 @@ impl<'m> THRtoQBE<'m> {
         let THRStatement::Init(decl, val) = stmt else {
             unreachable!("global statement must be an init");
         };
-        let name = self.thr_module.get_symbol(decl.symbol).name.clone();
+        let name = self.thr_module.get_symbol(decl.symbol);
+        let name = self.disambiguate_global_symbol(name);
         let thr_typ = self.thr_module.get_type(decl.typ);
         let qbe_typ_id = self.emit_lvalue_type(thr_typ);
         let align = self.thr_module.alignment_of(decl.typ);
@@ -267,9 +318,8 @@ impl<'m> THRtoQBE<'m> {
         trace!("walking function `{}`", func.name);
         let mut qbe_func = self.build_function_signature(func);
         let body = self.thr_module.get_block(func.body);
-        let _ = qbe_func.add_block(&func.name);
         let mut bctx = BlockContext::new(m, &mut qbe_func);
-        self.emit_block(&mut bctx, body);
+        self.emit_block(&mut bctx, body, &func.name);
         m.add_function(qbe_func);
     }
     fn build_function_signature(&mut self, func: &THRFunction) -> Q::Function {
@@ -291,11 +341,23 @@ impl<'m> THRtoQBE<'m> {
         )
     }
 
-    fn emit_block(&mut self, bctx: &mut BlockContext, body: &THRBlock) {
+    fn emit_block(&mut self, bctx: &mut BlockContext, body: &THRBlock, label: &str) {
+        bctx.sig.add_block(label);
         for stmt in body.items.iter().copied() {
             let stmt = self.thr_module.get_statement(stmt);
             trace!("emitting block statement `{stmt:?}`");
             self.emit_stmt(bctx, stmt);
         }
+        bctx.sig
+            .blocks
+            .last_mut()
+            .unwrap()
+            .add_comment(format!("END_{label}"));
+    }
+
+    fn get_module_prefix(&self) -> String {
+        let mut s = self.thr_module.name.clone();
+        s.push('_');
+        s
     }
 }

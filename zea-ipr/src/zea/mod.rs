@@ -83,6 +83,14 @@ pub mod ipr {
                 IPRASTNode::Init(i) => i.id,
             }
         }
+
+        pub fn as_init(&self) -> Option<&IPRSimpleInitialization> {
+            if let Self::Init(v) = self {
+                Some(v)
+            } else {
+                None
+            }
+        }
     }
     impl From<IPRSimpleInitialization> for IPRASTNode {
         fn from(v: IPRSimpleInitialization) -> Self {

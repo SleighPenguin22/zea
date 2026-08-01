@@ -11,9 +11,9 @@ pub mod zea;
 pub mod traits;
 pub mod visualisation;
 
-pub trait ZeaError {
+pub trait ZeaError<'m> {
     type ErrContext;
-    fn zea_error_format(&self, ctx: &Self::ErrContext) -> String;
+    fn zea_error_format(&'m self, ctx: &'m Self::ErrContext) -> String;
 }
 
 /// An interning table generic over its key and value.
