@@ -128,7 +128,12 @@ impl<'m> THRtoQBE<'m> {
             THRExpression::Ident(i) => {
                 let symbol = self.thr_module.get_symbol(*i);
                 let disamb = self.disambiguate_nonglobal_symbol(bctx, symbol);
-                Q::Value::Temporary(disamb)
+                match symbol.kind {
+                    SymbolKind::LocalVar | SymbolKind::FunctionParam => Q::Value::Temporary(disamb),
+                    SymbolKind::GlobalVar => Q::Value::Global(disamb),
+                    SymbolKind::FunctionName => todo!(),
+                    SymbolKind::ImportItem => todo!(),
+                }
             }
         }
     }
@@ -173,7 +178,7 @@ impl<'m> THRtoQBE<'m> {
             }
             THRTypeSpecifier::Float { width } => Some(self.emit_type_float(*width)),
             THRTypeSpecifier::Pointer(_t) => Some(self.types.intern(Q::Type::Long)),
-            THRTypeSpecifier::Boolean => Some(self.types.intern(Q::Type::Word)),
+            THRTypeSpecifier::Boolean => Some(self.types.intern(Q::Type::UnsignedByte)),
             THRTypeSpecifier::Unit => None,
             THRTypeSpecifier::Never => None,
             THRTypeSpecifier::Struct { .. } => todo!(),
@@ -190,7 +195,7 @@ impl<'m> THRtoQBE<'m> {
             THRTypeSpecifier::Integer { width, signed } => self.emit_type_integer(*width, *signed),
             THRTypeSpecifier::Float { width } => self.emit_type_float(*width),
             THRTypeSpecifier::Pointer(_t) => self.types.intern(Q::Type::Long),
-            THRTypeSpecifier::Boolean => self.types.intern(Q::Type::Word),
+            THRTypeSpecifier::Boolean => self.types.intern(Q::Type::Byte),
             THRTypeSpecifier::Unit => todo!(),
             THRTypeSpecifier::Never => todo!(),
             THRTypeSpecifier::Struct {
@@ -247,12 +252,12 @@ impl<'m> THRtoQBE<'m> {
         format!("{}_{}_", self.thr_module.name, bctx.sig.name)
     }
     fn disambiguate_nonglobal_symbol(&self, bctx: &BlockContext, ident: &THRSymbol) -> String {
-        let prefix = self.get_module_func_prefix(bctx);
+        let prefix = self.get_module_prefix();
         let demangle = match ident.kind {
-            SymbolKind::LocalVar => "local_",
+            SymbolKind::LocalVar => &format!("{}_local_", bctx.sig.name),
             SymbolKind::GlobalVar => "global_",
             SymbolKind::FunctionName => "func_",
-            SymbolKind::FunctionParam => "param_",
+            SymbolKind::FunctionParam => &format!("{}_param_", bctx.sig.name),
             SymbolKind::ImportItem => todo!(),
         };
 
