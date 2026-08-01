@@ -65,16 +65,16 @@ macro_rules! internal_compiler_error {
     };
 }
 use crate::{
+    InternTable,
     zea::{
+        BinOp, UnOp,
         ipr::{
             IPRBlockExpression, IPRExpression, IPRExpressionKind, IPRFunction,
             IPRInitializationBlock, IPRInitializationKind, IPRModule, IPRSimpleInitialization,
             IPRStatement, IPRStatementKind, IPRTypeSpecifier, IPRTypedIdentifier,
         },
         visitors::{altering::IdentifierScoper, annotating::SymbolKind},
-        BinOp, UnOp,
     },
-    InternTable,
 };
 
 use super::{ipr, typecheck::IPRModuleTypeInfo};
@@ -292,11 +292,7 @@ impl THRStructLayout {
             (c, a) => {
                 if c > a {
                     let (div, rem) = div_rem(c, a);
-                    if rem != 0 {
-                        (div + 1) * a
-                    } else {
-                        div * a
-                    }
+                    if rem != 0 { (div + 1) * a } else { div * a }
                 } else {
                     a
                 }
@@ -359,11 +355,7 @@ impl NumericLiteral for u64 {
 
 impl NumericLiteral for f64 {
     fn canonical(&self) -> Self {
-        if self.is_nan() {
-            f64::NAN
-        } else {
-            *self
-        }
+        if self.is_nan() { f64::NAN } else { *self }
     }
 }
 impl NumericLiteral for bool {
@@ -592,9 +584,14 @@ impl THRInternTables {
         match &stmt.kind {
             IPRStatementKind::Initialization(init) => {
                 let ids = self.lower_init_block(ipr_ctx, init, SymbolKind::LocalVar);
-                let block = THRBlock { items: ids };
-                let block = self.blocks.intern(block);
-                THRLoweredStatement::Multiple(block)
+                if ids.len() == 1 {
+                    let id = ids[0];
+                    THRLoweredStatement::Single(id)
+                } else {
+                    let block = THRBlock { items: ids };
+                    let block = self.blocks.intern(block);
+                    THRLoweredStatement::Multiple(block)
+                }
             }
             IPRStatementKind::Reassignment(_iprreassignment) => {
                 todo!()
