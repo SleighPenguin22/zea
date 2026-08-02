@@ -211,9 +211,9 @@ pub enum IntegerWidth {
     _64 = 8,
 }
 
-impl TryFrom<usize> for IntegerWidth {
-    type Error = usize;
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+impl TryFrom<u8> for IntegerWidth {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             8 => Ok(Self::_8),
             16 => Ok(Self::_16),

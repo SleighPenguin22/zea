@@ -1,4 +1,11 @@
-use crate::zea::visitors::altering::{AssignmentSimplifier, IdentifierScoper, NodeLabeler};
+//! This module contains the visitor and transformer skeleton for IPR passes
+//!
+//! implementing a visitor is as easy as implementing the [`IPRVisitor`] trait,
+//! and then overriding any of the `visit_[node]` methods
+//! to specify behaviour when encountering a given node.
+//!
+
+use crate::zea::visitors::altering::{AssignmentExpander, IdentifierScoper, NodeLabeler};
 use crate::zea::{IPRScopedIdentifier, ipr::*};
 use std::ops::Deref;
 

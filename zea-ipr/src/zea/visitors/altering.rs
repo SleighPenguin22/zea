@@ -1,3 +1,10 @@
+//!
+//! This module contains implementations for the following transformers:
+//! - [`BareNodeLabeler`]: give each IPR node a unique label
+//! - [`AssignmentExpander`]: expand pattern-initializations into a series of simple initializations
+//! - [`IdentifierScoper`]: disambguate identifier-expression and annotate them with their binding site
+//! - [`InsertImplicitMainReturn`]: insert a return 0 inside the `main` function, if it exists
+
 #![allow(clippy::new_without_default)]
 use crate::visualisation::IndentPrint;
 use crate::zea::visitors::annotating::IPRScopedIdentifier;
@@ -11,7 +18,7 @@ use crate::{InternTable, ZeaError, impl_nodelabeler};
 use indexmap::IndexSet;
 use indexmap::set::MutableValues;
 use log::trace;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::exit;
 use zea_internal_macros::{InternKey, VariantToStr};
 
@@ -53,7 +60,7 @@ macro_rules! internal_compiler_error {
 }
 
 pub struct BareNodeLabeler {
-    label: usize,
+    label: u32,
 }
 
 impl BareNodeLabeler {
@@ -157,13 +164,13 @@ impl IPRTransfomer for BareNodeLabeler {
     }
 }
 
-pub struct AssignmentSimplifier {
-    label: usize,
+pub struct AssignmentExpander {
+    label: u32,
 }
 
-crate::impl_nodelabeler!(AssignmentSimplifier, "unpack");
+crate::impl_nodelabeler!(AssignmentExpander, "unpack");
 
-impl IPRTransfomer for AssignmentSimplifier {
+impl IPRTransfomer for AssignmentExpander {
     type TransformerError = ();
     type TransformerOk = ();
     fn visit_initblock(
@@ -180,7 +187,7 @@ impl IPRTransfomer for AssignmentSimplifier {
     }
 }
 
-impl AssignmentSimplifier {
+impl AssignmentExpander {
     pub fn new() -> Self {
         Self { label: 1 }
     }
@@ -260,7 +267,7 @@ impl BlockScopeIndex {
 /// A lexical scope within a block-like node,
 /// keeping track of all identifiers introduced within the scope
 #[derive(Eq, Hash, PartialEq, Debug)]
-pub struct BlockScope {
+pub struct BlockLikeScope {
     /// The node that created this scope; a link to a [`BlockExpression`]
     origin: NodeId,
     /// The parent scope; a link to the [`BlockScope`] of the nearest enclosing [`BlockExpression`]
@@ -279,7 +286,7 @@ enum ScopeKind {
     Global,
 }
 
-impl BlockScope {
+impl BlockLikeScope {
     pub fn from_block(block: &IPRBlockExpression, parent: BlockScopeIndex) -> Self {
         Self {
             origin: block.id,
@@ -305,14 +312,22 @@ impl BlockScope {
     }
 }
 
-/// this pass gathers all scope information within the AST,
+/// this pass builds scope information within the AST,
 /// and then replaces all occurences of Expression::UnscopedIdent with an
-/// Expression::ScopedIdent.
+/// [`IPRScopedIdentifier`]
+///
+/// These scoped identifiers contain the name, kind and origin of their symbol
+/// Important to note is that the origin is the *binding site* of the symbol,
+/// which is one of the following:
+/// - an [`IPRSimpleInitialization`]
+/// - an [`IPRFuncParam`]
+/// - an [`IPRFunction`]
+///
 pub struct IdentifierScoper {
     /// The scope-path to the currently analyzed scope
     scope_stack: Vec<BlockScopeIndex>,
     /// A set of all unique scopes within the program
-    scope_arena: InternTable<BlockScopeIndex, BlockScope>,
+    scope_arena: InternTable<BlockScopeIndex, BlockLikeScope>,
     /// map an Ident-expression to a BlockScope and the nearest enclosing block.
     node_to_scope: HashMap<NodeId, BlockScopeIndex>,
 }
@@ -327,22 +342,31 @@ impl<'m> ZeaError<'m> for NotInScopeError {
     type ErrContext = (IdentifierScoper, IPRModule);
     fn zea_error_format(&self, ctx: &Self::ErrContext) -> String {
         let (scope_ctx, _module) = ctx;
-        let origin = scope_ctx.get(self.scope_stack_top);
+        let origin = scope_ctx.get_scope(self.scope_stack_top);
         let ident = &self.ident;
         let pretty_scope_kind = scopekind_to_pretty_string(origin.kind);
-        format!(
-            "identifier `{ident}` not found within this scope\n\
-            within {pretty_scope_kind}"
-        )
+        let cur_scope = scope_ctx.current_scope().kind;
+        let in_scope = scope_ctx
+            .all_in_current_scope()
+            .into_iter()
+            .map(|i| &i.ident);
+        let mut buffer = format!(
+            "(in {cur_scope:?}): identifier `{ident}` not found within {pretty_scope_kind}, identifiers in scope:\n"
+        );
+
+        for i in in_scope {
+            buffer += &format!("- {i}\n");
+        }
+        buffer
     }
 }
 
 fn scopekind_to_pretty_string(scopekind: ScopeKind) -> &'static str {
     match scopekind {
-        ScopeKind::Function => "function",
-        ScopeKind::Block => "block",
-        ScopeKind::BranchTwig => "branch",
-        ScopeKind::Global => "global scope",
+        ScopeKind::Function => "this function",
+        ScopeKind::Block => "this block",
+        ScopeKind::BranchTwig => "this branch",
+        ScopeKind::Global => "the global scope",
     }
 }
 
@@ -386,7 +410,7 @@ impl IPRTransfomer for IdentifierScoper {
         init: &mut IPRSimpleInitialization,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         let ident = IPRScopedIdentifier::local(init.id, init.assignee.clone());
-        let cs = self.current_scope();
+        let cs = self.current_scope_mut();
         cs.add_introduction(ident);
         walk_mut_unpacked_init(self, init)?;
         Ok(())
@@ -412,23 +436,23 @@ impl IPRTransfomer for IdentifierScoper {
             };
             for init in u {
                 walk_mut_unpacked_init(self, init)?;
-                self.current_scope()
+                self.current_scope_mut()
                     .add_introduction(IPRScopedIdentifier::from_global_init(init));
             }
         }
         // Functions and imports are not considered ordered; their scope covers the whole of the module.
         for imp in module.imports.iter_mut() {
-            self.current_scope()
+            self.current_scope_mut()
                 .add_introduction(IPRScopedIdentifier::import_item(module.id, imp.clone()));
         }
 
         for func in module.functions.iter_mut() {
-            self.current_scope()
+            self.current_scope_mut()
                 .add_introduction(IPRScopedIdentifier::from_funcdef(func));
         }
 
         for func in module.functions.iter_mut() {
-            walk_mut_funcdef(self, func)?;
+            self.visit_funcdef(func)?;
         }
 
         Ok(())
@@ -438,6 +462,7 @@ impl IPRTransfomer for IdentifierScoper {
         funcdef: &mut IPRFunction,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         let scope = self.enter_scope(funcdef.body.id, ScopeKind::Function);
+        trace!("entering func {}", funcdef.name);
         for param in funcdef.params.iter() {
             scope.add_introduction(IPRScopedIdentifier::from_func_param(param));
         }
@@ -468,7 +493,6 @@ fn branch_twig_as_block(twig: &mut IPRExpression) -> Option<&mut IPRBlockExpress
 }
 
 impl IdentifierScoper {
-    const GLOBAL_SCOPE_IDX: BlockScopeIndex = BlockScopeIndex(1);
     pub fn new(module: &IPRModule) -> Self {
         let mut new = Self {
             scope_stack: Vec::with_capacity(16),
@@ -478,8 +502,8 @@ impl IdentifierScoper {
         new.build_global_scope_skeleton(module);
         new
     }
-    fn build_global_scope_skeleton(&mut self, module: &IPRModule) -> &mut BlockScope {
-        let dummy_scope = BlockScope {
+    fn build_global_scope_skeleton(&mut self, module: &IPRModule) -> &mut BlockLikeScope {
+        let dummy_scope = BlockLikeScope {
             origin: NodeId::sentinel(),
             parent: BlockScopeIndex::sentinel(),
             introductions: vec![],
@@ -487,7 +511,7 @@ impl IdentifierScoper {
             kind: ScopeKind::Global,
         };
 
-        let global_scope = BlockScope {
+        let global_scope = BlockLikeScope {
             origin: module.id,
             parent: BlockScopeIndex::sentinel(),
             introductions: vec![],
@@ -500,20 +524,20 @@ impl IdentifierScoper {
         self.scope_stack.push(global_scope_id);
         self.get_scope_mut(global_scope_id)
     }
-    fn get(&self, idx: BlockScopeIndex) -> &BlockScope {
+    fn get_scope(&self, idx: BlockScopeIndex) -> &BlockLikeScope {
         self.scope_arena
             .get_by_id(idx)
             .expect("invalid block scope index")
     }
-    fn get_scope_mut(&mut self, idx: BlockScopeIndex) -> &mut BlockScope {
+    fn get_scope_mut(&mut self, idx: BlockScopeIndex) -> &mut BlockLikeScope {
         self.scope_arena
             .get_mut_by_id(idx)
             .expect("invalid block scope index")
     }
 
-    fn enter_scope(&mut self, origin: NodeId, kind: ScopeKind) -> &mut BlockScope {
+    fn enter_scope(&mut self, origin: NodeId, kind: ScopeKind) -> &mut BlockLikeScope {
         let parent = self.current_scope_idx();
-        let scope = BlockScope {
+        let scope = BlockLikeScope {
             origin,
             parent,
             introductions: Vec::with_capacity(8),
@@ -529,7 +553,14 @@ impl IdentifierScoper {
         assert!(!self.scope_stack.is_empty(), "cannot pop module scope");
         self.scope_stack.pop();
     }
-    fn current_scope(&mut self) -> &mut BlockScope {
+    fn current_scope(&self) -> &BlockLikeScope {
+        let idx = self
+            .scope_stack
+            .last()
+            .expect("scope stack should not be empty");
+        self.get_scope(*idx)
+    }
+    fn current_scope_mut(&mut self) -> &mut BlockLikeScope {
         let idx = self
             .scope_stack
             .last()
@@ -580,10 +611,19 @@ impl IdentifierScoper {
         }
         Ok(())
     }
+
+    fn all_in_current_scope(&self) -> Vec<&IPRScopedIdentifier> {
+        let mut res = Vec::with_capacity(64);
+        for scope in self.scope_stack.iter() {
+            let scope = self.get_scope(*scope);
+            res.extend(&scope.introductions);
+        }
+        res
+    }
 }
 
 pub struct InsertImplicitMainReturn {
-    label: usize,
+    label: u32,
 }
 
 impl_nodelabeler!(InsertImplicitMainReturn, "mainreturns");

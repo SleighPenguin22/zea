@@ -35,21 +35,24 @@ pub mod visitors;
 pub mod thr;
 pub mod ipr {
     use arbitrary::{Arbitrary, Unstructured};
+    use log::error;
     use std::{
         char,
         fmt::{Debug, Formatter},
         hash::{Hash, Hasher},
+        process::exit,
     };
 
     use zea_internal_macros::{ASTStructuralEq, VariantToStr};
 
     use crate::{
+        ZeaError,
         traits::StructuralEq,
         zea::{
             BareNodeLabeler, BinOp, IPRScopedIdentifier, NodeLabeler, UnOp, ZeaNodeQuery,
             visitors::{
                 IPRTransfomer, IPRVisitor,
-                altering::{AssignmentSimplifier, IdentifierScoper, InsertImplicitMainReturn},
+                altering::{AssignmentExpander, IdentifierScoper, InsertImplicitMainReturn},
             },
         },
     };
@@ -254,14 +257,17 @@ pub mod ipr {
         pub fn simplify_assignments_after(
             &mut self,
             labeler: impl NodeLabeler,
-        ) -> AssignmentSimplifier {
+        ) -> AssignmentExpander {
             self.transform_self_with(labeler).unwrap()
         }
-        pub fn scope_idents(mut self) -> (Self, IdentifierScoper) {
+        pub fn scope_idents_diverging(mut self) -> (Self, IdentifierScoper) {
             let mut scoper = IdentifierScoper::new(&self);
             match scoper.visit_module(&mut self) {
                 Ok(_) => (self, scoper),
-                Err(e) => panic!("{e:?}"),
+                Err(e) => {
+                    error!("{}", e.zea_error_format(&(scoper, self)));
+                    exit(1)
+                }
             }
         }
     }
@@ -344,6 +350,16 @@ pub mod ipr {
                     assignee,
                     value,
                 }),
+            }
+        }
+        /// Try to match the block to a single simple init
+        pub fn as_single_simple(&self) -> Option<&IPRSimpleInitialization> {
+            match self.kind {
+                IPRInitializationKind::Unpacked(ref i) => match i[..] {
+                    [ref i] => Some(i),
+                    _ => None,
+                },
+                _ => None,
             }
         }
     }
@@ -549,7 +565,6 @@ pub mod ipr {
 
     #[derive(Debug, Clone, VariantToStr, Arbitrary)]
     pub enum IPRExpressionKind {
-        // initial pass
         Unit,
         IntegerLiteral(usize),
         BoolLiteral(bool),
@@ -797,9 +812,9 @@ pub mod ipr {
         /// boolean type
         Bool,
         /// Integer type with width and sign
-        Integer { width: usize, signed: bool },
+        Integer { width: u8, signed: bool },
         /// Floating point type with width
-        Float { width: usize },
+        Float { width: u8 },
 
         /// a pointer to a memory location containing something of the inner type
         Pointer(Box<IPRTypeSpecifier>),
@@ -1279,7 +1294,7 @@ use std::hash::{Hash, Hasher};
 use zea_internal_macros::{ASTStructuralEq, VariantToStr};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
-pub struct NodeId(usize);
+pub struct NodeId(u32);
 impl<'a> Arbitrary<'a> for NodeId {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         let _ = u;
@@ -1292,7 +1307,7 @@ impl NodeId {
         Self(0)
     }
 
-    pub const fn as_usize(&self) -> usize {
+    pub const fn as_usize(&self) -> u32 {
         self.0
     }
 }

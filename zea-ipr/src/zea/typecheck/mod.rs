@@ -1,3 +1,119 @@
+//! This module contains the implementation of the type checker for the zea language
+//! The type checker operates on the IPR.
+//! When finished, a [`IPRModuleTypeInfo`] struct is returned.
+//! The following invariants hold:
+//! - every [`IPRExpression`] node is typed, and you can lookup its type by its ID.
+//! - Every [`IPRSimpleInitialization`] has its `.typ` field set to `Some(t)`,
+//!   where `t` is the inferred, or supplied type.
+//! - If the typechecker did not return an error, the supplied IPR is considered well-typed.
+//!
+//! From now on I will use TC to refer to the type checker as I am too lazy to keep writing it.
+//! ## the process of type checking
+//!
+//! Since this version of Zea does not feature generics,
+//! the TC is quite simple conceptually; It assigns each typeable-node
+//! (expressions and symbol bindings) a type variable,
+//! and then through a system of constraints and rules, solves them to some concrete type.
+//!
+//!
+//! The following inference-rules are in order:
+//!
+//! arithmetic:
+//! - An integer literal gets inferred the narrowest unsigned integer type that it fits.
+//! - The type of the result of srithmetic on integer types is the widest type of its operands
+//!   if their signs match.
+//! - An unisgned integer may be implicitly cast into a signed one,
+//!   where it will be widened if necessary; `255: U8 => 255: I16`
+//!   because `255` does not fit in `I8`.
+//! - negation converts an unsigned integer to a signed one, and keeps a signed one signed
+//! - booleans can be widened into any other integer type, where `Falsee => 0` and `True => 1`.
+//!
+//! block-like-expressions:
+//! - The type of a block is the type of its last expression (its `.tail` field)
+//! - The twigs of a branch must have the same type
+//! - The type of a branch is that of its twigs
+//!
+//!
+//!
+//! Lets walk through the type checking of the code `a := -3 + 257`
+//!
+//! We first introduce each expression:
+//!
+//! `t0: (3)`
+//! `t1: (-3)`
+//! `t2: (257)`
+//! `t3: (-3+257)`
+//! `t4: (a := -3 + 257)`
+//!
+//! You may notice the binding itself also gets assigned a variable,
+//! this is to allow the solving of referring to identifiers like `a := 3 + 257; b := a;`,
+//! as an [`IPRScopedIdentifier`] holds the id to the binding site of the symbol, not to its value.
+//!
+//! During introduction, we can already solve `t0` and `t2`
+//! - `t0` fits inside a `U8`; `t0 := U8`
+//! - `t2` does not fit inside a `U8`, but it does inside a `U16`; `t2 := U16`
+//!
+//! Then we can solve each variable in the following order:
+//! - `t1` has type `I16`, because negation converts `UN`'s into `IN`'s or `IN+1`'s; `t1 := I16`
+//! - `t3` has the widest type of its operands if their signs match
+//!     - the signs do not match; we perform an implicit sign conversion `t2 := I16`
+//!     - the sign now match; `t3 := I16`
+//! - `t4` can now be solved; `t4 := I16`
+//!
+//! You may notice some relationships between variables.
+//! The notation `t[e]` denotes the type variable assigned to the expression `e`.
+//! The notation `t[e]: T` denotes that the type variable for expression `e` has the type `T`.
+//!
+//! For any [`IPRSimpleInitialization`], it holds that
+//! `t[init] == t[init.typ] == t[init.value]`
+//!
+//! For any [`IPRBlockExpression`]: `t[block] == t[block.tail]`
+//!
+//! For any [`IPRBranch`] with an else: `t[branch] == t[branch.then] == t[branch.otherwise]`
+//! For any [`IPRBranch`] without an else: `t[branch]: Unit`
+//!
+//! For any [`IPRFunction`]: `t[func.returns] == t[func.body] == t[func.body.last]`
+//!
+//! For any statement of the form `e ;` (some semicolon terminated expression): `e; : Unit`
+//! For any call to a function `f` with definition `func`: `t[f()] == t[func.returns]`
+//!
+//! The TC uses a union-find structure for its type variables.
+//! Applying the `find` operation on a type variables returns a (possibly different) type variable.
+//! The sepcific variable returned is not really significant.
+//! What is significant however,
+//! is when two separate variables return the same variable
+//! after a `find` call (i.e. `a.find == b.find`). This means the TC considers them equal.
+//!
+//! When applying some rule specified above, it can apply `unify` to two variables `a` and `b`,
+//! This causes `a` and `b` to then be considered equal like specified above.
+//!
+//! Additionaly, the `set_solved` operation on a type variable can bind an [`InternedTypeID`] `t`
+//! to a type variable, which then causes the `get_solved` operation to return `Some(t)`.
+//! Applying `get_solved` to some type variable that is not yet bound returns `None`.
+//!
+//! Consequently, unifying two variables`a` and `b`,
+//! and solving one of them to type `t` using `set_solved`
+//! will cause both `a` and `b` to have their `get_solved` return `Some(t)`.
+//!
+//! The TC inference mechanism features two main categories of functions:
+//! - `introduce_[node]`
+//! - `infer_[node]`
+//!
+//! The `introduce_` family of functions has the following job:
+//! - Assign each expression and binding site in the IPR a type variable and add it to the `node_variables` map
+//! - Intern any type that is mentioned in the code
+//! - solve the type variables of any trivially solvable expression (literals mostly)
+//!
+//! The `infer_` functions then walk the tree and attempt to solve the type
+//! of the given expression using the available information.
+//!
+//! Any solved expression is added to the `node_types` map,
+//! which maps an Expression- or Binding-site's ID to an [`InternedTypeID`].
+//! The `type_interning_table` is used to map an intern-id to an [`IPRTypespecifier`].
+//!
+//! When all variables in the `node_variables` map are bound, type checking is done,
+//! the `node_types` and `type_interining_table` are then extracted into a [`IPRModuleTypeInfo`]
+//!
 use std::{
     arch::x86_64::_SIDD_MASKED_NEGATIVE_POLARITY, collections::HashMap, hash::DefaultHasher,
     ops::ControlFlow, process::exit, thread::sleep, time::Duration,
@@ -16,7 +132,7 @@ pub fn typecheck_module(module: &mut IPRModule) -> IPRModuleTypeInfo {
     let mut tc = ZeaTypeChecker::new();
     tc.introduce_module(module)
         .expect("error introducing module");
-    tc.check_module(module)
+    tc.check_module_panicking(module)
 }
 
 const BUILTIN_SCALAR_TYPES: [IPRTypeSpecifier; 10] = [
@@ -136,12 +252,19 @@ impl TypeVariableInterningTable {
     /// let mut table = Self::new();
     /// let t1 = table.fresh_var();
     /// let t2 = table.fresh_var();
+    ///
     /// // t1->t2
     /// table.union(t1, t2);
+    ///
     /// let t2 = table.fresh_var;
+    ///
     /// // t1->t2->t3
     /// table.union(t2, t3);
     ///
+    /// // t3 <- t2
+    /// // /\
+    /// // |
+    /// // t1
     /// table.compress_paths();
     ///
     /// for t in table.typevar_disjoint_set.iter() {
@@ -166,7 +289,7 @@ impl TypeVariableInterningTable {
         }
         Ok(())
     }
-
+    /// follow some index to its representative, and count how many steps where needed to get there
     fn follow_with_path_length(&self, t: usize) -> (usize, usize) {
         let mut t_id = t;
         let mut path_length = 0;
@@ -189,9 +312,10 @@ impl TypeVariableInterningTable {
             .find_map(|(k, v)| (*v == interned_type).then_some(k))
             .copied()
             // otherwise create a dummy type variable that immediatly gets that type
-            .unwrap_or_else(|| self.generate_dummy_variable_with_type(interned_type))
+            .unwrap_or_else(|| self.fresh_solved(interned_type))
     }
-    fn generate_dummy_variable_with_type(&mut self, interned_type: InternedTypeId) -> TypeVariable {
+    /// Generate a fresh variable and immediatly solve it to the supplied type
+    fn fresh_solved(&mut self, interned_type: InternedTypeId) -> TypeVariable {
         trace!("\tsynthesizing type variable for interned type {interned_type:?}");
         let t_var = self.fresh_var();
         let _ = self.set_solved(t_var, interned_type);
@@ -206,7 +330,7 @@ impl TypeVariableInterningTable {
         variable: TypeVariable,
         to: InternedTypeId,
     ) -> Result<(), TypeCheckError> {
-        self.compress_paths()?;
+        let variable = self.follow_var(variable);
         self.solved_variables.insert(variable, to);
         Ok(())
     }
@@ -216,7 +340,7 @@ impl TypeVariableInterningTable {
         let typevar = self.follow_var(typevar);
         self.solved_variables.get(&typevar).cloned()
     }
-
+    /// Return all unique representatives in the table
     pub fn disjoint_typevars(&self) -> IndexSet<TypeVariable> {
         let mut res = IndexSet::new();
 
@@ -242,19 +366,20 @@ impl TypeInterningTable {
     pub fn with_builtin_types() -> Self {
         let mut new = Self::new();
         for t in BUILTIN_SCALAR_TYPES.iter() {
-            new.introduce(t);
+            new.intern(t);
         }
         new
     }
 
     /// introduce some type into the table, generating an id associated with that specifier.
     /// If the type was already introduced, return its id
-    pub fn introduce(&mut self, typ: &IPRTypeSpecifier) -> InternedTypeId {
+    pub fn intern(&mut self, typ: &IPRTypeSpecifier) -> InternedTypeId {
         self.interned_types.intern(typ.clone())
     }
 
     /// try to lookup some [`TypeSpecifier`] by its associated ID
     /// Returns [`TypeCheckError::MissingInternedType`] if the id is not present in the table
+    /// (was not `intern()`'ed)
     pub fn get_specifier_by_id(
         &self,
         id: InternedTypeId,
@@ -284,13 +409,10 @@ pub enum IllegalTypeCoercionKind {
     PointerCast,
 }
 
-struct ZeaTypeChecker {
-    type_interning_table: TypeInterningTable,
-    typevar_interning_table: TypeVariableInterningTable,
-    node_variables: HashMap<NodeId, TypeVariable>,
-    node_types: HashMap<NodeId, InternedTypeId>,
-}
-
+/// A struct which provides a way to lookup the type of:
+/// - [`IPRExpression`]
+/// - [`IPRFuncParams`]
+/// - [`IPRSimpleINitialization`]
 pub struct IPRModuleTypeInfo {
     type_interning_table: InternTable<InternedTypeId, IPRTypeSpecifier>,
     node_types: HashMap<NodeId, InternedTypeId>,
@@ -324,7 +446,7 @@ macro_rules! coercion_rule_widen {
 
 impl<'m> ZeaError<'m> for TypeCheckError {
     type ErrContext = ZeaTypeChecker;
-    fn zea_error_format(&'m self, ctx: &Self::ErrContext) -> String {
+    fn zea_error_format(&'m self, ctx: &'m Self::ErrContext) -> String {
         match self {
             Self::IllegalTypeCoercion(a, b, kind) => {
                 let t_a = ctx.type_interning_table.get_specifier_by_id(*a).unwrap();
@@ -342,6 +464,16 @@ impl<'m> ZeaError<'m> for TypeCheckError {
     }
 }
 
+struct ZeaTypeChecker {
+    type_interning_table: TypeInterningTable,
+    typevar_interning_table: TypeVariableInterningTable,
+    node_variables: HashMap<NodeId, TypeVariable>,
+    node_types: HashMap<NodeId, InternedTypeId>,
+}
+
+// ================================================================================================
+// util
+// ================================================================================================
 impl ZeaTypeChecker {
     pub fn new() -> Self {
         Self {
@@ -355,75 +487,6 @@ impl ZeaTypeChecker {
     pub fn finish(self) -> IPRModuleTypeInfo {
         self.into()
     }
-
-    pub fn inner_check_module(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
-        self.introduce_module(module)?;
-        let (_solved, frac, vars_solved, vars_total) = self.all_vars_solved();
-        trace!("\tinitially solved {frac}% ({vars_solved} of {vars_total}) of typevars");
-        while self.check_module_once(module).is_ok() {
-            let (solved, frac, vars_solved, vars_total) = self.all_vars_solved();
-            trace!("\tsolved {frac}% ({vars_solved} of {vars_total}) of typevars");
-            if solved {
-                self.check_module_once(module)?;
-                break;
-            }
-            sleep(Duration::from_millis(300));
-        }
-        Ok(())
-    }
-    pub fn check_module(mut self, module: &mut IPRModule) -> IPRModuleTypeInfo {
-        match self.inner_check_module(module) {
-            Ok(_) => {}
-            Err(_) => {
-                error!("exiting...");
-                exit(1)
-            }
-        }
-        self.finish()
-    }
-    fn check_module_once(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
-        for glob in module.global_vars.iter_mut() {
-            match self.check_assignment(glob) {
-                Ok(_) => {}
-                Err(TypeCheckError::ExpectedSolvedTypeVariable(t)) => {
-                    trace!("\tinsufficient information to solve type variable {t:?}, moving on...");
-                }
-                Err(other) => {
-                    error!("TYPE ERROR: {}", other.zea_error_format(self));
-                    return Err(other);
-                }
-            }
-        }
-
-        for f in module.functions.iter_mut() {
-            match self.check_function(f) {
-                Ok(_) => {}
-                Err(TypeCheckError::ExpectedSolvedTypeVariable(t)) => {
-                    trace!("\tinsufficient information to solve type variable {t:?}, moving on...");
-                }
-                Err(other) => {
-                    error!("{}", other.zea_error_format(self));
-                    return Err(other);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn all_vars_solved(&self) -> (bool, f64, usize, usize) {
-        let disj_typevars = self.typevar_interning_table.disjoint_typevars();
-        let mut vars_solved = 0;
-        let vars_total = disj_typevars.len();
-        for t in disj_typevars.iter() {
-            if self.typevar_interning_table.get_solved(*t).is_some() {
-                vars_solved += 1;
-            }
-        }
-        let frac = (vars_solved as f64 / vars_total as f64) * 100.0;
-        (vars_solved == vars_total, frac, vars_solved, vars_total)
-    }
-
     /// Get the type variable associated with some expression node,
     /// or generate it if it does not yet exist
     fn get_inference_id(&mut self, id: NodeId) -> &mut TypeVariable {
@@ -431,94 +494,41 @@ impl ZeaTypeChecker {
             .entry(id)
             .or_insert_with(|| self.typevar_interning_table.fresh_var())
     }
-    fn solve_to_type(
+
+    /// Solve some type variable to a given type specifier
+    fn set_solved_typespec(
         &mut self,
         inf_var: TypeVariable,
         typ: &IPRTypeSpecifier,
     ) -> Result<(), TypeCheckError> {
-        let t_id = self.type_interning_table.introduce(typ);
+        let t_id = self.type_interning_table.intern(typ);
         trace!("\tsolving type variable {inf_var:?} of literal to type {typ:?}");
-        let _ = self.typevar_interning_table.set_solved(inf_var, t_id);
+        self.typevar_interning_table.set_solved(inf_var, t_id)?;
         Ok(())
     }
 
-    fn introduce_assignment(&mut self, assigment: &IPRInitializationBlock) {
-        let IPRInitializationKind::Unpacked(inits) = &assigment.kind else {
-            unreachable!("initializations should be unpacked before typechecks")
-        };
-        for init in inits.iter() {
-            self.introduce_simple_assignment(init);
-        }
-    }
-    fn introduce_simple_assignment(&mut self, assignment: &IPRSimpleInitialization) {
-        if let Some(t) = &assignment.typ {
-            let _ = self.type_interning_table.introduce(t);
-        }
-        let _ = *self.get_inference_id(assignment.id);
-        self.introduce_expression(&assignment.value);
+    fn get_solved_typespec(
+        &self,
+        inf_var: TypeVariable,
+    ) -> Result<&IPRTypeSpecifier, TypeCheckError> {
+        let solved = self
+            .typevar_interning_table
+            .get_solved(inf_var)
+            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(inf_var))?;
+        self.type_interning_table.get_specifier_by_id(solved)
     }
 
-    fn introduce_expression(&mut self, expr: &IPRExpression) {
-        let inf_var = *self.get_inference_id(expr.id);
-        match &expr.kind {
-            IPRExpressionKind::Unit => {
-                self.solve_to_type(inf_var, &IPRTypeSpecifier::Unit)
-                    .expect("unit literal should solve just fine...");
-                let t_unit = self.type_interning_table.introduce(&IPRTypeSpecifier::Unit);
-                self.node_types.insert(expr.id, t_unit);
-            }
-            IPRExpressionKind::IntegerLiteral(i) => {
-                let typ = narrowest_int_type(*i);
-                let typ_id = self.type_interning_table.introduce(&typ);
-                self.solve_to_type(inf_var, &typ)
-                    .expect("integer literals should solve just fine...");
-                self.node_types.insert(expr.id, typ_id);
-            }
-            IPRExpressionKind::BoolLiteral(_) => {
-                let t_bool = self.type_interning_table.introduce(&IPRTypeSpecifier::Bool);
-                self.solve_to_type(inf_var, &IPRTypeSpecifier::Bool)
-                    .expect("boolean literal should solve just fine...");
-                self.node_types.insert(expr.id, t_bool);
-            }
-            IPRExpressionKind::FloatLiteral(_) => {
-                self.solve_to_type(inf_var, &IPRTypeSpecifier::t_F64())
-                    .expect("float literal should solve just fine...");
-            }
-            IPRExpressionKind::StringLiteral(_) => todo!(),
-            IPRExpressionKind::UnScopedIdent(_) => {
-                unreachable!("identifiers should be scoped before type checking")
-            }
-            IPRExpressionKind::ScopedIdent(_) => {}
-            IPRExpressionKind::FunctionCall(_) => todo!(),
-            IPRExpressionKind::BinOpExpr(_, l, r) => {
-                self.introduce_expression(l.as_ref());
-                self.introduce_expression(r.as_ref());
-            }
-            IPRExpressionKind::UnOpExpr(_, arg) => {
-                self.introduce_expression(arg.as_ref());
-            }
-            IPRExpressionKind::MemberAccess(_, _) => todo!(),
-            IPRExpressionKind::IfThenElse(_) => todo!(),
-            IPRExpressionKind::Block(b) => {
-                for stmt in b.statements.iter() {
-                    self.introduce_stmt(stmt);
-                }
-                self.introduce_expression(&b.tail);
-            }
-        }
+    fn get_bool_tvar(&mut self) -> TypeVariable {
+        self.type_interning_table
+            .intern(&IPRTypeSpecifier::Bool)
+            .as_typevar(&mut self.typevar_interning_table)
     }
 
-    fn introduce_module(&mut self, module: &IPRModule) -> Result<(), TypeCheckError> {
-        for glob in module.global_vars.iter() {
-            self.introduce_assignment(glob);
-        }
-        for f in module.functions.iter() {
-            self.introduce_function(f);
-        }
-
-        Ok(())
+    fn get_u64_tvar(&mut self) -> TypeVariable {
+        self.type_interning_table
+            .intern(&IPRTypeSpecifier::t_U64())
+            .as_typevar(&mut self.typevar_interning_table)
     }
-
     fn hindley_milner_unify(
         &mut self,
         a: TypeVariable,
@@ -622,17 +632,92 @@ impl ZeaTypeChecker {
             _ => Err(IllegalTypeCoercionKind::InconvertibleTypes),
         }
     }
+}
 
-    fn check_function(&mut self, f: &mut IPRFunction) -> Result<(), TypeCheckError> {
-        trace!("checking function `{}`", f.name);
-        let body_returns = self.check_block(&mut f.body)?;
-        let signature_expects = &f.returns;
-        let ret_typ = self.type_interning_table.introduce(signature_expects);
-        let ret_tvar = ret_typ.as_typevar(&mut self.typevar_interning_table);
-        self.hindley_milner_unify(body_returns, ret_tvar)?;
+// ================================================================================================
+// introduce_ methods
+// ================================================================================================
+impl ZeaTypeChecker {
+    /// recursively generate typevars for the given assignment block
+    fn introduce_assignment_block(&mut self, assigment: &IPRInitializationBlock) {
+        let IPRInitializationKind::Unpacked(inits) = &assigment.kind else {
+            unreachable!("initializations should be unpacked before typechecks")
+        };
+        for init in inits.iter() {
+            self.introduce_assignment(init);
+        }
+    }
+
+    /// recursively generate typevars for the assignments's symbol and its value
+    fn introduce_assignment(&mut self, init: &IPRSimpleInitialization) {
+        if let Some(t) = &init.typ {
+            let _ = self.type_interning_table.intern(t);
+        }
+        let _ = *self.get_inference_id(init.id);
+        self.introduce_expression(&init.value);
+    }
+
+    fn introduce_expression(&mut self, expr: &IPRExpression) {
+        let inf_var = *self.get_inference_id(expr.id);
+        match &expr.kind {
+            IPRExpressionKind::Unit => {
+                self.set_solved_typespec(inf_var, &IPRTypeSpecifier::Unit)
+                    .expect("unit literal should solve just fine...");
+                let t_unit = self.type_interning_table.intern(&IPRTypeSpecifier::Unit);
+                self.node_types.insert(expr.id, t_unit);
+            }
+            IPRExpressionKind::IntegerLiteral(i) => {
+                let typ = narrowest_int_type(*i);
+                let typ_id = self.type_interning_table.intern(&typ);
+                self.set_solved_typespec(inf_var, &typ)
+                    .expect("integer literals should solve just fine...");
+                self.node_types.insert(expr.id, typ_id);
+            }
+            IPRExpressionKind::BoolLiteral(_) => {
+                let t_bool = self.type_interning_table.intern(&IPRTypeSpecifier::Bool);
+                self.set_solved_typespec(inf_var, &IPRTypeSpecifier::Bool)
+                    .expect("boolean literal should solve just fine...");
+                self.node_types.insert(expr.id, t_bool);
+            }
+            IPRExpressionKind::FloatLiteral(_) => {
+                self.set_solved_typespec(inf_var, &IPRTypeSpecifier::t_F64())
+                    .expect("float literal should solve just fine...");
+            }
+            IPRExpressionKind::StringLiteral(_) => todo!(),
+            IPRExpressionKind::UnScopedIdent(_) => {
+                unreachable!("identifiers should be scoped before type checking")
+            }
+            IPRExpressionKind::ScopedIdent(_) => {}
+            IPRExpressionKind::FunctionCall(_) => todo!(),
+            IPRExpressionKind::BinOpExpr(_, l, r) => {
+                self.introduce_expression(l.as_ref());
+                self.introduce_expression(r.as_ref());
+            }
+            IPRExpressionKind::UnOpExpr(_, arg) => {
+                self.introduce_expression(arg.as_ref());
+            }
+            IPRExpressionKind::MemberAccess(_, _) => todo!(),
+            IPRExpressionKind::IfThenElse(_) => todo!(),
+            IPRExpressionKind::Block(b) => {
+                for stmt in b.statements.iter() {
+                    self.introduce_stmt(stmt);
+                }
+                self.introduce_expression(&b.tail);
+            }
+        }
+    }
+
+    fn introduce_module(&mut self, module: &IPRModule) -> Result<(), TypeCheckError> {
+        for glob in module.global_vars.iter() {
+            self.introduce_assignment_block(glob);
+        }
+        for f in module.functions.iter() {
+            self.introduce_function(f);
+        }
 
         Ok(())
     }
+
     fn introduce_block(&mut self, b: &IPRBlockExpression) {
         let _ = *self.get_inference_id(b.id);
         for s in b.statements.iter() {
@@ -640,43 +725,9 @@ impl ZeaTypeChecker {
         }
         self.introduce_expression(&b.tail);
     }
-
-    fn check_block(
-        &mut self,
-        body: &mut IPRBlockExpression,
-    ) -> Result<TypeVariable, TypeCheckError> {
-        let tvar_block = *self.get_inference_id(body.id);
-        for stmt in body.statements.iter_mut() {
-            self.check_stmt(stmt)?;
-        }
-        let tvar = self.infer_expression(&body.tail)?;
-        let block_rets = self
-            .typevar_interning_table
-            .get_solved(tvar)
-            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(tvar))?;
-        self.hindley_milner_unify(tvar_block, tvar)?;
-        self.node_types.insert(body.id, block_rets);
-        self.node_types.insert(body.tail.id, block_rets);
-        Ok(tvar)
-    }
-
-    fn check_stmt(&mut self, stmt: &mut IPRStatement) -> Result<(), TypeCheckError> {
-        match &mut stmt.kind {
-            IPRStatementKind::Initialization(i) => {
-                self.check_assignment(i)?;
-            }
-            IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
-            IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
-            IPRStatementKind::Return(_iprexpression) => todo!(),
-            IPRStatementKind::Block(_iprblock_expression) => todo!(),
-            IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
-        }
-        Ok(())
-    }
-
     fn introduce_stmt(&mut self, s: &IPRStatement) {
         match &s.kind {
-            IPRStatementKind::Initialization(i) => self.introduce_assignment(i),
+            IPRStatementKind::Initialization(i) => self.introduce_assignment_block(i),
             IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
             IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
             IPRStatementKind::Return(_iprexpression) => todo!(),
@@ -688,67 +739,22 @@ impl ZeaTypeChecker {
     fn introduce_function(&mut self, f: &IPRFunction) {
         for param in f.params.iter() {
             let IPRFuncParam { typ, id, .. } = param;
-            let t = self.type_interning_table.introduce(typ);
+            let t = self.type_interning_table.intern(typ);
+            let t_id = *self.get_inference_id(*id);
+            self.set_solved_typespec(t_id, typ)
+                .expect("cannot set-solved func param");
             self.node_types.insert(*id, t);
             todo!()
         }
-        self.type_interning_table.introduce(&f.returns);
+        self.type_interning_table.intern(&f.returns);
         self.introduce_block(&f.body);
     }
 }
 
+// ================================================================================================
+// infer_ methods
+// ================================================================================================
 impl ZeaTypeChecker {
-    fn check_assignment(
-        &mut self,
-        assign: &mut IPRInitializationBlock,
-    ) -> Result<(), TypeCheckError> {
-        let IPRInitializationKind::Unpacked(inits) = &mut assign.kind else {
-            unreachable!("inits should be unpacked before type checking");
-        };
-        for init in inits.iter_mut() {
-            trace!("\tchecking simple assigment for symbol `{}`", init.assignee);
-            self.check_simple_assignment(init)?;
-        }
-        Ok(())
-    }
-
-    fn check_simple_assignment(
-        &mut self,
-        assign: &mut IPRSimpleInitialization,
-    ) -> Result<(), TypeCheckError> {
-        if self.node_types.contains_key(&assign.id) {
-            trace!("\t\tskipping annotated initialization");
-            return Ok(());
-        }
-        let t_init = *self.get_inference_id(assign.id);
-        let t_init_value = *self.get_inference_id(assign.value.id);
-        self.hindley_milner_unify(t_init, t_init_value)?;
-
-        let t_inferred = self.infer_expression(&assign.value)?;
-        if let Some(t_actual) = &assign.typ {
-            let t_actual_id = self.type_interning_table.introduce(t_actual);
-            let t_actual_as_var = t_actual_id.as_typevar(&mut self.typevar_interning_table);
-            self.hindley_milner_unify(t_inferred, t_actual_as_var)?;
-            self.node_types.insert(assign.id, t_actual_id);
-        } else {
-            let t_conc_id = self
-                .typevar_interning_table
-                .get_solved(t_inferred)
-                .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(t_inferred))?;
-            let t_conc = self
-                .type_interning_table
-                .get_specifier_by_id(t_conc_id)?
-                .clone();
-            trace!(
-                "\tannotating symbol `{:?}` with type {:?}",
-                assign.assignee, t_conc
-            );
-            assign.typ = Some(t_conc);
-            self.node_types.insert(assign.id, t_conc_id);
-        }
-        Ok(())
-    }
-
     fn infer_expression(&mut self, expr: &IPRExpression) -> Result<TypeVariable, TypeCheckError> {
         let t_var = *self.get_inference_id(expr.id);
         if self.get_solved_typespec(t_var).is_ok() {
@@ -800,18 +806,6 @@ impl ZeaTypeChecker {
         self.node_variables.insert(expr.id, res);
         Ok(res)
     }
-
-    fn get_solved_typespec(
-        &self,
-        inf_var: TypeVariable,
-    ) -> Result<&IPRTypeSpecifier, TypeCheckError> {
-        let solved = self
-            .typevar_interning_table
-            .get_solved(inf_var)
-            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(inf_var))?;
-        self.type_interning_table.get_specifier_by_id(solved)
-    }
-
     fn infer_expr_binop(
         &mut self,
         id: NodeId,
@@ -824,8 +818,8 @@ impl ZeaTypeChecker {
         let r_var = self.infer_expression(r)?;
         let _l_t = self.get_solved_typespec(l_var)?.clone();
         let r_t = self.get_solved_typespec(r_var)?.clone();
-        let bool_t = self.bool_t();
-        let u64_t = self.u64_t();
+        let bool_t = self.get_bool_tvar();
+        let u64_t = self.get_u64_tvar();
         match op {
             BinOp::Add
             | BinOp::Sub
@@ -870,19 +864,192 @@ impl ZeaTypeChecker {
             }
         }
     }
+}
 
-    fn bool_t(&mut self) -> TypeVariable {
-        self.type_interning_table
-            .introduce(&IPRTypeSpecifier::Bool)
-            .as_typevar(&mut self.typevar_interning_table)
+// ================================================================================================
+// check_ methods
+// ================================================================================================
+impl ZeaTypeChecker {
+    pub fn check_module_panicking(mut self, module: &mut IPRModule) -> IPRModuleTypeInfo {
+        match self.check_module(module) {
+            Ok(_) => {}
+            Err(_) => {
+                error!("exiting...");
+                exit(1)
+            }
+        }
+        self.finish()
+    }
+    pub fn check_module(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
+        self.introduce_module(module)?;
+        self.trace_solved_stats();
+
+        while self.check_module_once(module).is_ok() {
+            let solved = self.trace_solved_stats();
+            if solved {
+                self.check_module_once(module)?;
+                break;
+            }
+            self.typevar_interning_table.compress_paths()?;
+        }
+        Ok(())
+    }
+    /// Iterate once over a module, inserting typespecs where possible.
+    /// Stops upon encoutering an unrecoverable error, that is, an error that is not
+    /// [`TypeCheckError::ExpectedSolvedTypeVariable`]
+    fn check_module_once(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
+        for glob in module.global_vars.iter_mut() {
+            match self.check_assignment(glob) {
+                Ok(_) => {}
+                Err(TypeCheckError::ExpectedSolvedTypeVariable(t)) => {
+                    self.trace_insufficient_info_for_solving(t);
+                }
+                Err(other) => {
+                    error!("TYPE ERROR: {}", other.zea_error_format(self));
+                    return Err(other);
+                }
+            }
+        }
+
+        for f in module.functions.iter_mut() {
+            match self.check_function(f) {
+                Ok(_) => {}
+                Err(TypeCheckError::ExpectedSolvedTypeVariable(t)) => {
+                    self.trace_insufficient_info_for_solving(t);
+                }
+                Err(other) => {
+                    error!("{}", other.zea_error_format(self));
+                    return Err(other);
+                }
+            }
+        }
+
+        Ok(())
+    }
+    fn check_function(&mut self, f: &mut IPRFunction) -> Result<(), TypeCheckError> {
+        trace!("checking function `{}`", f.name);
+        let body_returns = self.check_block(&mut f.body)?;
+        let signature_expects = &f.returns;
+        let ret_typ = self.type_interning_table.intern(signature_expects);
+        let ret_tvar = ret_typ.as_typevar(&mut self.typevar_interning_table);
+        self.hindley_milner_unify(body_returns, ret_tvar)?;
+
+        Ok(())
     }
 
-    fn u64_t(&mut self) -> TypeVariable {
-        self.type_interning_table
-            .introduce(&IPRTypeSpecifier::t_U64())
-            .as_typevar(&mut self.typevar_interning_table)
+    fn check_block(
+        &mut self,
+        body: &mut IPRBlockExpression,
+    ) -> Result<TypeVariable, TypeCheckError> {
+        let tvar_block = *self.get_inference_id(body.id);
+        for stmt in body.statements.iter_mut() {
+            self.check_stmt(stmt)?;
+        }
+        let tvar = self.infer_expression(&body.tail)?;
+        let block_rets = self
+            .typevar_interning_table
+            .get_solved(tvar)
+            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(tvar))?;
+        self.hindley_milner_unify(tvar_block, tvar)?;
+        self.node_types.insert(body.id, block_rets);
+        self.node_types.insert(body.tail.id, block_rets);
+        Ok(tvar)
     }
 
+    fn check_stmt(&mut self, stmt: &mut IPRStatement) -> Result<(), TypeCheckError> {
+        match &mut stmt.kind {
+            IPRStatementKind::Initialization(i) => {
+                self.check_assignment(i)?;
+            }
+            IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
+            IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
+            IPRStatementKind::Return(_iprexpression) => todo!(),
+            IPRStatementKind::Block(_iprblock_expression) => todo!(),
+            IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
+        }
+        Ok(())
+    }
+
+    fn check_assignment(
+        &mut self,
+        assign: &mut IPRInitializationBlock,
+    ) -> Result<(), TypeCheckError> {
+        let IPRInitializationKind::Unpacked(inits) = &mut assign.kind else {
+            unreachable!("inits should be unpacked before type checking");
+        };
+        for init in inits.iter_mut() {
+            trace!("\tchecking simple assigment for symbol `{}`", init.assignee);
+            self.check_simple_assignment(init)?;
+        }
+        Ok(())
+    }
+
+    fn check_simple_assignment(
+        &mut self,
+        assign: &mut IPRSimpleInitialization,
+    ) -> Result<(), TypeCheckError> {
+        if self.node_types.contains_key(&assign.id) {
+            trace!("\t\tskipping annotated initialization");
+            return Ok(());
+        }
+        let t_init = *self.get_inference_id(assign.id);
+        let t_init_value = *self.get_inference_id(assign.value.id);
+        self.hindley_milner_unify(t_init, t_init_value)?;
+
+        let t_inferred = self.infer_expression(&assign.value)?;
+        if let Some(t_actual) = &assign.typ {
+            let t_actual_id = self.type_interning_table.intern(t_actual);
+            let t_actual_as_var = t_actual_id.as_typevar(&mut self.typevar_interning_table);
+            self.hindley_milner_unify(t_inferred, t_actual_as_var)?;
+            self.node_types.insert(assign.id, t_actual_id);
+        } else {
+            let t_conc_id = self
+                .typevar_interning_table
+                .get_solved(t_inferred)
+                .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(t_inferred))?;
+            let t_conc = self
+                .type_interning_table
+                .get_specifier_by_id(t_conc_id)?
+                .clone();
+            trace!(
+                "\tannotating symbol `{:?}` with type {:?}",
+                assign.assignee, t_conc
+            );
+            assign.typ = Some(t_conc);
+            self.node_types.insert(assign.id, t_conc_id);
+        }
+        Ok(())
+    }
+}
+
+// ================================================================================================
+// tracing
+// ================================================================================================
+impl ZeaTypeChecker {
+    /// TRACE-print a message about having insufficient info to solve a type variable
+    fn trace_insufficient_info_for_solving(&self, t: TypeVariable) {
+        trace!("\tinsufficient information to solve type variable {t:?}, moving on...");
+    }
+    // calculate stats about solving type variables
+    fn get_solving_stats(&self) -> (bool, f64, usize, usize) {
+        let disj_typevars = self.typevar_interning_table.disjoint_typevars();
+        let mut vars_solved = 0;
+        let vars_total = disj_typevars.len();
+        for t in disj_typevars.iter() {
+            if self.typevar_interning_table.get_solved(*t).is_some() {
+                vars_solved += 1;
+            }
+        }
+        let frac = (vars_solved as f64 / vars_total as f64) * 100.0;
+        (vars_solved == vars_total, frac, vars_solved, vars_total)
+    }
+    /// TRACE-print info about the percentage of solved type variables,
+    /// and return if all of them are solved
+    fn trace_solved_stats(&self) -> bool {
+        let (solved, frac, vars_solved, vars_total) = self.get_solving_stats();
+        trace!("\tsolved {frac:.2}% ({vars_solved} of {vars_total}) of typevars");
+        solved
+    }
     fn trace_expr_typevar(&mut self, expr: &IPRExpression) {
         let var = *self.get_inference_id(expr.id);
         trace!("{var:?} for expr {expr:?}");
