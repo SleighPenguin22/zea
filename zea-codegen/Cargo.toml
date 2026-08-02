@@ -7,7 +7,7 @@ edition = "2024"
 zea-ipr = {path = "../zea-ipr"}
 zea-internal-macros = { path = "../zea-internal-macros" }
 qbe = "4.0.0"
-indexmap = "2.14.0"
+indexmap = {version = "2.14.0", features = ["rayon"]}
 log = { version = "0.4.33", features = ["std"] }
 
 [lib]

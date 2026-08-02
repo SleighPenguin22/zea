@@ -132,7 +132,7 @@ fn main() {
     let a = module.simplify_assignments_after(generator);
     module.insert_implicit_main_return(a);
 
-    let (mut module, scopes) = module.scope_idents();
+    let (mut module, scopes) = module.scope_idents_diverging();
     info!("commencing typechecking...");
     let tinfo = typecheck_module(&mut module);
     info!("finished typechecking");

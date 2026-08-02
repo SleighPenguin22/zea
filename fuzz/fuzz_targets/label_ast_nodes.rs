@@ -7,7 +7,7 @@ use zea_ipr::zea::visitors::IPRVisitor;
 use zea_ipr::{
     zea::ZeaNodeQuery,
     zea::ipr::*,
-    zea::visitors::{altering::AssignmentSimplifier, annotating::IPRHasUniqueIDs},
+    zea::visitors::{altering::AssignmentExpander, annotating::IPRHasUniqueIDs},
 };
 fuzz_target!(|data: &[u8]| {
     let mut uniques = IPRHasUniqueIDs::new();
@@ -16,7 +16,7 @@ fuzz_target!(|data: &[u8]| {
         assert!(uniques.visit_module(&m).is_ok());
         // println!("{m:?}");
         uniques.reset();
-        let res = m.transform_self_with::<AssignmentSimplifier>(label);
+        let res = m.transform_self_with::<AssignmentExpander>(label);
         assert!(res.is_ok());
         let res = uniques.visit_module(&m);
         // println!("{m:?}");

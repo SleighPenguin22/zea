@@ -30,7 +30,12 @@ impl CompilerConfig {
     }
 
     pub fn log_level(&self) -> LevelFilter {
-        self.log_level
+        let cmp = if self.print_thr || self.print_ipr {
+            LevelFilter::Info
+        } else {
+            LevelFilter::Off
+        };
+        std::cmp::max(cmp, self.log_level)
     }
 
     pub fn print_thr(&self) -> bool {
