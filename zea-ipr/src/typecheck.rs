@@ -114,19 +114,16 @@
 //! When all variables in the `node_variables` map are bound, type checking is done,
 //! the `node_types` and `type_interining_table` are then extracted into a [`IPRModuleTypeInfo`]
 //!
-use std::{
-    arch::x86_64::_SIDD_MASKED_NEGATIVE_POLARITY, collections::HashMap, hash::DefaultHasher,
-    ops::ControlFlow, process::exit, thread::sleep, time::Duration,
-};
+use std::{collections::HashMap, process::exit};
 
-use indexmap::{Equivalent, IndexMap, IndexSet, map::raw_entry_v1::RawEntryBuilderMut};
-use log::{error, info, trace};
-use zea_internal_macros::{InternKey, VariantToStr};
+use indexmap::{IndexMap, IndexSet};
+use log::{error, trace};
+use zea_internal_macros::InternKey;
 
 use crate::{
     InternTable, ZeaError,
+    ast::{BinOp, NodeId, ipr::*},
     visualisation::IndentPrint,
-    zea::{BinOp, NodeId, ZeaNodeQuery, ipr::*, visitors::annotating::SymbolKind},
 };
 pub fn typecheck_module(module: &mut IPRModule) -> IPRModuleTypeInfo {
     let mut tc = ZeaTypeChecker::new();
@@ -224,21 +221,21 @@ impl TypeVariableInterningTable {
         }
     }
 
-    fn follow_once_mut(&mut self, t: TypeVariable) -> Result<&mut usize, TypeCheckError> {
+    fn follow_once_mut(&mut self, t: TypeVariable) -> &mut usize {
         self.typevar_disjoint_set
             .get_mut(t.0)
-            .ok_or(TypeCheckError::MissingTypeVariable(t))
+            .expect("missing expected type variable")
     }
-    fn follow_once(&self, t: usize) -> Result<usize, TypeCheckError> {
+    fn follow_once(&self, t: usize) -> usize {
         self.typevar_disjoint_set
             .get(t)
             .cloned()
-            .ok_or(TypeCheckError::MissingTypeVariable(TypeVariable(t)))
+            .expect("missing expected type variable")
     }
 
     fn union(&mut self, a: TypeVariable, b: TypeVariable) -> Result<(), TypeCheckError> {
         let follow_a = self.follow_var(a);
-        let follow_a_representative = self.follow_once_mut(follow_a)?;
+        let follow_a_representative = self.follow_once_mut(follow_a);
         *follow_a_representative = b.0;
         Ok(())
     }
@@ -279,7 +276,7 @@ impl TypeVariableInterningTable {
             let (idx_repr, len) = self.follow_with_path_length(idx);
             if len > 1 {
                 let mut idx = idx;
-                let mut idx_follow = self.follow_once(idx)?;
+                let mut idx_follow = self.follow_once(idx);
                 while idx_follow != self.typevar_disjoint_set[idx_follow] {
                     self.typevar_disjoint_set[idx] = idx_repr;
                     idx = idx_follow;
@@ -380,20 +377,15 @@ impl TypeInterningTable {
     /// try to lookup some [`TypeSpecifier`] by its associated ID
     /// Returns [`TypeCheckError::MissingInternedType`] if the id is not present in the table
     /// (was not `intern()`'ed)
-    pub fn get_specifier_by_id(
-        &self,
-        id: InternedTypeId,
-    ) -> Result<&IPRTypeSpecifier, TypeCheckError> {
+    pub fn get_specifier_by_id(&self, id: InternedTypeId) -> &IPRTypeSpecifier {
         self.interned_types
             .get_by_id(id)
-            .ok_or(TypeCheckError::MissingInternedType(id))
+            .expect("missing expected type id")
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 enum TypeCheckError {
-    MissingInternedType(InternedTypeId),
-    MissingTypeVariable(TypeVariable),
     IllegalTypeCoercion(InternedTypeId, InternedTypeId, IllegalTypeCoercionKind),
     ExpectedSolvedTypeVariable(TypeVariable),
     InvalidOperands(NodeId, BinOp),
@@ -434,23 +426,13 @@ impl IPRModuleTypeInfo {
     }
 }
 
-macro_rules! coercion_rule_widen {
-    ($t_a:ident, $t_b:ident, $width_a:ident, $width_b:ident, $t_res:ident) => {{
-        if $width_a < $width_b {
-            Ok($t_res.into())
-        } else {
-            Err(TypeCheckError::IllegalTypeCoercion($t_a, $t_b))
-        }
-    }};
-}
-
 impl<'m> ZeaError<'m> for TypeCheckError {
     type ErrContext = ZeaTypeChecker;
     fn zea_error_format(&'m self, ctx: &'m Self::ErrContext) -> String {
         match self {
             Self::IllegalTypeCoercion(a, b, kind) => {
-                let t_a = ctx.type_interning_table.get_specifier_by_id(*a).unwrap();
-                let t_b = ctx.type_interning_table.get_specifier_by_id(*b).unwrap();
+                let t_a = ctx.type_interning_table.get_specifier_by_id(*a);
+                let t_b = ctx.type_interning_table.get_specifier_by_id(*b);
                 format!("illegal type coercion of types {t_a:?} and {t_b:?}: {kind:?}")
             }
             Self::InvalidOperands(id, op) => {
@@ -515,7 +497,7 @@ impl ZeaTypeChecker {
             .typevar_interning_table
             .get_solved(inf_var)
             .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(inf_var))?;
-        self.type_interning_table.get_specifier_by_id(solved)
+        Ok(self.type_interning_table.get_specifier_by_id(solved))
     }
 
     fn get_bool_tvar(&mut self) -> TypeVariable {
@@ -565,8 +547,8 @@ impl ZeaTypeChecker {
         typ: InternedTypeId,
         to: InternedTypeId,
     ) -> Result<InternedTypeId, TypeCheckError> {
-        let t_from = self.type_interning_table.get_specifier_by_id(typ)?;
-        let t_to = self.type_interning_table.get_specifier_by_id(to)?;
+        let t_from = self.type_interning_table.get_specifier_by_id(typ);
+        let t_to = self.type_interning_table.get_specifier_by_id(to);
         Self::try_coerce_types(t_from, t_to)
             .map_err(|kind| TypeCheckError::IllegalTypeCoercion(typ, to, kind))?;
         Ok(to)
@@ -1009,7 +991,7 @@ impl ZeaTypeChecker {
                 .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(t_inferred))?;
             let t_conc = self
                 .type_interning_table
-                .get_specifier_by_id(t_conc_id)?
+                .get_specifier_by_id(t_conc_id)
                 .clone();
             trace!(
                 "\tannotating symbol `{:?}` with type {:?}",
@@ -1058,7 +1040,6 @@ impl ZeaTypeChecker {
 
 #[cfg(test)]
 mod tests {
-    use indexmap::map::MutableKeys;
 
     use super::*;
     fn path_compression_invariant(table: &TypeVariableInterningTable) {
@@ -1148,7 +1129,7 @@ mod tests {
         path_compression_invariant(&table);
     }
 
-    use crate::zea::test_ast_macros::ztyp;
+    use crate::ast::test_ast_macros::ztyp;
 
     #[test]
     fn coercion_rules() {

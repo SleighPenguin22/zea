@@ -6,14 +6,14 @@
 //! - [`InsertImplicitMainReturn`]: insert a return 0 inside the `main` function, if it exists
 
 #![allow(clippy::new_without_default)]
-use crate::visualisation::IndentPrint;
-use crate::zea::visitors::annotating::IPRScopedIdentifier;
-use crate::zea::visitors::{
+use crate::ast::visitors::annotating::IPRScopedIdentifier;
+use crate::ast::visitors::{
     IPRTransfomer, IPRVisitor, walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr,
     walk_mut_funcdef, walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt,
     walk_mut_structdef, walk_mut_unpacked_init,
 };
-use crate::zea::{NodeId, ipr::*};
+use crate::ast::{NodeId, ipr::*};
+use crate::visualisation::IndentPrint;
 use crate::{InternTable, ZeaError, impl_nodelabeler};
 use indexmap::IndexSet;
 use indexmap::set::MutableValues;

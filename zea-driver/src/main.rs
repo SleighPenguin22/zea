@@ -15,8 +15,9 @@ use std::{
 use tempfile::NamedTempFile;
 use zea_codegen::THRtoQBE;
 use zea_common::CompilerConfig;
-use zea_ipr::zea::thr::THRModule;
-use zea_ipr::{visualisation::IndentPrint, zea::typecheck_module};
+use zea_ipr::ast::thr::THRModule;
+use zea_ipr::typecheck_module;
+use zea_ipr::visualisation::IndentPrint;
 use zea_parser::parse_module;
 
 fn out_path(ccfg: &CompilerConfig, module: &THRModule) -> PathBuf {
@@ -141,7 +142,7 @@ fn main() {
     }
 
     info!("lowering into THR...");
-    let lowered = zea_ipr::zea::thr::lower_module(module, tinfo, scopes);
+    let lowered = zea_ipr::ast::thr::lower_module(module, tinfo, scopes);
     if ccfg.print_thr() {
         info!("Typed Highlevel Representation:\n{:?}", lowered);
     }

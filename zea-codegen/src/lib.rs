@@ -3,7 +3,7 @@ use qbe::{self as Q};
 use zea_internal_macros::InternKey;
 use zea_ipr::{
     InternTable,
-    zea::{
+    ast::{
         BinOp,
         thr::{
             FloatWidth, IntegerWidth, THRBlock, THRExpression, THRFunction, THRModule,

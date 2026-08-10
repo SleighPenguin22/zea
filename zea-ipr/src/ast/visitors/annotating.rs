@@ -2,13 +2,13 @@
 use std::collections::HashSet;
 use std::ops::BitAnd;
 
-use crate::impls::StructuralEq;
-use crate::zea::visitors::{
+use crate::ast::visitors::{
     IPRVisitor, walk_block, walk_branch, walk_call, walk_expr, walk_funcdef, walk_funcparam,
     walk_initblock, walk_module, walk_mut_funcdef, walk_reassignment, walk_stmt, walk_structdef,
     walk_unpacked_init,
 };
-use crate::zea::{NodeId, ZeaNodeQuery, ipr::*};
+use crate::ast::{NodeId, ZeaNodeQuery, ipr::*};
+use crate::impls::StructuralEq;
 use arbitrary::Arbitrary;
 use indexmap::{IndexMap, IndexSet};
 

@@ -41,10 +41,10 @@
 
 use std::alloc::Layout;
 
+use crate::typecheck::IPRModuleTypeInfo;
 use indexmap::Equivalent;
-use zea_internal_macros::{InternKey, VariantToStr};
-
 use zea_common::{CompilerError, CompilerErrorKind, CompilerStage};
+use zea_internal_macros::{InternKey, VariantToStr};
 macro_rules! internal_compiler_error {
     (spi) => {
         unreachable!(
@@ -66,7 +66,7 @@ macro_rules! internal_compiler_error {
 }
 use crate::{
     InternTable,
-    zea::{
+    ast::{
         BinOp, UnOp,
         ipr::{
             IPRBlockExpression, IPRExpression, IPRExpressionKind, IPRFunction,
@@ -76,8 +76,6 @@ use crate::{
         visitors::{altering::IdentifierScoper, annotating::SymbolKind},
     },
 };
-
-use super::{ipr, typecheck::IPRModuleTypeInfo};
 
 pub fn lower_module(
     module: IPRModule,

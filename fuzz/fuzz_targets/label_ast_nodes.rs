@@ -2,12 +2,11 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
-use zea_ipr::visualisation::IndentPrint;
-use zea_ipr::zea::visitors::IPRVisitor;
-use zea_ipr::{
-    zea::ZeaNodeQuery,
-    zea::ipr::*,
-    zea::visitors::{altering::AssignmentExpander, annotating::IPRHasUniqueIDs},
+use zea_ipr::ast::visitors::IPRVisitor;
+use zea_ipr::ast::{
+    ZeaNodeQuery,
+    ipr::*,
+    visitors::{altering::AssignmentExpander, annotating::IPRHasUniqueIDs},
 };
 fuzz_target!(|data: &[u8]| {
     let mut uniques = IPRHasUniqueIDs::new();
@@ -20,8 +19,8 @@ fuzz_target!(|data: &[u8]| {
         assert!(res.is_ok());
         let res = uniques.visit_module(&m);
         // println!("{m:?}");
-        if let e @ Err(id) = res {
-            let query = ZeaNodeQuery::query_ipr_node(id, &m);
+        if let _e @ Err(id) = res {
+            let _query = ZeaNodeQuery::query_ipr_node(id, &m);
         }
         assert!(res.is_ok());
     }

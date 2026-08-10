@@ -1,6 +1,6 @@
 use std::str::FromStr;
-use zea_ipr::zea::immediate_parsed_representation::*;
-use zea_ipr::zea::{BinOp, UnOp, NodeId};
+use zea_ipr::ast::ipr::*;
+use zea_ipr::ast::{BinOp, UnOp, NodeId};
 use crate::{IPRModuleItem, separate_module_items};
 
 grammar<'ast>;

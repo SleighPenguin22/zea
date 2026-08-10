@@ -5,8 +5,8 @@
 //! to specify behaviour when encountering a given node.
 //!
 
-use crate::zea::visitors::altering::{AssignmentExpander, IdentifierScoper, NodeLabeler};
-use crate::zea::{IPRScopedIdentifier, ipr::*};
+use crate::ast::visitors::altering::{AssignmentExpander, IdentifierScoper, NodeLabeler};
+use crate::ast::{IPRScopedIdentifier, ipr::*};
 use std::ops::Deref;
 
 pub mod altering;

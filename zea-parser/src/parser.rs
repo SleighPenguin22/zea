@@ -1,9 +1,9 @@
 // auto-generated: "lalrpop 0.23.1"
-// sha3: 3a5c6e42765df0a44477f05fbb8d48c6be67c80db9e3a44fba1faccf57297b21
+// sha3: e93b1535b0860a5d040fbcabecf4f7733e604323f736f5352a5728aab704f984
 use crate::{IPRModuleItem, separate_module_items};
 use std::str::FromStr;
-use zea_ipr::zea::ipr::*;
-use zea_ipr::zea::{BinOp, NodeId, UnOp};
+use zea_ipr::ast::ipr::*;
+use zea_ipr::ast::{BinOp, NodeId, UnOp};
 #[allow(unused_extern_crates)]
 extern crate lalrpop_util as __lalrpop_util;
 #[allow(unused_imports)]
@@ -16,8 +16,8 @@ extern crate alloc;
 mod __parse__Expr {
 
     use std::str::FromStr;
-    use zea_ipr::zea::ipr::*;
-    use zea_ipr::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::ast::ipr::*;
+    use zea_ipr::ast::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -5469,8 +5469,8 @@ pub use self::__parse__Expr::ExprParser;
 mod __parse__Mod {
 
     use std::str::FromStr;
-    use zea_ipr::zea::ipr::*;
-    use zea_ipr::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::ast::ipr::*;
+    use zea_ipr::ast::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -11149,8 +11149,8 @@ pub use self::__parse__Mod::ModParser;
 mod __intern_token {
     #![allow(unused_imports)]
     use std::str::FromStr;
-    use zea_ipr::zea::ipr::*;
-    use zea_ipr::zea::{BinOp, UnOp, NodeId};
+    use zea_ipr::ast::ipr::*;
+    use zea_ipr::ast::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;

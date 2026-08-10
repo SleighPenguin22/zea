@@ -1,5 +1,5 @@
-use crate::zea::IPRScopedIdentifier;
-use crate::zea::ipr::*;
+use crate::ast::IPRScopedIdentifier;
+use crate::ast::ipr::*;
 use std::fmt::Debug;
 
 pub trait IndentPrint: Debug {

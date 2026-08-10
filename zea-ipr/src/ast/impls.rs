@@ -1,8 +1,8 @@
 use std::hash::{Hash, Hasher};
 
 use crate::{
+    ast::{BinOp, NodeId, UnOp, ipr::*},
     impls::StructuralEq,
-    zea::{BinOp, NodeId, UnOp, ipr::*},
 };
 
 impl StructuralEq for IPRModule {

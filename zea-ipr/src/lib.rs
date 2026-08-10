@@ -6,8 +6,9 @@ use indexmap::{
     set::{Iter, MutableValues},
 };
 /// The AST's for the ZEA language
-pub mod zea;
-
+pub mod ast;
+mod typecheck;
+pub use typecheck::typecheck_module;
 mod impls;
 pub mod visualisation;
 

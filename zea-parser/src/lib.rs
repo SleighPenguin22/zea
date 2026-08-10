@@ -2,8 +2,6 @@
 
 #[cfg(feature = "lalrpop_parser")]
 mod parser;
-#[cfg(feature = "zepast")]
-pub mod zepast;
 
 use log::{error, info, log};
 
@@ -12,11 +10,10 @@ pub use parser::ExprParser as ExpressionParser;
 #[cfg(feature = "lalrpop_parser")]
 pub use parser::ModParser as ModuleParser;
 use std::process::exit;
-use zea_ipr::zea::BareNodeLabeler;
 
 pub use lalrpop_util::ParseError;
-use zea_ipr::zea::ipr::*;
-use zea_ipr::zea::visitors::IPRTransfomer;
+use zea_ipr::ast::BareNodeLabeler;
+use zea_ipr::ast::ipr::*;
 pub fn parse_module(src: &'_ str) -> (IPRModule, BareNodeLabeler) {
     let p = ModuleParser::new();
     info!("parsing source file...");
