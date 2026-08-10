@@ -2,7 +2,7 @@
 use std::collections::HashSet;
 use std::ops::BitAnd;
 
-use crate::traits::StructuralEq;
+use crate::impls::StructuralEq;
 use crate::zea::visitors::{
     IPRVisitor, walk_block, walk_branch, walk_call, walk_expr, walk_funcdef, walk_funcparam,
     walk_initblock, walk_module, walk_mut_funcdef, walk_reassignment, walk_stmt, walk_structdef,

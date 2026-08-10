@@ -20,7 +20,7 @@
 ///
 /// The [`visitors::altering::BareNodeLabeler`] visitor
 /// grants a unique ID to node with a sentinel ID.
-use crate::traits::StructuralEq;
+use crate::impls::StructuralEq;
 use crate::zea::ipr::IPRASTNode;
 use crate::zea::ipr::IPRModule;
 use crate::zea::visitors::IPRVisitor;
@@ -47,7 +47,7 @@ pub mod ipr {
 
     use crate::{
         ZeaError,
-        traits::StructuralEq,
+        impls::StructuralEq,
         zea::{
             BareNodeLabeler, BinOp, IPRScopedIdentifier, NodeLabeler, UnOp, ZeaNodeQuery,
             visitors::{

@@ -8,7 +8,7 @@ use indexmap::{
 /// The AST's for the ZEA language
 pub mod zea;
 
-pub mod traits;
+mod impls;
 pub mod visualisation;
 
 pub trait ZeaError<'m> {
