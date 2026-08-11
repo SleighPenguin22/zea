@@ -64,7 +64,7 @@ impl<'m> THRtoQBE<'m> {
             let THRStatement::Init { decl, val, ipr_id } = *stmt else {
                 unreachable!("global statements can only be inits")
             };
-            self.emit_datadef(module, decl, val, ipr_id);
+            self.emit_datadef(module, decl, val);
         }
     }
     /// recursively emit the instructions necessary to represent the given statement
@@ -189,7 +189,7 @@ impl<'m> THRtoQBE<'m> {
     fn emit_return_type(&mut self, typ: &THRTypeSpecifier) -> Option<QBETypeID> {
         match typ {
             THRTypeSpecifier::Integer { width, signed } => {
-                Some(self.emit_type_integer(*width, *signed))
+                Some(self.emit_basetype_integer(*width, *signed))
             }
             THRTypeSpecifier::Float { width } => Some(self.emit_type_float(*width)),
             THRTypeSpecifier::Pointer(_t) => Some(self.types.intern(Q::Type::Long)),
@@ -207,7 +207,9 @@ impl<'m> THRtoQBE<'m> {
 
     fn emit_lvalue_type(&mut self, typ: &THRTypeSpecifier) -> QBETypeID {
         match typ {
-            THRTypeSpecifier::Integer { width, signed } => self.emit_type_integer(*width, *signed),
+            THRTypeSpecifier::Integer { width, signed } => {
+                self.emit_basetype_integer(*width, *signed)
+            }
             THRTypeSpecifier::Float { width } => self.emit_type_float(*width),
             THRTypeSpecifier::Pointer(_t) => self.types.intern(Q::Type::Long),
             THRTypeSpecifier::Boolean => self.types.intern(Q::Type::Byte),
@@ -226,7 +228,7 @@ impl<'m> THRtoQBE<'m> {
         self.types.get_by_id(t).unwrap().clone()
     }
 
-    fn emit_type_integer(&mut self, width: IntegerWidth, signed: bool) -> QBETypeID {
+    fn emit_basetype_integer(&mut self, width: IntegerWidth, signed: bool) -> QBETypeID {
         let t = match (width, signed) {
             (IntegerWidth::_8, true) => Q::Type::SignedByte,
             (IntegerWidth::_8, false) => Q::Type::UnsignedByte,
@@ -278,7 +280,7 @@ impl<'m> THRtoQBE<'m> {
 
         format!("{prefix}{demangle}{}", ident.name)
     }
-    fn disambiguate_global_symbol(&self, ident: &THRSymbol, ipr_id: NodeId) -> String {
+    fn disambiguate_global_symbol(&self, ident: &THRSymbol) -> String {
         let prefix = self.get_module_prefix();
         let demangle = match ident.kind {
             SymbolKind::GlobalVar => "global_",
@@ -307,10 +309,9 @@ impl<'m> THRtoQBE<'m> {
         module: &'module mut qbe::Module,
         decl: THRSymbolDecl,
         val: THRExprID,
-        ipr_id: NodeId,
     ) -> &'module Q::DataDef {
         let name = self.thr_module.get_symbol(decl.symbol);
-        let name = self.disambiguate_global_symbol(name, ipr_id);
+        let name = self.disambiguate_global_symbol(name);
         let thr_typ = self.thr_module.get_type(decl.typ);
         let qbe_typ_id = self.emit_lvalue_type(thr_typ);
         let align = self.thr_module.alignment_of(decl.typ);
@@ -318,7 +319,8 @@ impl<'m> THRtoQBE<'m> {
             .types
             .get_by_id(qbe_typ_id)
             .cloned()
-            .expect("emit_type should have interned the supplied typ");
+            .expect("emit_type should have interned the supplied typ")
+            .into_abi();
         let items = match self.thr_module.get_expr(val) {
             THRExpression::ConstInt(TypedLiteral { value, .. }) => {
                 let item = Q::DataItem::Const(*value);
@@ -339,8 +341,11 @@ impl<'m> THRtoQBE<'m> {
                 for glob in globs.iter() {
                     let stmt = self.thr_module.get_statement(*glob);
                     match stmt {
-                        THRStatement::Init { decl, val, ipr_id } if decl.symbol == *symbol => {
-                            return self.emit_datadef(module, *decl, *val, *ipr_id);
+                        THRStatement::Init { decl, val, ipr_id }
+                            if decl.symbol == *symbol
+                                && !self.symbol_table.contains_key(&decl.symbol) =>
+                        {
+                            return self.emit_datadef(module, *decl, *val);
                         }
                         _ => {}
                     };
