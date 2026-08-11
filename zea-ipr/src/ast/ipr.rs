@@ -7,7 +7,7 @@ use std::{
     process::exit,
 };
 
-use zea_internal_macros::{ASTStructuralEq, VariantToStr};
+use zea_internal_macros::ASTStructuralEq;
 
 use crate::{
     ZeaError,
@@ -263,7 +263,7 @@ pub struct IPRStatement {
     pub kind: IPRStatementKind,
 }
 
-#[derive(Debug, Clone, VariantToStr, Arbitrary)]
+#[derive(Debug, Clone, Arbitrary)]
 pub enum IPRStatementKind {
     // initial pass
     /// Variable initialization
@@ -521,7 +521,7 @@ impl IPRExpression {
     }
 }
 
-#[derive(Debug, Clone, VariantToStr, Arbitrary)]
+#[derive(Debug, Clone, Arbitrary)]
 pub enum IPRExpressionKind {
     Unit,
     IntegerLiteral(usize),

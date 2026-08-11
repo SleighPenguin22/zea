@@ -32,7 +32,7 @@ pub mod visitors;
 pub mod ipr;
 pub mod thr;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr, Arbitrary)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Arbitrary)]
 pub enum BinOp {
     Add,
     Sub,
@@ -56,7 +56,7 @@ pub enum BinOp {
     GT,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, VariantToStr, Arbitrary)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Arbitrary)]
 pub enum UnOp {
     Neg,
     LogNot,

@@ -72,14 +72,16 @@ Vec<IPRTaggedUnionDataTypeDefinition>
 ModSymbolsHelper: Vec<IPRModuleItem> = {
     => vec![],
     <cur: Init> <rest:ModSymbolsHelper> => {
-        let mut v = rest;
+        let mut v = Vec::with_capacity(rest.len() + 1);
         v.push(IPRModuleItem::Init(cur));
+        v.extend(rest);
         v
     },
     <cur: Func> <rest:ModSymbolsHelper> => {
-            let mut v = rest;
-                    v.push(IPRModuleItem::Func(cur));
-                    v
+        let mut v = Vec::with_capacity(rest.len() + 1);
+        v.push(IPRModuleItem::Func(cur));
+        v.extend(rest);
+        v
         },
 
    // <cur: StructDef> <rest:ModSymbolsHelper> => {

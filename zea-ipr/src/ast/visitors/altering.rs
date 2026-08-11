@@ -5,7 +5,6 @@
 //! - [`IdentifierScoper`]: disambguate identifier-expression and annotate them with their binding site
 //! - [`InsertImplicitMainReturn`]: insert a return 0 inside the `main` function, if it exists
 
-#![allow(clippy::new_without_default)]
 use crate::ast::visitors::annotating::IPRScopedIdentifier;
 use crate::ast::visitors::{
     IPRTransfomer, IPRVisitor, walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr,
@@ -278,7 +277,7 @@ pub struct BlockLikeScope {
     children: Vec<BlockScopeIndex>,
     kind: ScopeKind,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, VariantToStr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ScopeKind {
     Function,
     Block,
@@ -434,6 +433,7 @@ impl IPRTransfomer for IdentifierScoper {
             let IPRInitializationKind::Unpacked(u) = &mut glob.kind else {
                 internal_compiler_error!(spi)
             };
+            trace!("scoping global inits {u:?}");
             for init in u {
                 walk_mut_unpacked_init(self, init)?;
                 self.current_scope_mut()
@@ -441,9 +441,9 @@ impl IPRTransfomer for IdentifierScoper {
             }
         }
         // Functions and imports are not considered ordered; their scope covers the whole of the module.
-        for imp in module.imports.iter_mut() {
+        for import in module.imports.iter_mut() {
             self.current_scope_mut()
-                .add_introduction(IPRScopedIdentifier::import_item(module.id, imp.clone()));
+                .add_introduction(IPRScopedIdentifier::import_item(module.id, import.clone()));
         }
 
         for func in module.functions.iter_mut() {
@@ -574,7 +574,7 @@ impl IdentifierScoper {
             .expect("scope stack should not be empty")
     }
     fn resolve(&mut self, ident: &str) -> Result<IPRScopedIdentifier, NotInScopeError> {
-        let mut cur_scope_idx = *self.scope_stack.last().expect("stack should not be empty");
+        let mut cur_scope_idx = self.current_scope_idx();
         let mut cur_scope = self.get_scope_mut(cur_scope_idx);
 
         loop {
@@ -647,10 +647,9 @@ impl IPRTransfomer for InsertImplicitMainReturn {
 
 #[cfg(test)]
 mod tests {
-    use crate::zea::visitors::IPRTransfomer;
-    use crate::zea::*;
-    use crate::zea::{IPRModule, NodeLabeler};
-    use zea_parser::zepast;
+    use crate::ast::visitors::IPRTransfomer;
+    use crate::ast::*;
+    use crate::ast::{IPRModule, NodeLabeler};
 
     fn prepare_module(mut ast: IPRModule) -> (IPRModule, impl NodeLabeler) {
         let mut labeler = BareNodeLabeler::new();

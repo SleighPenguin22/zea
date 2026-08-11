@@ -39,10 +39,9 @@
 //! This is done by a later visitor pass, which provides a way to get the pred- and successors of a [`THRBlock`],
 //! which is then used by QBE or some other backend to generate its CFG.
 
-use std::alloc::Layout;
-
-use crate::typecheck::IPRModuleTypeInfo;
+use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
 use indexmap::Equivalent;
+use log::trace;
 use zea_common::{CompilerError, CompilerErrorKind, CompilerStage};
 use zea_internal_macros::{InternKey, VariantToStr};
 macro_rules! internal_compiler_error {
@@ -147,11 +146,18 @@ pub struct THRModule {
     global_data_block: THRBlockID,
     entry_point: THRFunctionID,
     pub name: String,
+    ipr_id: NodeId,
 }
 
 impl THRModule {
     pub fn global_data_block(&self) -> THRBlockID {
         self.global_data_block
+    }
+    pub fn get_global_data_block(&self) -> &THRBlock {
+        self.interned
+            .blocks
+            .get_by_id(self.global_data_block)
+            .unwrap()
     }
 
     pub fn entry_point(&self) -> THRFunctionID {
@@ -398,9 +404,13 @@ enum THRLoweredStatement {
     Multiple(THRBlockID),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, VariantToStr)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum THRStatement {
-    Init(THRSymbolDecl, THRExprID),
+    Init {
+        decl: THRSymbolDecl,
+        val: THRExprID,
+        ipr_id: NodeId,
+    },
     Jmp(THRBlockID),
     Ret(THRExprID),
     /// An assigment that is initialized by some branch,
@@ -639,12 +649,16 @@ impl THRInternTables {
         let typ = init.typ.as_ref().unwrap();
         let typ = self.lower_type(ipr_ctx, typ);
 
-        let init = THRSymbolDecl { symbol, typ };
+        let thr_decl = THRSymbolDecl { symbol, typ };
         let stmt = match value {
             LoweredMaybeSegmentedExpr::Segmented(block) => {
-                THRStatement::SegmentedAssign(init, block)
+                THRStatement::SegmentedAssign(thr_decl, block)
             }
-            LoweredMaybeSegmentedExpr::NotSegmented(expr) => THRStatement::Init(init, expr),
+            LoweredMaybeSegmentedExpr::NotSegmented(expr) => THRStatement::Init {
+                decl: thr_decl,
+                val: expr,
+                ipr_id: init.id,
+            },
         };
         self.statements.intern(stmt)
     }
@@ -653,8 +667,12 @@ impl THRInternTables {
         let globs = &ipr_ctx.module.global_vars;
         let mut items = vec![];
         for glob in globs.iter() {
+            trace!("lowering global {}", glob.id);
             let ids = self.lower_init_block(ipr_ctx, glob, SymbolKind::GlobalVar);
-            items.extend(ids);
+            let [item] = ids.as_slice() else {
+                unreachable!()
+            };
+            items.push(*item);
         }
         let global_data_block = THRBlock { items };
         let global_data_block = self.blocks.intern(global_data_block);
@@ -673,6 +691,7 @@ impl THRInternTables {
             global_data_block,
             entry_point: entry_point.expect("missing entry point"),
             name: ipr_ctx.module.name.clone(),
+            ipr_id: ipr_ctx.module.id,
         }
     }
 
@@ -896,8 +915,8 @@ mod tests {
         for (ordering, fields, size, align) in cases {
             let s = THRStructLayout { ordering, fields };
 
-            assert_eq!(s.width(ctx), size);
-            assert_eq!(s.alignment(ctx), align);
+            assert_eq!(s.width(ctx), size as u64);
+            assert_eq!(s.alignment(ctx), align as u64);
             struct_size_invariant(&s, ctx);
         }
     }

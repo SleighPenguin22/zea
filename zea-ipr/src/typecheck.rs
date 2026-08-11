@@ -436,10 +436,7 @@ impl<'m> ZeaError<'m> for TypeCheckError {
                 format!("illegal type coercion of types {t_a:?} and {t_b:?}: {kind:?}")
             }
             Self::InvalidOperands(id, op) => {
-                format!(
-                    "illegal operands for operator {} in {id:?}",
-                    op.variant_as_str()
-                )
+                format!("illegal operands for operator {op:?} in {id:?}",)
             }
             _ => todo!(),
         }
@@ -678,7 +675,9 @@ impl ZeaTypeChecker {
             IPRExpressionKind::UnOpExpr(_, arg) => {
                 self.introduce_expression(arg.as_ref());
             }
-            IPRExpressionKind::MemberAccess(_, _) => todo!(),
+            IPRExpressionKind::MemberAccess(subject, field) => {
+                self.introduce_expression(subject.as_ref());
+            }
             IPRExpressionKind::IfThenElse(_) => todo!(),
             IPRExpressionKind::Block(b) => {
                 for stmt in b.statements.iter() {
@@ -772,9 +771,11 @@ impl ZeaTypeChecker {
             }
             IPRExpressionKind::StringLiteral(_)
             | IPRExpressionKind::FunctionCall(_)
-            | IPRExpressionKind::UnOpExpr(_, _)
-            | IPRExpressionKind::MemberAccess(_, _)
-            | IPRExpressionKind::IfThenElse(_) => todo!(),
+            | IPRExpressionKind::IfThenElse(_)
+            | IPRExpressionKind::UnOpExpr(_, _) => todo!(),
+            IPRExpressionKind::MemberAccess(subject, field) => {
+                todo!("member access inference")
+            }
             IPRExpressionKind::UnScopedIdent(_) => {
                 unreachable!("identifiers should be scoped before typechecking")
             }

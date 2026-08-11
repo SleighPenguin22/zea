@@ -1,13 +1,15 @@
+use std::collections::HashMap;
+
 use log::trace;
 use qbe::{self as Q};
 use zea_internal_macros::InternKey;
 use zea_ipr::{
     InternTable,
     ast::{
-        BinOp,
+        BinOp, NodeId,
         thr::{
-            FloatWidth, IntegerWidth, THRBlock, THRExpression, THRFunction, THRModule,
-            THRStatement, THRSymbol, THRTypeSpecifier,
+            FloatWidth, IntegerWidth, THRBlock, THRExprID, THRExpression, THRFunction, THRModule,
+            THRStatement, THRSymbol, THRSymbolDecl, THRSymbolID, THRTypeSpecifier, TypedLiteral,
         },
         visitors::annotating::SymbolKind,
     },
@@ -19,6 +21,7 @@ pub struct QBETypeID(u32);
 pub struct THRtoQBE<'m> {
     thr_module: &'m THRModule,
     types: InternTable<QBETypeID, Q::Type>,
+    symbol_table: HashMap<THRSymbolID, Q::Value>,
     temp_generator: usize,
     block_label_generator: usize,
 }
@@ -39,6 +42,7 @@ impl<'m> THRtoQBE<'m> {
         Self {
             thr_module: module,
             types: InternTable::new(),
+            symbol_table: HashMap::with_capacity(64),
             temp_generator: 0,
             block_label_generator: 0,
         }
@@ -53,22 +57,27 @@ impl<'m> THRtoQBE<'m> {
         m
     }
 
-    pub fn walk_global_data_blocks(&mut self, module: &mut Q::Module) {
-        let glob_data = self
-            .thr_module
-            .get_block(self.thr_module.global_data_block());
-        for stmt in glob_data.items.iter() {
-            let stmt = self.thr_module.get_statement(*stmt);
-            self.emit_datadef(module, stmt);
+    fn walk_global_data_blocks(&mut self, module: &mut Q::Module) {
+        let glob_data = self.thr_module.get_global_data_block();
+        for stmt in glob_data.items.iter().copied() {
+            let stmt = self.thr_module.get_statement(stmt);
+            let THRStatement::Init { decl, val, ipr_id } = *stmt else {
+                unreachable!("global statements can only be inits")
+            };
+            self.emit_datadef(module, decl, val, ipr_id);
         }
     }
     /// recursively emit the instructions necessary to represent the given statement
     fn emit_stmt(&mut self, bctx: &mut BlockContext, stmt: &THRStatement) {
         match stmt {
-            THRStatement::Init(symbdecl, expr) => {
-                let symb = self.thr_module.get_symbol(symbdecl.symbol);
+            THRStatement::Init {
+                decl: symbdecl,
+                val: expr,
+                ..
+            } => {
+                let symb = symbdecl.symbol;
                 let typ = self.thr_module.get_type(symbdecl.typ);
-                let value = self.thr_module.get_expr(*expr);
+                let value = *expr;
                 self.emit_stmt_init(bctx, symb, typ, value);
             }
             THRStatement::Jmp(b) => {
@@ -92,10 +101,12 @@ impl<'m> THRtoQBE<'m> {
     fn emit_stmt_init(
         &mut self,
         bctx: &mut BlockContext,
-        symb: &THRSymbol,
+        symb_id: THRSymbolID,
         typ: &THRTypeSpecifier,
-        value: &THRExpression,
+        value_id: THRExprID,
     ) -> Option<Q::Value> {
+        let symb = self.thr_module.get_symbol(symb_id);
+        let value = self.thr_module.get_expr(value_id);
         let q_val = self.emit_expr(bctx, value);
         // an expression with unit-type cannot be stored, as it holds no data.
         // it may however have side effects, so it must still be emitted
@@ -109,15 +120,18 @@ impl<'m> THRtoQBE<'m> {
                 let temp = Q::Value::Temporary(self.disambiguate_nonglobal_symbol(bctx, symb));
                 bctx.sig
                     .assign_instr(temp.clone(), q_typ, Q::Instr::Copy(q_val));
+                self.symbol_table.insert(symb_id, temp.clone());
                 Some(temp)
             }
         }
     }
     /// Recursively emit instructions necessary to compute the given expression, then return the temporary it is saved to.
     fn emit_expr(&mut self, bctx: &mut BlockContext, expr: &THRExpression) -> Q::Value {
-        match expr {
-            THRExpression::ConstInt(lit_i) => Q::Value::Const(lit_i.value),
-            THRExpression::ConstFloat(lit_f) => Q::Value::Const(lit_f.value.to_bits()),
+        let val = match expr {
+            THRExpression::ConstInt(TypedLiteral { value, .. }) => Q::Value::Const(*value),
+            THRExpression::ConstFloat(TypedLiteral { value, .. }) => {
+                Q::Value::Const((*value).to_bits())
+            }
             THRExpression::ConstBool(b) => Q::Value::Const(*b as u64),
             THRExpression::Binop(_op, _l, _r) => {
                 let l = self.thr_module.get_expr(*_l);
@@ -135,7 +149,8 @@ impl<'m> THRtoQBE<'m> {
                     SymbolKind::ImportItem => todo!(),
                 }
             }
-        }
+        };
+        val
     }
     /// Recursively emit instructions necessary to compute the given binary expression, then return the temporary it is saved to.
     fn emit_expr_binop(
@@ -263,7 +278,7 @@ impl<'m> THRtoQBE<'m> {
 
         format!("{prefix}{demangle}{}", ident.name)
     }
-    fn disambiguate_global_symbol(&self, ident: &THRSymbol) -> String {
+    fn disambiguate_global_symbol(&self, ident: &THRSymbol, ipr_id: NodeId) -> String {
         let prefix = self.get_module_prefix();
         let demangle = match ident.kind {
             SymbolKind::GlobalVar => "global_",
@@ -287,12 +302,15 @@ impl<'m> THRtoQBE<'m> {
         }
     }
 
-    fn emit_datadef(&mut self, module: &mut qbe::Module, stmt: &THRStatement) {
-        let THRStatement::Init(decl, val) = stmt else {
-            unreachable!("global statement must be an init");
-        };
+    fn emit_datadef<'ctx, 'module: 'ctx>(
+        &'ctx mut self,
+        module: &'module mut qbe::Module,
+        decl: THRSymbolDecl,
+        val: THRExprID,
+        ipr_id: NodeId,
+    ) -> &'module Q::DataDef {
         let name = self.thr_module.get_symbol(decl.symbol);
-        let name = self.disambiguate_global_symbol(name);
+        let name = self.disambiguate_global_symbol(name, ipr_id);
         let thr_typ = self.thr_module.get_type(decl.typ);
         let qbe_typ_id = self.emit_lvalue_type(thr_typ);
         let align = self.thr_module.alignment_of(decl.typ);
@@ -301,22 +319,37 @@ impl<'m> THRtoQBE<'m> {
             .get_by_id(qbe_typ_id)
             .cloned()
             .expect("emit_type should have interned the supplied typ");
-        let items = match self.thr_module.get_expr(*val) {
-            THRExpression::ConstInt(i) => {
-                let item = Q::DataItem::Const(i.value);
+        let items = match self.thr_module.get_expr(val) {
+            THRExpression::ConstInt(TypedLiteral { value, .. }) => {
+                let item = Q::DataItem::Const(*value);
                 vec![(qbe_typ, item)]
             }
-            THRExpression::ConstFloat(_) => todo!(),
+            THRExpression::ConstFloat(TypedLiteral { value, .. }) => {
+                let item = Q::DataItem::Const(value.to_bits());
+                vec![(qbe_typ, item)]
+            }
             THRExpression::ConstBool(b) => {
                 let item = Q::DataItem::Const(*b as u64);
                 vec![(qbe_typ, item)]
             }
             THRExpression::Binop(..) => todo!(),
             THRExpression::Unop(..) => todo!(),
-            THRExpression::Ident(..) => todo!(),
+            THRExpression::Ident(symbol) => {
+                let globs = &self.thr_module.get_global_data_block().items;
+                for glob in globs.iter() {
+                    let stmt = self.thr_module.get_statement(*glob);
+                    match stmt {
+                        THRStatement::Init { decl, val, ipr_id } if decl.symbol == *symbol => {
+                            return self.emit_datadef(module, *decl, *val, *ipr_id);
+                        }
+                        _ => {}
+                    };
+                }
+                unreachable!()
+            }
         };
         let d = Q::DataDef::new(Q::Linkage::public(), name, Some(align), items);
-        module.add_data(d);
+        module.add_data(d)
     }
 
     fn emit_function(&mut self, m: &mut Q::Module, func: &THRFunction) {
