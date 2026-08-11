@@ -39,12 +39,11 @@
 //! This is done by a later visitor pass, which provides a way to get the pred- and successors of a [`THRBlock`],
 //! which is then used by QBE or some other backend to generate its CFG.
 
-use std::alloc::Layout;
-
-use crate::typecheck::IPRModuleTypeInfo;
+use crate::InternKey;
+use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
 use indexmap::Equivalent;
+use std::alloc::Layout;
 use zea_common::{CompilerError, CompilerErrorKind, CompilerStage};
-use zea_internal_macros::{InternKey, VariantToStr};
 macro_rules! internal_compiler_error {
     (spi) => {
         unreachable!(
@@ -91,9 +90,8 @@ pub fn lower_module(
     };
     thr_ctx.lower_module(&ipr_ctx)
 }
-
 #[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRTypeID(usize);
+pub struct THRTypeID(u32);
 
 impl THRTypeID {
     fn alignment(self, ctx: &THRInternTables) -> u64 {
@@ -131,15 +129,15 @@ impl THRTypeID {
     }
 }
 #[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRExprID(usize);
+pub struct THRExprID(u32);
 #[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRSymbolID(usize);
+pub struct THRSymbolID(u32);
 #[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRStatementID(usize);
+pub struct THRStatementID(u32);
 #[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRBlockID(usize);
+pub struct THRBlockID(u32);
 #[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRFunctionID(usize);
+pub struct THRFunctionID(u32);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct THRModule {
@@ -147,6 +145,7 @@ pub struct THRModule {
     global_data_block: THRBlockID,
     entry_point: THRFunctionID,
     pub name: String,
+    pub ipr_id: NodeId,
 }
 
 impl THRModule {
@@ -398,7 +397,7 @@ enum THRLoweredStatement {
     Multiple(THRBlockID),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, VariantToStr)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum THRStatement {
     Init(THRSymbolDecl, THRExprID),
     Jmp(THRBlockID),
@@ -673,6 +672,7 @@ impl THRInternTables {
             global_data_block,
             entry_point: entry_point.expect("missing entry point"),
             name: ipr_ctx.module.name.clone(),
+            ipr_id: ipr_ctx.module.id,
         }
     }
 
@@ -896,8 +896,8 @@ mod tests {
         for (ordering, fields, size, align) in cases {
             let s = THRStructLayout { ordering, fields };
 
-            assert_eq!(s.width(ctx), size);
-            assert_eq!(s.alignment(ctx), align);
+            assert_eq!(s.width(ctx), size as u64);
+            assert_eq!(s.alignment(ctx), align as u64);
             struct_size_invariant(&s, ctx);
         }
     }

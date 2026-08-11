@@ -1,10 +1,14 @@
+use cranelift::codegen as Ccdg;
+use cranelift::codegen::ir::{self as Cir};
+use cranelift::codegen::isa as Cisa;
+use cranelift::module as Cmod;
+use cranelift::object as Cobj;
+use cranelift::object::object::Architecture;
+use cranelift::prelude as crane;
 use log::trace;
-use qbe::{self as Q};
-use zea_internal_macros::InternKey;
 use zea_ipr::{
-    InternTable,
+    InternKey, InternTable,
     ast::{
-        BinOp,
         thr::{
             FloatWidth, IntegerWidth, THRBlock, THRExpression, THRFunction, THRModule,
             THRStatement, THRSymbol, THRTypeSpecifier,
@@ -12,190 +16,91 @@ use zea_ipr::{
         visitors::annotating::SymbolKind,
     },
 };
-#[derive(Copy, Clone, Debug, PartialEq, Eq, InternKey)]
-pub struct QBETypeID(u32);
+#[derive(Copy, Clone, InternKey, Debug, PartialEq, Eq)]
+pub struct CraneTypeID(u32);
 
-#[derive(Debug)]
-pub struct THRtoQBE<'m> {
+fn get_triple() -> Cisa::OwnedTargetIsa {
+    use target_lexicon::Triple;
+    Triple::host();
+    let builder = Ccdg::settings::builder();
+    let flags = Ccdg::settings::Flags::new(builder);
+    Cisa::lookup_by_name("x86_64")
+        .unwrap()
+        .finish(flags)
+        .expect("cannot build isa triple")
+}
+
+pub struct THRtoCraneLift<'m> {
     thr_module: &'m THRModule,
-    types: InternTable<QBETypeID, Q::Type>,
+    crane_types: InternTable<CraneTypeID, cranelift::prelude::Type>,
     temp_generator: usize,
     block_label_generator: usize,
-}
-#[allow(unused)]
-struct BlockContext<'b> {
-    m: &'b mut Q::Module,
-    sig: &'b mut Q::Function,
+    crane_object: Cobj::ObjectModule,
 }
 
-impl<'b> BlockContext<'b> {
-    fn new(m: &'b mut Q::Module, sig: &'b mut Q::Function) -> Self {
-        Self { m, sig }
+struct FuncContext<'f, 'ctx> {
+    builder: crane::FunctionBuilder<'ctx>,
+    sig: &'f THRFunction,
+}
+
+impl<'f, 'ctx> FuncContext<'f, 'ctx> {
+    fn new(builder: crane::FunctionBuilder<'ctx>, sig: &'f THRFunction) -> Self {
+        Self { builder, sig }
     }
 }
 
-impl<'m> THRtoQBE<'m> {
+impl<'m> THRtoCraneLift<'m> {
     pub fn new(module: &'m THRModule) -> Self {
+        let triple = get_triple();
+        let objext_ctx =
+            Cobj::ObjectBuilder::new(triple, module.name.clone(), Cmod::default_libcall_names())
+                .unwrap();
+        let crane_object = Cobj::ObjectModule::new(objext_ctx);
         Self {
             thr_module: module,
-            types: InternTable::new(),
+            crane_types: InternTable::new(),
             temp_generator: 0,
             block_label_generator: 0,
+            crane_object,
         }
     }
 
-    pub fn lower(&mut self) -> Q::Module {
-        let mut m = Q::Module::new();
-        self.walk_global_data_blocks(&mut m);
-        for func in self.thr_module.functions().iter() {
-            self.emit_function(&mut m, func);
-        }
-        m
-    }
-
-    pub fn walk_global_data_blocks(&mut self, module: &mut Q::Module) {
+    pub fn walk_global_data_blocks(&mut self) {
         let glob_data = self
             .thr_module
             .get_block(self.thr_module.global_data_block());
         for stmt in glob_data.items.iter() {
-            let stmt = self.thr_module.get_statement(*stmt);
-            self.emit_datadef(module, stmt);
+            todo!()
         }
     }
     /// recursively emit the instructions necessary to represent the given statement
-    fn emit_stmt(&mut self, bctx: &mut BlockContext, stmt: &THRStatement) {
-        match stmt {
-            THRStatement::Init(symbdecl, expr) => {
-                let symb = self.thr_module.get_symbol(symbdecl.symbol);
-                let typ = self.thr_module.get_type(symbdecl.typ);
-                let value = self.thr_module.get_expr(*expr);
-                self.emit_stmt_init(bctx, symb, typ, value);
-            }
-            THRStatement::Jmp(b) => {
-                let b = self.thr_module.get_block(*b);
-                let label = self.fresh_blocklabel(bctx);
-                bctx.sig.add_instr(Q::Instr::Jmp(label.clone()));
-                self.emit_block(bctx, b, &label);
-            }
-            THRStatement::Ret(e) => {
-                let expr = self.thr_module.get_expr(*e);
-                let temp = self.emit_expr(bctx, expr);
-                let instr = Q::Instr::Ret(Some(temp));
-                bctx.sig.add_instr(instr);
-            }
-            THRStatement::SegmentedAssign(_thrsymbol_decl, _thrblock_ids) => {
-                todo!()
-            }
-            THRStatement::SegmentReturn(_thrsymbol_id, _threxpr_id) => todo!(),
-        }
+    fn emit_stmt(&mut self, bctx: &mut FuncContext, stmt: &THRStatement) {
+        todo!()
     }
     fn emit_stmt_init(
         &mut self,
-        bctx: &mut BlockContext,
+        bctx: &mut FuncContext,
         symb: &THRSymbol,
         typ: &THRTypeSpecifier,
         value: &THRExpression,
-    ) -> Option<Q::Value> {
-        let q_val = self.emit_expr(bctx, value);
-        // an expression with unit-type cannot be stored, as it holds no data.
-        // it may however have side effects, so it must still be emitted
-        match typ {
-            THRTypeSpecifier::Unit | THRTypeSpecifier::Never => {
-                bctx.sig.add_instr(Q::Instr::Copy(q_val));
-                None
-            }
-            _ => {
-                let q_typ = self.emit_lvalue_type_and_get(typ);
-                let temp = Q::Value::Temporary(self.disambiguate_nonglobal_symbol(bctx, symb));
-                bctx.sig
-                    .assign_instr(temp.clone(), q_typ, Q::Instr::Copy(q_val));
-                Some(temp)
-            }
-        }
+    ) {
+        todo!()
     }
     /// Recursively emit instructions necessary to compute the given expression, then return the temporary it is saved to.
-    fn emit_expr(&mut self, bctx: &mut BlockContext, expr: &THRExpression) -> Q::Value {
-        match expr {
-            THRExpression::ConstInt(lit_i) => Q::Value::Const(lit_i.value),
-            THRExpression::ConstFloat(lit_f) => Q::Value::Const(lit_f.value.to_bits()),
-            THRExpression::ConstBool(b) => Q::Value::Const(*b as u64),
-            THRExpression::Binop(_op, _l, _r) => {
-                let l = self.thr_module.get_expr(*_l);
-                let r = self.thr_module.get_expr(*_r);
-                self.emit_expr_binop(bctx, *_op, l, r)
-            }
-            THRExpression::Unop(..) => todo!(),
-            THRExpression::Ident(i) => {
-                let symbol = self.thr_module.get_symbol(*i);
-                let disamb = self.disambiguate_nonglobal_symbol(bctx, symbol);
-                match symbol.kind {
-                    SymbolKind::LocalVar | SymbolKind::FunctionParam => Q::Value::Temporary(disamb),
-                    SymbolKind::GlobalVar => Q::Value::Global(disamb),
-                    SymbolKind::FunctionName => todo!(),
-                    SymbolKind::ImportItem => todo!(),
-                }
-            }
-        }
-    }
-    /// Recursively emit instructions necessary to compute the given binary expression, then return the temporary it is saved to.
-    fn emit_expr_binop(
-        &mut self,
-        bctx: &mut BlockContext,
-        op: BinOp,
-        l: &THRExpression,
-        r: &THRExpression,
-    ) -> Q::Value {
-        let _l = self.emit_expr(bctx, l);
-        let _r = self.emit_expr(bctx, r);
-        match op {
-            BinOp::Add => todo!(),
-            BinOp::Sub => todo!(),
-            BinOp::Mul => todo!(),
-            BinOp::Div => todo!(),
-            BinOp::Mod => todo!(),
-            BinOp::LogAnd => todo!(),
-            BinOp::LogOr => todo!(),
-            BinOp::LogXor => todo!(),
-            BinOp::BitAnd => todo!(),
-            BinOp::BitOr => todo!(),
-            BinOp::BitXor => todo!(),
-            BinOp::Subscript => todo!(),
-            BinOp::Lsh => todo!(),
-            BinOp::Rsh => todo!(),
-            BinOp::Eq => todo!(),
-            BinOp::Neq => todo!(),
-            BinOp::Geq => todo!(),
-            BinOp::Leq => todo!(),
-            BinOp::LT => todo!(),
-            BinOp::GT => todo!(),
-        }
+    fn emit_expr(&mut self, bctx: &mut FuncContext, expr: &THRExpression) {
+        todo!()
     }
 
-    fn emit_return_type(&mut self, typ: &THRTypeSpecifier) -> Option<QBETypeID> {
+    fn emit_type(&mut self, typ: &THRTypeSpecifier) -> CraneTypeID {
         match typ {
-            THRTypeSpecifier::Integer { width, signed } => {
-                Some(self.emit_type_integer(*width, *signed))
-            }
-            THRTypeSpecifier::Float { width } => Some(self.emit_type_float(*width)),
-            THRTypeSpecifier::Pointer(_t) => Some(self.types.intern(Q::Type::Long)),
-            THRTypeSpecifier::Boolean => Some(self.types.intern(Q::Type::UnsignedByte)),
-            THRTypeSpecifier::Unit => None,
-            THRTypeSpecifier::Never => None,
-            THRTypeSpecifier::Struct { .. } => todo!(),
-            THRTypeSpecifier::Tuple(_) => todo!(),
-        }
-    }
-    fn emit_return_type_and_get(&mut self, return_ty: &THRTypeSpecifier) -> Option<&Q::Type> {
-        let id = self.emit_return_type(return_ty)?;
-        self.types.get_by_id(id)
-    }
-
-    fn emit_lvalue_type(&mut self, typ: &THRTypeSpecifier) -> QBETypeID {
-        match typ {
-            THRTypeSpecifier::Integer { width, signed } => self.emit_type_integer(*width, *signed),
+            THRTypeSpecifier::Integer { width, .. } => self.emit_type_integer(*width),
             THRTypeSpecifier::Float { width } => self.emit_type_float(*width),
-            THRTypeSpecifier::Pointer(_t) => self.types.intern(Q::Type::Long),
-            THRTypeSpecifier::Boolean => self.types.intern(Q::Type::Byte),
+            THRTypeSpecifier::Pointer(_t) => self
+                .crane_types
+                .intern(crane::Type::int_with_byte_size(8).unwrap()),
+            THRTypeSpecifier::Boolean => self
+                .crane_types
+                .intern(crane::Type::int_with_byte_size(1).unwrap()),
             THRTypeSpecifier::Unit => todo!(),
             THRTypeSpecifier::Never => todo!(),
             THRTypeSpecifier::Struct {
@@ -206,52 +111,33 @@ impl<'m> THRtoQBE<'m> {
         }
     }
 
-    fn emit_lvalue_type_and_get(&mut self, typ: &THRTypeSpecifier) -> Q::Type {
-        let t = self.emit_lvalue_type(typ);
-        self.types.get_by_id(t).unwrap().clone()
+    fn emit_type_and_get(&mut self, typ: &THRTypeSpecifier) -> crane::Type {
+        let t = self.emit_type(typ);
+        self.crane_types.get_by_id(t).unwrap().clone()
     }
 
-    fn emit_type_integer(&mut self, width: IntegerWidth, signed: bool) -> QBETypeID {
-        let t = match (width, signed) {
-            (IntegerWidth::_8, true) => Q::Type::SignedByte,
-            (IntegerWidth::_8, false) => Q::Type::UnsignedByte,
-            (IntegerWidth::_16, true) => Q::Type::SignedHalfword,
-            (IntegerWidth::_16, false) => Q::Type::UnsignedHalfword,
-            (IntegerWidth::_32, true) => Q::Type::Word,
-            (IntegerWidth::_32, false) => Q::Type::Word,
-            (IntegerWidth::_64, true) => Q::Type::Long,
-            (IntegerWidth::_64, false) => Q::Type::Long,
-        };
-        self.types.intern(t)
-    }
-
-    fn emit_type_float(&mut self, width: FloatWidth) -> QBETypeID {
+    fn emit_type_integer(&mut self, width: IntegerWidth) -> CraneTypeID {
         let t = match width {
-            FloatWidth::_32 => Q::Type::Single,
-            FloatWidth::_64 => Q::Type::Double,
+            IntegerWidth::_8 => crane::types::I8,
+            IntegerWidth::_16 => crane::types::I16,
+            IntegerWidth::_32 => crane::types::I32,
+            IntegerWidth::_64 => crane::types::I64,
         };
-        self.types.intern(t)
+        self.crane_types.intern(t)
     }
 
-    fn fresh_temporary(&mut self, name: &str) -> Q::Value {
-        let temp = Q::Value::Temporary(format!("t{}_{name}", self.temp_generator));
-        self.temp_generator += 1;
-        temp
-    }
-    fn fresh_blocklabel(&mut self, bctx: &BlockContext) -> String {
-        let temp = format!(
-            "{}B{}",
-            self.get_module_func_prefix(bctx),
-            self.block_label_generator
-        );
-        self.block_label_generator += 1;
-        temp
+    fn emit_type_float(&mut self, width: FloatWidth) -> CraneTypeID {
+        let t = match width {
+            FloatWidth::_32 => crane::types::F32,
+            FloatWidth::_64 => crane::types::F64,
+        };
+        self.crane_types.intern(t)
     }
 
-    fn get_module_func_prefix(&self, bctx: &BlockContext) -> String {
+    fn get_module_func_prefix(&self, bctx: &FuncContext) -> String {
         format!("{}_{}_", self.thr_module.name, bctx.sig.name)
     }
-    fn disambiguate_nonglobal_symbol(&self, bctx: &BlockContext, ident: &THRSymbol) -> String {
+    fn disambiguate_nonglobal_symbol(&self, bctx: &FuncContext, ident: &THRSymbol) -> String {
         let prefix = self.get_module_prefix();
         let demangle = match ident.kind {
             SymbolKind::LocalVar => &format!("{}_local_", bctx.sig.name),
@@ -277,92 +163,85 @@ impl<'m> THRtoQBE<'m> {
         format!("{prefix}{demangle}{}", ident.name)
     }
 
-    #[allow(unused)]
-    fn fresh_prelude_block(&mut self) -> Q::Block {
-        let label = format!("_{}_predule", self.temp_generator);
-        self.temp_generator += 1;
-        Q::Block {
-            label,
-            items: vec![],
-        }
-    }
-
-    fn emit_datadef(&mut self, module: &mut qbe::Module, stmt: &THRStatement) {
+    fn emit_datadef(&mut self, object: &mut Cobj::ObjectModule, stmt: &THRStatement) {
         let THRStatement::Init(decl, val) = stmt else {
             unreachable!("global statement must be an init");
         };
         let name = self.thr_module.get_symbol(decl.symbol);
         let name = self.disambiguate_global_symbol(name);
         let thr_typ = self.thr_module.get_type(decl.typ);
-        let qbe_typ_id = self.emit_lvalue_type(thr_typ);
+        let crane_typ_id = self.emit_type(thr_typ);
         let align = self.thr_module.alignment_of(decl.typ);
-        let qbe_typ = self
-            .types
-            .get_by_id(qbe_typ_id)
-            .cloned()
-            .expect("emit_type should have interned the supplied typ");
         let items = match self.thr_module.get_expr(*val) {
-            THRExpression::ConstInt(i) => {
-                let item = Q::DataItem::Const(i.value);
-                vec![(qbe_typ, item)]
-            }
+            THRExpression::ConstInt(i) => {}
             THRExpression::ConstFloat(_) => todo!(),
-            THRExpression::ConstBool(b) => {
-                let item = Q::DataItem::Const(*b as u64);
-                vec![(qbe_typ, item)]
-            }
+            THRExpression::ConstBool(b) => {}
             THRExpression::Binop(..) => todo!(),
             THRExpression::Unop(..) => todo!(),
             THRExpression::Ident(..) => todo!(),
         };
-        let d = Q::DataDef::new(Q::Linkage::public(), name, Some(align), items);
-        module.add_data(d);
     }
 
-    fn emit_function(&mut self, m: &mut Q::Module, func: &THRFunction) {
+    // generate the userfuncname associated with a function
+    fn get_func_crane_ref(&self, func: &THRFunction) -> Cir::UserFuncName {
+        let func_id = self
+            .thr_module
+            .functions()
+            .get_unchecked(func)
+            .destruct_key() as u32;
+        let mod_id: u32 = self.thr_module.ipr_id.as_usize();
+        Cir::UserFuncName::user(mod_id, func_id.into())
+    }
+
+    fn emit_function(&mut self, builder: &mut crane::FunctionBuilderContext, func: &THRFunction) {
         trace!("walking function `{}`", func.name);
-        let mut qbe_func = self.build_function_signature(func);
+        let (crane_name, sig) = self.build_func_sig_and_name(func);
+
+        let mut crane_func = Cir::Function::with_name_signature(crane_name, sig);
+        let builder = crane::FunctionBuilder::new(&mut crane_func, builder);
+        let mut bctx = FuncContext::new(builder, func);
         let body = self.thr_module.get_block(func.body);
-        let mut bctx = BlockContext::new(m, &mut qbe_func);
-        self.emit_block(&mut bctx, body, &func.name);
-        m.add_function(qbe_func);
+        self.emit_block(&mut bctx, body);
     }
-    fn build_function_signature(&mut self, func: &THRFunction) -> Q::Function {
+    fn build_func_sig_and_name(
+        &mut self,
+        func: &THRFunction,
+    ) -> (Cir::UserFuncName, crane::Signature) {
+        let mut sig = crane::Signature::new(crane::isa::CallConv::SystemV);
         let return_ty = self.thr_module.get_type(func.ret);
-        let return_ty = self.emit_return_type_and_get(return_ty).cloned();
-        let mut arguments = vec![];
+        let return_ty = self.emit_type_and_get(return_ty);
+        let return_abi = Cir::AbiParam::new(return_ty);
+        sig.returns.push(return_abi);
+
         for param in func.params.iter() {
-            let typ = self.thr_module.get_type(param.typ);
-            let typ = self.emit_lvalue_type_and_get(typ);
-            let name = self.thr_module.get_symbol(param.symbol).name.as_str();
-            let name = self.fresh_temporary(name);
-            arguments.push((typ, name));
+            let arg_ty = self.thr_module.get_type(param.typ);
+            let arg_ty = self.emit_type_and_get(arg_ty);
+            let value = Cir::AbiParam::new(arg_ty);
+            sig.params.push(value)
         }
-        Q::Function::new(
-            Q::Linkage::public(),
-            func.name.clone(),
-            arguments,
-            return_ty,
-        )
+        let name = self.get_func_crane_ref(func);
+        (name, sig)
     }
 
-    fn emit_block(&mut self, bctx: &mut BlockContext, body: &THRBlock, label: &str) {
-        bctx.sig.add_block(label);
+    fn emit_block(&mut self, bctx: &mut FuncContext, body: &THRBlock) {
         for stmt in body.items.iter().copied() {
             let stmt = self.thr_module.get_statement(stmt);
             trace!("emitting block statement `{stmt:?}`");
             self.emit_stmt(bctx, stmt);
         }
-        bctx.sig
-            .blocks
-            .last_mut()
-            .unwrap()
-            .add_comment(format!("END_{label}"));
     }
 
-    fn get_module_prefix(&self) -> String {
-        let mut s = self.thr_module.name.clone();
-        s.push('_');
-        s
+    fn current_block(&mut self, bctx: &mut FuncContext) -> Cir::Block {
+        bctx.builder
+            .current_block()
+            .unwrap_or_else(|| bctx.builder.create_block())
+    }
+
+    fn get_module_prefix(&self) -> &str {
+        &self.thr_module.name
+    }
+
+    pub fn lower(&self) {
+        todo!()
     }
 }

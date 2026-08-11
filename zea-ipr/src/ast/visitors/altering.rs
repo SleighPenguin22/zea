@@ -6,6 +6,7 @@
 //! - [`InsertImplicitMainReturn`]: insert a return 0 inside the `main` function, if it exists
 
 #![allow(clippy::new_without_default)]
+use crate::InternKey;
 use crate::ast::visitors::annotating::IPRScopedIdentifier;
 use crate::ast::visitors::{
     IPRTransfomer, IPRVisitor, walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr,
@@ -20,7 +21,6 @@ use indexmap::set::MutableValues;
 use log::trace;
 use std::collections::{HashMap, HashSet};
 use std::process::exit;
-use zea_internal_macros::{InternKey, VariantToStr};
 
 pub trait NodeLabeler: Sized {
     /// Start `Self`'s id-generator with the last id that `other_generator` used,
@@ -278,7 +278,7 @@ pub struct BlockLikeScope {
     children: Vec<BlockScopeIndex>,
     kind: ScopeKind,
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, VariantToStr)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ScopeKind {
     Function,
     Block,
@@ -647,10 +647,9 @@ impl IPRTransfomer for InsertImplicitMainReturn {
 
 #[cfg(test)]
 mod tests {
-    use crate::zea::visitors::IPRTransfomer;
-    use crate::zea::*;
-    use crate::zea::{IPRModule, NodeLabeler};
-    use zea_parser::zepast;
+    use crate::ast::visitors::IPRTransfomer;
+    use crate::ast::*;
+    use crate::ast::{IPRModule, NodeLabeler};
 
     fn prepare_module(mut ast: IPRModule) -> (IPRModule, impl NodeLabeler) {
         let mut labeler = BareNodeLabeler::new();

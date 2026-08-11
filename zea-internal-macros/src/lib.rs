@@ -214,15 +214,12 @@ fn internkey_derive_impl_struct(s: DataStruct, ident: Ident, generics: Generics)
             let fident = f.ident.clone();
             let fty = f.ty.clone();
             quote! {
-                impl #generics From<usize> for #ident #generics {
-                    fn from(value: usize) -> Self {
-                        Self {
-                            #fident : value as #fty
-                        }
+                impl #generics InternKey for #ident #generics {
+
+                    fn construct_key(idx: usize) -> Self {
+                        Self {#fident: idx as #fty}
                     }
-                }
-                impl #generics Into<usize> for #ident #generics {
-                    fn into(self) -> usize {
+                    fn destruct_key(self) -> usize {
                         self.#fident as usize
                     }
                 }
@@ -233,13 +230,12 @@ fn internkey_derive_impl_struct(s: DataStruct, ident: Ident, generics: Generics)
         Some(f) if f.ident.is_none() => {
             let fty = f.ty.clone();
             quote! {
-                impl #generics From<usize> for #ident #generics {
-                    fn from(value: usize) -> Self {
-                        Self(value as #fty)
+                impl #generics InternKey for #ident #generics {
+
+                    fn construct_key(idx: usize) -> Self {
+                        Self(idx as #fty)
                     }
-                }
-                impl #generics Into<usize> for #ident #generics {
-                    fn into(self) -> usize {
+                    fn destruct_key(self) -> usize {
                         self.0 as usize
                     }
                 }

@@ -114,11 +114,10 @@
 //! When all variables in the `node_variables` map are bound, type checking is done,
 //! the `node_types` and `type_interining_table` are then extracted into a [`IPRModuleTypeInfo`]
 //!
-use std::{collections::HashMap, process::exit};
-
+use crate::InternKey;
 use indexmap::{IndexMap, IndexSet};
 use log::{error, trace};
-use zea_internal_macros::InternKey;
+use std::{collections::HashMap, process::exit};
 
 use crate::{
     InternTable, ZeaError,
@@ -165,7 +164,7 @@ fn narrowest_int_type(literal: usize) -> IPRTypeSpecifier {
 
 /// The id that a concrete type gets during type-checking
 #[derive(Copy, Clone, Eq, PartialEq, Hash, InternKey)]
-pub struct InternedTypeId(usize);
+pub struct InternedTypeId(u32);
 
 impl InternedTypeId {
     fn as_typevar(self, table: &mut TypeVariableInterningTable) -> TypeVariable {

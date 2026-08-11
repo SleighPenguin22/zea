@@ -13,7 +13,7 @@ use std::{
     process::exit as pexit,
 };
 use tempfile::NamedTempFile;
-use zea_codegen::THRtoQBE;
+use zea_codegen::THRtoCraneLift;
 use zea_common::CompilerConfig;
 use zea_ipr::ast::thr::THRModule;
 use zea_ipr::typecheck_module;
@@ -147,7 +147,7 @@ fn main() {
         info!("Typed Highlevel Representation:\n{:?}", lowered);
     }
 
-    let mut codegen = THRtoQBE::new(&lowered);
+    let mut codegen = THRtoCraneLift::new(&lowered);
     let qbe = codegen.lower();
     let il = format!("{qbe}");
     if ccfg.print_qbe_il() {
