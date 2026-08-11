@@ -23,14 +23,14 @@ pub trait ZeaError<'m> {
 /// as it guarantees non-panicking access.
 #[derive(PartialEq, Eq, Clone)]
 pub struct InternTable<Key: InternKey, Value: Hash + Eq> {
-    set: IndexSet<Value>,
-    phantom: PhantomData<Key>,
+    indexset: IndexSet<Value>,
+    _phantom: PhantomData<Key>,
 }
 
 impl<Key: InternKey + Debug, Value: Hash + Eq + Debug> Debug for InternTable<Key, Value> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InternTable")
-            .field("set", &self.set)
+            .field("set", &self.indexset)
             .finish()
     }
 }
@@ -42,30 +42,31 @@ pub trait InternKey {
 impl<Key: InternKey, Value: Hash + Eq> InternTable<Key, Value> {
     pub fn new() -> Self {
         Self {
-            set: IndexSet::new(),
-            phantom: PhantomData,
+            indexset: IndexSet::new(),
+            _phantom: PhantomData,
         }
     }
     pub fn intern(&mut self, item: Value) -> Key {
-        let (idx, _) = self.set.insert_full(item);
+        let (idx, _) = self.indexset.insert_full(item);
         Key::construct_key(idx)
     }
     pub fn get_by_id(&self, id: Key) -> Option<&Value> {
-        self.set.get_index(id.destruct_key())
+        self.indexset.get_index(id.destruct_key())
     }
-    pub fn get_unchecked(&self, item: &Value) -> Key {
+    /// Get the Key of a given value, panicking if that item was not intered
+    pub fn get_id_panicking(&self, item: &Value) -> Key {
         Key::construct_key(
-            self.set
+            self.indexset
                 .get_index_of(item)
                 .expect("non-interned item in intern table"),
         )
     }
     pub fn iter(&self) -> Iter<'_, Value> {
-        self.set.iter()
+        self.indexset.iter()
     }
 
     fn get_mut_by_id(&mut self, id: Key) -> Option<&mut Value> {
-        self.set.get_index_mut2(id.destruct_key())
+        self.indexset.get_index_mut2(id.destruct_key())
     }
 }
 

@@ -152,6 +152,12 @@ impl THRModule {
     pub fn global_data_block(&self) -> THRBlockID {
         self.global_data_block
     }
+    pub fn get_global_data_block(&self) -> &THRBlock {
+        self.get_block(self.global_data_block)
+    }
+    pub fn id_of_stmt(&self, init: &THRStatement) -> THRStatementID {
+        self.interned.statements.get_id_panicking(init)
+    }
 
     pub fn entry_point(&self) -> THRFunctionID {
         self.entry_point
@@ -319,7 +325,7 @@ pub struct THRStructField {
     pub offset: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum THRExpression {
     ConstInt(TypedLiteral<u64>),
     ConstFloat(TypedLiteral<f64>),
@@ -399,7 +405,11 @@ enum THRLoweredStatement {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum THRStatement {
-    Init(THRSymbolDecl, THRExprID),
+    Init {
+        ipr_id: NodeId,
+        decl: THRSymbolDecl,
+        value: THRExprID,
+    },
     Jmp(THRBlockID),
     Ret(THRExprID),
     /// An assigment that is initialized by some branch,
@@ -638,12 +648,16 @@ impl THRInternTables {
         let typ = init.typ.as_ref().unwrap();
         let typ = self.lower_type(ipr_ctx, typ);
 
-        let init = THRSymbolDecl { symbol, typ };
+        let thr_decl = THRSymbolDecl { symbol, typ };
         let stmt = match value {
             LoweredMaybeSegmentedExpr::Segmented(block) => {
-                THRStatement::SegmentedAssign(init, block)
+                THRStatement::SegmentedAssign(thr_decl, block)
             }
-            LoweredMaybeSegmentedExpr::NotSegmented(expr) => THRStatement::Init(init, expr),
+            LoweredMaybeSegmentedExpr::NotSegmented(expr) => THRStatement::Init {
+                decl: thr_decl,
+                value: expr,
+                ipr_id: init.id,
+            },
         };
         self.statements.intern(stmt)
     }
