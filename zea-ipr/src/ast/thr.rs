@@ -39,30 +39,6 @@
 //! This is done by a later visitor pass, which provides a way to get the pred- and successors of a [`THRBlock`],
 //! which is then used by QBE or some other backend to generate its CFG.
 
-use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
-use indexmap::Equivalent;
-use log::trace;
-use zea_common::{CompilerError, CompilerErrorKind, CompilerStage};
-use zea_internal_macros::{InternKey, VariantToStr};
-macro_rules! internal_compiler_error {
-    (spi) => {
-        unreachable!(
-            "{}",
-            CompilerError::new(CompilerStage::IPRtoTHR, CompilerErrorKind::StrayPackedInit)
-                .pretty()
-        )
-    };
-    (sui) => {
-        unreachable!(
-            "{}",
-            CompilerError::new(
-                CompilerStage::IPRtoTHR,
-                CompilerErrorKind::StrayUnscopedIdent
-            )
-            .pretty()
-        )
-    };
-}
 use crate::{
     InternTable,
     ast::{
@@ -75,6 +51,11 @@ use crate::{
         visitors::{altering::IdentifierScoper, annotating::SymbolKind},
     },
 };
+use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
+use indexmap::Equivalent;
+use log::trace;
+use zea_common::{CompilerError, CompilerErrorKind, CompilerStage, internal_compiler_error};
+use zea_internal_macros::{InternKey, VariantToStr};
 
 pub fn lower_module(
     module: IPRModule,
@@ -669,10 +650,7 @@ impl THRInternTables {
         for glob in globs.iter() {
             trace!("lowering global {}", glob.id);
             let ids = self.lower_init_block(ipr_ctx, glob, SymbolKind::GlobalVar);
-            let [item] = ids.as_slice() else {
-                unreachable!()
-            };
-            items.push(*item);
+            items.extend(ids);
         }
         let global_data_block = THRBlock { items };
         let global_data_block = self.blocks.intern(global_data_block);

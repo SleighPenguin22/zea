@@ -6,7 +6,7 @@ use zea_internal_macros::InternKey;
 use zea_ipr::{
     InternTable,
     ast::{
-        BinOp, NodeId,
+        BinOp,
         thr::{
             FloatWidth, IntegerWidth, THRBlock, THRExprID, THRExpression, THRFunction, THRModule,
             THRStatement, THRSymbol, THRSymbolDecl, THRSymbolID, THRTypeSpecifier, TypedLiteral,
@@ -61,7 +61,7 @@ impl<'m> THRtoQBE<'m> {
         let glob_data = self.thr_module.get_global_data_block();
         for stmt in glob_data.items.iter().copied() {
             let stmt = self.thr_module.get_statement(stmt);
-            let THRStatement::Init { decl, val, ipr_id } = *stmt else {
+            let THRStatement::Init { decl, val, .. } = *stmt else {
                 unreachable!("global statements can only be inits")
             };
             self.emit_datadef(module, decl, val);

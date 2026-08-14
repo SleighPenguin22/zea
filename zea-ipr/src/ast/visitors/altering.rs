@@ -5,7 +5,7 @@
 //! - [`IdentifierScoper`]: disambguate identifier-expression and annotate them with their binding site
 //! - [`InsertImplicitMainReturn`]: insert a return 0 inside the `main` function, if it exists
 
-use crate::ast::visitors::annotating::IPRScopedIdentifier;
+use crate::ast::visitors::annotating::{IPRScopedIdentifier, SymbolKind};
 use crate::ast::visitors::{
     IPRTransfomer, IPRVisitor, walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr,
     walk_mut_funcdef, walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt,
@@ -14,11 +14,15 @@ use crate::ast::visitors::{
 use crate::ast::{NodeId, ipr::*};
 use crate::visualisation::IndentPrint;
 use crate::{InternTable, ZeaError, impl_nodelabeler};
-use indexmap::IndexSet;
+use arbitrary::{Arbitrary, Unstructured};
 use indexmap::set::MutableValues;
+use indexmap::{IndexMap, IndexSet};
 use log::trace;
 use std::collections::{HashMap, HashSet};
+use std::env::Args;
+use std::ops::IndexMut;
 use std::process::exit;
+use zea_common::internal_compiler_error;
 use zea_internal_macros::{InternKey, VariantToStr};
 
 pub trait NodeLabeler: Sized {
@@ -45,19 +49,6 @@ pub trait NodeLabeler: Sized {
     }
 }
 
-use zea_common::{CompilerError, CompilerErrorKind, CompilerStage};
-fn stray_packed_init() -> CompilerError {
-    CompilerError::new(
-        CompilerStage::ExpandInit,
-        CompilerErrorKind::StrayPackedInit,
-    )
-}
-macro_rules! internal_compiler_error {
-    (spi) => {
-        unreachable!("{}", stray_packed_init().pretty())
-    };
-}
-
 pub struct BareNodeLabeler {
     label: u32,
 }
@@ -65,6 +56,12 @@ pub struct BareNodeLabeler {
 impl BareNodeLabeler {
     pub fn new() -> Self {
         Self { label: 1 }
+    }
+}
+
+impl Default for BareNodeLabeler {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -252,6 +249,12 @@ impl AssignmentExpander {
     }
 }
 
+impl Default for AssignmentExpander {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, InternKey)]
 pub struct BlockScopeIndex(u32);
 
@@ -322,6 +325,13 @@ impl BlockLikeScope {
 /// - an [`IPRFuncParam`]
 /// - an [`IPRFunction`]
 ///
+/// If a call to `visit_module()` from this pass returns succesfully,
+/// the following invariant holds:
+/// - The IPR no longer contains any [`IPRExpression`] with kind `UnscopedIdent`
+///
+/// subsequent passes thus may mark this match arm `unreachable!()`,
+/// the `internal_compiler_error!(sui)` is a shortcut for printing a message upon
+/// encountering a stray unscoped identifier
 pub struct IdentifierScoper {
     /// The scope-path to the currently analyzed scope
     scope_stack: Vec<BlockScopeIndex>,
@@ -644,7 +654,6 @@ impl IPRTransfomer for InsertImplicitMainReturn {
         Ok(())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use crate::ast::visitors::IPRTransfomer;

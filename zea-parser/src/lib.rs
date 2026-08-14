@@ -24,10 +24,7 @@ pub fn parse_module(src: &'_ str) -> (IPRModule, BareNodeLabeler) {
             exit(1);
         }
     };
-    info!("\tparsed source file succesfully");
-    info!("starting node-labeling...");
     let labeler = module.label_nodes();
-    info!("\tnode-labeling successful");
     (module, labeler)
 }
 

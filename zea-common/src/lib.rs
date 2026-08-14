@@ -87,7 +87,8 @@ pub enum CompilerStage {
     Parse = 0,
     ExpandInit = 1,
     TypeCheck = 2,
-    IPRtoTHR,
+    LexicalScopeAnalysis = 3,
+    IPRtoTHR = 4,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,4 +97,27 @@ pub enum CompilerErrorKind {
 
     StrayUnscopedIdent = 1,
     StrayPackedInit = 2,
+}
+pub fn stray_packed_init() -> CompilerError {
+    CompilerError::new(
+        CompilerStage::ExpandInit,
+        CompilerErrorKind::StrayPackedInit,
+    )
+}
+pub fn stray_unscoped_ident() -> CompilerError {
+    CompilerError::new(
+        CompilerStage::LexicalScopeAnalysis,
+        CompilerErrorKind::StrayUnscopedIdent,
+    )
+}
+#[macro_export]
+macro_rules! internal_compiler_error {
+    (spi) => {{
+        use $crate::stray_packed_init;
+        unreachable!("{}", stray_packed_init().pretty())
+    }};
+    (sui) => {{
+        use $crate::stray_unscoped_ident;
+        unreachable!("{}", stray_unscoped_ident().pretty())
+    }};
 }

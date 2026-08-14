@@ -118,6 +118,7 @@ use std::{collections::HashMap, process::exit};
 
 use indexmap::{IndexMap, IndexSet};
 use log::{error, trace};
+use zea_common::internal_compiler_error;
 use zea_internal_macros::InternKey;
 
 use crate::{
@@ -620,7 +621,7 @@ impl ZeaTypeChecker {
     /// recursively generate typevars for the given assignment block
     fn introduce_assignment_block(&mut self, assigment: &IPRInitializationBlock) {
         let IPRInitializationKind::Unpacked(inits) = &assigment.kind else {
-            unreachable!("initializations should be unpacked before typechecks")
+            internal_compiler_error!(sui)
         };
         for init in inits.iter() {
             self.introduce_assignment(init);
@@ -664,7 +665,7 @@ impl ZeaTypeChecker {
             }
             IPRExpressionKind::StringLiteral(_) => todo!(),
             IPRExpressionKind::UnScopedIdent(_) => {
-                unreachable!("identifiers should be scoped before type checking")
+                internal_compiler_error!(sui)
             }
             IPRExpressionKind::ScopedIdent(_) => {}
             IPRExpressionKind::FunctionCall(_) => todo!(),
@@ -675,7 +676,7 @@ impl ZeaTypeChecker {
             IPRExpressionKind::UnOpExpr(_, arg) => {
                 self.introduce_expression(arg.as_ref());
             }
-            IPRExpressionKind::MemberAccess(subject, field) => {
+            IPRExpressionKind::MemberAccess(subject, ..) => {
                 self.introduce_expression(subject.as_ref());
             }
             IPRExpressionKind::IfThenElse(_) => todo!(),
@@ -763,7 +764,7 @@ impl ZeaTypeChecker {
             IPRExpressionKind::ScopedIdent(s) => {
                 let t_referrant = *self.get_inference_id(s.origin);
                 self.hindley_milner_unify(t_var, t_referrant)?;
-                self.trace_expr_typevar(expr);
+                // self.trace_expr_typevar(expr);
                 if let Some(int_solved) = self.typevar_interning_table.get_solved(t_referrant) {
                     self.node_types.insert(expr.id, int_solved);
                 }
@@ -773,11 +774,11 @@ impl ZeaTypeChecker {
             | IPRExpressionKind::FunctionCall(_)
             | IPRExpressionKind::IfThenElse(_)
             | IPRExpressionKind::UnOpExpr(_, _) => todo!(),
-            IPRExpressionKind::MemberAccess(subject, field) => {
+            IPRExpressionKind::MemberAccess(..) => {
                 todo!("member access inference")
             }
             IPRExpressionKind::UnScopedIdent(_) => {
-                unreachable!("identifiers should be scoped before typechecking")
+                internal_compiler_error!(sui)
             }
         }?;
 
@@ -958,7 +959,7 @@ impl ZeaTypeChecker {
         assign: &mut IPRInitializationBlock,
     ) -> Result<(), TypeCheckError> {
         let IPRInitializationKind::Unpacked(inits) = &mut assign.kind else {
-            unreachable!("inits should be unpacked before type checking");
+            internal_compiler_error!(spi)
         };
         for init in inits.iter_mut() {
             trace!("\tchecking simple assigment for symbol `{}`", init.assignee);
@@ -995,7 +996,7 @@ impl ZeaTypeChecker {
                 .get_specifier_by_id(t_conc_id)
                 .clone();
             trace!(
-                "\tannotating symbol `{:?}` with type {:?}",
+                "\tannotating symbol `{}` with type {:?}",
                 assign.assignee, t_conc
             );
             assign.typ = Some(t_conc);
@@ -1033,6 +1034,7 @@ impl ZeaTypeChecker {
         trace!("\tsolved {frac:.2}% ({vars_solved} of {vars_total}) of typevars");
         solved
     }
+
     fn trace_expr_typevar(&mut self, expr: &IPRExpression) {
         let var = *self.get_inference_id(expr.id);
         trace!("{var:?} for expr {expr:?}");

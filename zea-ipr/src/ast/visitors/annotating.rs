@@ -11,6 +11,7 @@ use crate::ast::{NodeId, ZeaNodeQuery, ipr::*};
 use crate::impls::StructuralEq;
 use arbitrary::Arbitrary;
 use indexmap::{IndexMap, IndexSet};
+use zea_common::internal_compiler_error;
 
 type NodeIdMap<T> = IndexMap<NodeId, T>;
 type NodeIdSet = IndexSet<NodeId>;
@@ -124,7 +125,7 @@ impl ScopeAnnotations {
 
     fn gather_idents_local_stmt(&mut self, init: &IPRInitializationBlock) {
         let IPRInitializationKind::Unpacked(u) = &init.kind else {
-            unreachable!()
+            internal_compiler_error!(spi)
         };
         for init in u.iter() {
             self.identifiers
@@ -134,7 +135,7 @@ impl ScopeAnnotations {
 
     fn gather_idents_global_init(&mut self, init: &IPRInitializationBlock) {
         let IPRInitializationKind::Unpacked(u) = &init.kind else {
-            unreachable!()
+            internal_compiler_error!(spi)
         };
         for init in u.iter() {
             self.identifiers
