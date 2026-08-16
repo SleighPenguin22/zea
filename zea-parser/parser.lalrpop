@@ -29,6 +29,7 @@ TTypedIdent:IPRTypedIdentifier = {
 pub Mod: IPRModule = {
     <name:ModName> <imports:ModImports?> <exports:ModExports?> <(global_vars, functions, struct_definitions, tagged_unions):ModSymbols> => {
         IPRModule {
+            attributes: Default::default(),
             id: NodeId::sentinel(),
             name,
             imports: imports.unwrap_or(vec![]),
@@ -39,6 +40,21 @@ pub Mod: IPRModule = {
         }
  }
 };
+
+Attr: (String,Option<String>) = {
+    "@" <key:ExprIdent> => (key,None),
+    "@" <key:ExprIdent> "=" <value:ExprIdent> => (key,Some(value))
+};
+
+AttrList: Vec<(String,Option<String>)> = {
+    Attr => vec![<>],
+    <head:Attr> <tail:AttrList> => {
+        let mut tail = tail;
+        tail.push(head);
+        tail
+    }
+}
+
 
 CondBranch: IPRBranch = {
     "if" <condition:Expr> <true_case:Block> => {
@@ -122,7 +138,7 @@ Init: IPRInitializationBlock = {
 }
 AssignPat: IPRAssignmentPattern = {
     <i:ExprIdent> => IPRAssignmentPattern::Identifier(i),
-    "@" <AssignPatInner>
+    "`" <AssignPatInner>
 }
 
 #[inline]
@@ -157,6 +173,7 @@ Func: IPRFunction = {
     <body:Block> => {
         let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
         IPRFunction {
+            attributes: Default::default(),
             id: NodeId::sentinel(),
             name,
             params,
@@ -169,6 +186,7 @@ Func: IPRFunction = {
     "->" <funcreturns:TType> <body:Block> => {
         let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
         IPRFunction {
+            attributes: Default::default(),
             id: NodeId::sentinel(),
             name,
             params,
@@ -191,20 +209,7 @@ Block: IPRBlockExpression = {
             IPRExpression::unit()
         };
         IPRBlockExpression {
-            id: NodeId::sentinel(),
-            statements,
-            tail
-        }
-    },
-};
-FuncBody: IPRBlockExpression = {
-    "{" <statements:(<Stmt>)*> <tail:Expr?> "}" => {
-        let tail = if let Some(tail) = tail {
-            tail
-        } else {
-            IPRExpression::unit()
-        };
-        IPRBlockExpression {
+            attributes: Default::default(),
             id: NodeId::sentinel(),
             statements,
             tail
