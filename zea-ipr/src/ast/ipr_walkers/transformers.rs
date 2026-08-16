@@ -22,7 +22,7 @@ use std::collections::{HashMap, HashSet};
 use std::env::Args;
 use std::ops::IndexMut;
 use std::process::exit;
-use zea_common::internal_compiler_error;
+use zea_common::{CompilerConfig, internal_compiler_error};
 use zea_internal_macros::{InternKey, VariantToStr};
 
 pub trait NodeLabeler: Sized {
@@ -65,18 +65,7 @@ impl Default for BareNodeLabeler {
     }
 }
 
-impl NodeLabeler for BareNodeLabeler {
-    fn next_id(&mut self) -> NodeId {
-        let l = NodeId(self.label);
-        self.label += 1;
-        l
-    }
-    fn labeler_from(mut other_generator: impl NodeLabeler) -> Self {
-        Self {
-            label: other_generator.next_id().0,
-        }
-    }
-}
+impl_nodelabeler!(BareNodeLabeler);
 
 impl IPRTransfomer for BareNodeLabeler {
     type TransformerOk = ();
@@ -164,7 +153,7 @@ pub struct AssignmentExpander {
     label: u32,
 }
 
-crate::impl_nodelabeler!(AssignmentExpander, "unpack");
+impl_nodelabeler!(AssignmentExpander, "unpack");
 
 impl IPRTransfomer for AssignmentExpander {
     type TransformerError = ();
@@ -451,10 +440,6 @@ impl IPRTransfomer for IdentifierScoper {
             }
         }
         // Functions and imports are not considered ordered; their scope covers the whole of the module.
-        for import in module.imports.iter_mut() {
-            self.current_scope_mut()
-                .add_introduction(IPRScopedIdentifier::import_item(module.id, import.clone()));
-        }
 
         for func in module.functions.iter_mut() {
             self.current_scope_mut()
@@ -654,9 +639,20 @@ impl IPRTransfomer for InsertImplicitMainReturn {
         Ok(())
     }
 }
+/// Apply Zea Compiler attributes to IPR nodes, like `inline`, `reorder_fields` etc.
+pub struct CompilerAttributeInserter<'cfg> {
+    ccfg: &'cfg CompilerConfig,
+}
+
+impl<'cfg> CompilerAttributeInserter<'cfg> {
+    pub fn new(ccfg: &'cfg CompilerConfig) -> Self {
+        Self { ccfg }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::ast::visitors::IPRTransfomer;
+    use crate::ast::ipr_walkers::IPRTransfomer;
     use crate::ast::*;
     use crate::ast::{IPRModule, NodeLabeler};
 

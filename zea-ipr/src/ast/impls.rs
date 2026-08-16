@@ -43,25 +43,6 @@ impl StructuralEq for IPRFunction {
         is_eq
     }
 }
-impl StructuralEq for HoistedFunctionSignature {
-    fn eq_ignore_id(&self, other: &Self) -> bool {
-        let mut is_eq = true;
-        is_eq &= (self.name).eq_ignore_id(&other.name);
-        is_eq &= (self.args).eq_ignore_id(&other.args);
-        is_eq &= (self.returns).eq_ignore_id(&other.returns);
-        is_eq
-    }
-}
-impl From<IPRFunction> for HoistedFunctionSignature {
-    fn from(value: IPRFunction) -> Self {
-        HoistedFunctionSignature {
-            id: value.id,
-            name: value.name,
-            args: value.params,
-            returns: value.returns,
-        }
-    }
-}
 impl StructuralEq for IPRStatement {
     fn eq_ignore_id(&self, other: &Self) -> bool {
         let mut is_eq = true;

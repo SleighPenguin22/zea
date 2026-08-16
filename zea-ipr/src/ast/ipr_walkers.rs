@@ -11,6 +11,9 @@
 //! These ID's are just `u32`'s. To hold the invariant that each ID is unique,
 //! the [`NodeLabeler::labeler_from`] method can be used
 //! to pass the last used ID as the starting label for the new labeler.
+//!
+//! The [`impl_nodelabeler`] macro is provided to implement the trait
+//! for some struct with a `label: usize` field
 
 use crate::ast::ipr_walkers::transformers::{AssignmentExpander, IdentifierScoper, NodeLabeler};
 use crate::ast::{IPRScopedIdentifier, ipr::*};

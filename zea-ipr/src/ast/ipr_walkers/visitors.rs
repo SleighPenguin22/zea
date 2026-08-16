@@ -22,7 +22,7 @@ pub enum SymbolKind {
     GlobalVar,
     FunctionName,
     FunctionParam,
-    ImportItem,
+    StructName,
 }
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Arbitrary)]
 pub struct IPRScopedIdentifier {
@@ -65,6 +65,13 @@ impl IPRScopedIdentifier {
             kind: SymbolKind::FunctionParam,
         }
     }
+    pub fn struct_name(origin: NodeId, ident: String) -> Self {
+        Self {
+            origin,
+            ident,
+            kind: SymbolKind::StructName,
+        }
+    }
     pub fn from_func_param(func_param: &IPRFuncParam) -> Self {
         IPRScopedIdentifier::func_param(func_param.id, func_param.name.clone())
     }
@@ -76,14 +83,6 @@ impl IPRScopedIdentifier {
     }
     pub fn from_global_init(init: &IPRSimpleInitialization) -> Self {
         IPRScopedIdentifier::global(init.id, init.assignee.clone())
-    }
-
-    pub fn import_item(origin: NodeId, ident: String) -> Self {
-        Self {
-            origin,
-            ident,
-            kind: SymbolKind::ImportItem,
-        }
     }
 }
 

@@ -1,6 +1,7 @@
 //! This crate holds the AST definition for the Zea language, along with the target C AST.
 use std::{fmt::Debug, hash::Hash, marker::PhantomData};
 
+use arbitrary::Arbitrary;
 use indexmap::{
     IndexSet,
     set::{Iter, MutableValues},
@@ -24,7 +25,7 @@ pub trait ZeaError<'m> {
 #[derive(PartialEq, Eq, Clone)]
 pub struct InternTable<Key: From<usize> + Into<usize>, Value: Hash + Eq> {
     set: IndexSet<Value>,
-    phantom: PhantomData<Key>,
+    _phantom: PhantomData<Key>,
 }
 
 impl<Key: From<usize> + Into<usize> + Debug, Value: Hash + Eq + Debug> Debug
@@ -41,7 +42,7 @@ impl<Key: From<usize> + Into<usize>, Value: Hash + Eq> InternTable<Key, Value> {
     pub fn new() -> Self {
         Self {
             set: IndexSet::new(),
-            phantom: PhantomData,
+            _phantom: PhantomData,
         }
     }
     pub fn intern(&mut self, item: Value) -> Key {
@@ -70,6 +71,11 @@ impl<Key: From<usize> + Into<usize>, Value: Hash + Eq> Default for InternTable<K
         Self::new()
     }
 }
+/// Supply a struct's Name to Implement the NodeLabeler trait for it.
+/// This macro requires the struct to have a `label: usize` field.
+///
+/// Additionaly a lebel suffix mat be provided to customize
+/// [`NodeLabeler::next_label_with_ident_string`]
 macro_rules! impl_nodelabeler {
     ($typ:ident, $label:literal) => {
         impl NodeLabeler for $typ {
@@ -109,3 +115,154 @@ macro_rules! impl_nodelabeler {
     };
 }
 pub(crate) use impl_nodelabeler;
+
+mod attributes {
+    #![allow(unused)]
+    use arbitrary::Arbitrary;
+
+    #[derive(Default, Debug, Clone, Arbitrary)]
+    pub struct IPRModuleAttributes {
+        /// How should items within this module be inlined?
+        cascade_inline: InlineAttribute,
+        /// what should be the default struct attributes
+        /// for structs contained in this module?
+        cascade_struct_attributes: IPRStructAttributes,
+    }
+
+    #[derive(Default, Debug, Clone, Arbitrary)]
+    pub struct IPRStructAttributes {
+        /// How should the fields of this struct be ordered?
+        field_order: StructFieldOrdering,
+        alignment: TypeAlignment,
+    }
+    #[derive(Debug, Copy, Clone, Arbitrary)]
+    pub struct IPRFunctionAttributes {
+        /// should this function be inlined?
+        hint_inline: InlineAttribute,
+        /// is this function called often?
+        temperature: TemperatureAttribute,
+        /// Should dead code elimination
+        /// be performed on this function?
+        eliminate_if_dead: bool,
+        /// Must the caller use the return value?
+        must_use: bool,
+    }
+
+    impl Default for IPRFunctionAttributes {
+        fn default() -> Self {
+            Self {
+                hint_inline: InlineAttribute::AsNecessary,
+                temperature: TemperatureAttribute::LukeWarm,
+                eliminate_if_dead: false,
+                must_use: false,
+            }
+        }
+    }
+
+    #[derive(Default, Debug, Copy, Clone, Arbitrary, PartialEq, Eq)]
+    pub struct IPRBlockAttributes {
+        temperature: TemperatureAttribute,
+    }
+    #[derive(Default, Debug, Copy, Clone, Arbitrary, PartialEq, Eq)]
+    pub struct IPRBranchAttributes {
+        taken_path_temperature: TemperatureAttribute,
+    }
+
+    impl IPRBranchAttributes {
+        pub fn then_path_temperature(&self) -> TemperatureAttribute {
+            self.taken_path_temperature
+        }
+        pub fn else_path_temperature(&self) -> TemperatureAttribute {
+            match self.taken_path_temperature {
+                TemperatureAttribute::Hot => TemperatureAttribute::Cold,
+                TemperatureAttribute::Cold => TemperatureAttribute::Hot,
+                TemperatureAttribute::LukeWarm => TemperatureAttribute::LukeWarm,
+            }
+        }
+    }
+
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    pub enum TemperatureAttribute {
+        Hot,
+        Cold,
+        #[default]
+        LukeWarm,
+    }
+
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    pub enum StructFieldOrdering {
+        #[default]
+        ReprC,
+        Descending,
+    }
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    pub enum TypeAlignment {
+        #[default]
+        Inferred,
+        Explicit(usize),
+    }
+
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    pub enum InlineAttribute {
+        Always,
+        #[default]
+        AsNecessary,
+        Never,
+    }
+    pub enum ZeaAttribute {
+        Inline(InlineAttribute),
+        Align(TypeAlignment),
+        Ordering(StructFieldOrdering),
+        Temperature(TemperatureAttribute),
+        MustUse(bool),
+        Keep(bool),
+    }
+    pub enum AttributeParseError {
+        InvalidKey(String),
+        InvalidValueForKey(String, String),
+        MissingValue(String),
+    }
+
+    static ALLOWED_VALUELESS_KEYS: &[&str] = &["inline", "hot", "cold", "must-use", "keep-unused"];
+    static ALLOWED_KV_PAIRS: &[(&str, &str)] = &[
+        ("inline", "never"),
+        ("inline", "always"),
+        ("fields", "descending"),
+        ("fields", "c"),
+    ];
+    pub fn parse_raw_attribute(
+        key: String,
+        value: Option<String>,
+    ) -> Result<ZeaAttribute, AttributeParseError> {
+        match value {
+            Some(value) => parse_raw_keyful_attribute(key, value),
+            None => parse_raw_keyless_attribute(key),
+        }
+    }
+
+    fn parse_raw_keyless_attribute(key: String) -> Result<ZeaAttribute, AttributeParseError> {
+        match key.as_str() {
+            "inline" => Ok(ZeaAttribute::Inline(InlineAttribute::Always)),
+            "hot" => Ok(ZeaAttribute::Temperature(TemperatureAttribute::Hot)),
+            "cold" => Ok(ZeaAttribute::Temperature(TemperatureAttribute::Cold)),
+            "must-use" => Ok(ZeaAttribute::MustUse(true)),
+            "keep-unused" => Ok(ZeaAttribute::Keep(true)),
+            _ => Err(AttributeParseError::InvalidKey(key)),
+        }
+    }
+
+    fn parse_raw_keyful_attribute(
+        key: String,
+        value: String,
+    ) -> Result<ZeaAttribute, AttributeParseError> {
+        match (key.as_str(), value.as_str()) {
+            ("inline", "always") => Ok(ZeaAttribute::Inline(InlineAttribute::Always)),
+            ("inline", "never") => Ok(ZeaAttribute::Inline(InlineAttribute::Never)),
+            ("inline", _) => Err(AttributeParseError::InvalidValueForKey(key, value)),
+            ("fields", "desc") => Ok(ZeaAttribute::Ordering(StructFieldOrdering::Descending)),
+            ("fields", "c") => Ok(ZeaAttribute::Ordering(StructFieldOrdering::ReprC)),
+            ("fields", _) => Err(AttributeParseError::InvalidValueForKey(key, value)),
+            _ => Err(AttributeParseError::InvalidKey(key)),
+        }
+    }
+}

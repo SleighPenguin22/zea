@@ -18,6 +18,9 @@ use crate::{
             transformers::{AssignmentExpander, IdentifierScoper, InsertImplicitMainReturn},
         },
     },
+    attributes::{
+        IPRBlockAttributes, IPRBranchAttributes, IPRFunctionAttributes, IPRModuleAttributes,
+    },
     impls::StructuralEq,
 };
 
@@ -173,6 +176,7 @@ impl IPRASTNode {
 
 #[derive(Default, Debug, Clone, Arbitrary)]
 pub struct IPRModule {
+    pub attributes: IPRModuleAttributes,
     pub id: NodeId,
     pub imports: Vec<String>,
     pub exports: Vec<String>,
@@ -181,6 +185,7 @@ pub struct IPRModule {
     pub struct_definitions: Vec<IPRStructDataTypeDefinition>,
     pub name: String,
 }
+
 impl IPRModule {
     pub(crate) fn get_main(&mut self) -> Option<&mut IPRFunction> {
         self.functions.iter_mut().find(|f| f.name == "main")
@@ -242,19 +247,12 @@ pub struct IPRFuncParam {
 /// Functions may be imported as many times as needed.
 #[derive(Debug, Clone, Arbitrary)]
 pub struct IPRFunction {
+    pub attributes: IPRFunctionAttributes,
     pub id: NodeId,
     pub name: String,
     pub params: Vec<IPRFuncParam>,
     pub returns: IPRTypeSpecifier,
     pub body: IPRBlockExpression,
-}
-
-#[derive(Debug, Clone)]
-pub struct HoistedFunctionSignature {
-    pub id: NodeId,
-    pub name: String,
-    pub args: Vec<IPRFuncParam>,
-    pub returns: IPRTypeSpecifier,
 }
 
 #[derive(Debug, Clone, Arbitrary)]
@@ -429,9 +427,7 @@ impl IPRFunctionCall {
 
 #[derive(Clone, Debug, Arbitrary)]
 pub struct IPRBlockExpression {
-    /// The label that the block expression has its value assigned to
-    /// i.e. `__block0`, `__block1` etc.
-    /// This label must be unique to the scope of the function in which it exists
+    pub attributes: IPRBlockAttributes,
     pub id: NodeId,
     pub statements: Vec<IPRStatement>,
     pub tail: IPRExpression,
@@ -588,6 +584,7 @@ pub struct PatternMatch {
 
 #[derive(Clone, Debug, Arbitrary)]
 pub struct IPRBranch {
+    pub attributes: IPRBranchAttributes,
     pub id: NodeId,
     pub condition: Box<IPRExpression>,
     pub true_case: Box<IPRExpression>,
@@ -613,6 +610,7 @@ impl StructuralEq for IPRBranch {
 impl IPRBranch {
     pub fn if_block(condition: IPRExpression, then: IPRExpression) -> Self {
         IPRBranch {
+            attributes: Default::default(),
             id: NodeId::sentinel(),
             condition: Box::new(condition),
             true_case: Box::new(then),
@@ -625,6 +623,7 @@ impl IPRBranch {
         otherwise: IPRExpression,
     ) -> Self {
         IPRBranch {
+            attributes: Default::default(),
             id: NodeId::sentinel(),
             condition: Box::new(condition),
             true_case: Box::new(then),
