@@ -8,11 +8,11 @@ use zea_ipr::{
     InternTable,
     ast::{
         BinOp,
+        ipr_walkers::visitors::SymbolKind,
         thr::{
             FloatWidth, IntegerWidth, THRBlock, THRExprID, THRExpression, THRFunction, THRModule,
             THRStatement, THRSymbol, THRSymbolDecl, THRSymbolID, THRTypeSpecifier, TypedLiteral,
         },
-        ipr_walkers::visitors::SymbolKind,
     },
 };
 #[derive(Copy, Clone, Debug, PartialEq, Eq, InternKey)]
@@ -26,6 +26,7 @@ pub struct THRtoQBE<'m> {
     temp_generator: usize,
     block_label_generator: usize,
 }
+/// The context necessary to construct QBE nodes for blocks within a function body
 #[allow(unused)]
 struct BlockContext<'b> {
     m: &'b mut Q::Module,
@@ -57,7 +58,7 @@ impl<'m> THRtoQBE<'m> {
         }
         m
     }
-
+    /// Walk the global data block of a THR module
     fn walk_global_data_blocks(&mut self, module: &mut Q::Module) {
         let glob_data = self.thr_module.get_global_data_block();
         for stmt in glob_data.items.iter().copied() {
@@ -99,6 +100,7 @@ impl<'m> THRtoQBE<'m> {
             THRStatement::SegmentReturn(_thrsymbol_id, _threxpr_id) => todo!(),
         }
     }
+    /// Given all components of an initialization, construct the QBE nodes necessary for it.
     fn emit_stmt_init(
         &mut self,
         bctx: &mut BlockContext,
@@ -128,7 +130,7 @@ impl<'m> THRtoQBE<'m> {
     }
     /// Recursively emit instructions necessary to compute the given expression, then return the temporary it is saved to.
     fn emit_expr(&mut self, bctx: &mut BlockContext, expr: &THRExpression) -> Q::Value {
-        let val = match expr {
+        match expr {
             THRExpression::ConstInt(TypedLiteral { value, .. }) => Q::Value::Const(*value),
             THRExpression::ConstFloat(TypedLiteral { value, .. }) => {
                 Q::Value::Const((*value).to_bits())
@@ -147,13 +149,13 @@ impl<'m> THRtoQBE<'m> {
                     SymbolKind::LocalVar | SymbolKind::FunctionParam => Q::Value::Temporary(disamb),
                     SymbolKind::GlobalVar => Q::Value::Global(disamb),
                     SymbolKind::FunctionName => todo!(),
-                    SymbolKind::ImportItem => todo!(),
+                    SymbolKind::StructName => todo!(),
                 }
             }
-        };
-        val
+        }
     }
-    /// Recursively emit instructions necessary to compute the given binary expression, then return the temporary it is saved to.
+    /// Recursively emit instructions necessary to compute the given binary expression,
+    /// then return the temporary it is saved to.
     fn emit_expr_binop(
         &mut self,
         bctx: &mut BlockContext,
@@ -276,7 +278,7 @@ impl<'m> THRtoQBE<'m> {
             SymbolKind::GlobalVar => "global_",
             SymbolKind::FunctionName => "func_",
             SymbolKind::FunctionParam => &format!("{}_param_", bctx.sig.name),
-            SymbolKind::ImportItem => todo!(),
+            SymbolKind::StructName => todo!(),
         };
 
         format!("{prefix}{demangle}{}", ident.name)
