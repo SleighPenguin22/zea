@@ -48,7 +48,7 @@ use crate::{
             IPRInitializationBlock, IPRInitializationKind, IPRModule, IPRSimpleInitialization,
             IPRStatement, IPRStatementKind, IPRTypeSpecifier, IPRTypedIdentifier,
         },
-        visitors::{altering::IdentifierScoper, annotating::SymbolKind},
+        ipr_walkers::{transformers::IdentifierScoper, visitors::SymbolKind},
     },
 };
 use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};

@@ -13,9 +13,9 @@ use crate::{
     ZeaError,
     ast::{
         BareNodeLabeler, BinOp, IPRScopedIdentifier, NodeLabeler, UnOp, ZeaNodeQuery,
-        visitors::{
+        ipr_walkers::{
             IPRTransfomer, IPRVisitor,
-            altering::{AssignmentExpander, IdentifierScoper, InsertImplicitMainReturn},
+            transformers::{AssignmentExpander, IdentifierScoper, InsertImplicitMainReturn},
         },
     },
     impls::StructuralEq,

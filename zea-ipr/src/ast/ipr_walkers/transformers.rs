@@ -5,8 +5,8 @@
 //! - [`IdentifierScoper`]: disambguate identifier-expression and annotate them with their binding site
 //! - [`InsertImplicitMainReturn`]: insert a return 0 inside the `main` function, if it exists
 
-use crate::ast::visitors::annotating::{IPRScopedIdentifier, SymbolKind};
-use crate::ast::visitors::{
+use crate::ast::ipr_walkers::visitors::{IPRScopedIdentifier, SymbolKind};
+use crate::ast::ipr_walkers::{
     IPRTransfomer, IPRVisitor, walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr,
     walk_mut_funcdef, walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt,
     walk_mut_structdef, walk_mut_unpacked_init,
@@ -48,7 +48,7 @@ pub trait NodeLabeler: Sized {
         }
     }
 }
-
+/// This transformer gives each sentinel ID a new, unique ID.
 pub struct BareNodeLabeler {
     label: u32,
 }

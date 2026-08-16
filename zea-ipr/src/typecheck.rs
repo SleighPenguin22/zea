@@ -95,23 +95,31 @@
 //! and solving one of them to type `t` using `set_solved`
 //! will cause both `a` and `b` to have their `get_solved` return `Some(t)`.
 //!
-//! The TC inference mechanism features two main categories of functions:
+//! The TC inference mechanism features three main categories of functions:
 //! - `introduce_[node]`
 //! - `infer_[node]`
+//! - `check_[node]`
 //!
 //! The `introduce_` family of functions has the following job:
-//! - Assign each expression and binding site in the IPR a type variable and add it to the `node_variables` map
+//! - Assign each expression and binding site in the IPR a type variable and add it to `node_variables`
 //! - Intern any type that is mentioned in the code
 //! - solve the type variables of any trivially solvable expression (literals mostly)
 //!
 //! The `infer_` functions then walk the tree and attempt to solve the type
 //! of the given expression using the available information.
 //!
+//! The `check_` functions verify that each inferred type satisfies the typing rules, i.e.
+//! - An initialization has its annotation and iferred type equal.
+//! - return statement return the same type as the function does.
+//!
+//! Additionally, the `check_` functions will insert an initializations inferred value type
+//! into the annotation if it had none
+//!
 //! Any solved expression is added to the `node_types` map,
 //! which maps an Expression- or Binding-site's ID to an [`InternedTypeID`].
-//! The `type_interning_table` is used to map an intern-id to an [`IPRTypespecifier`].
+//! The `type_interning_table` is used to map an `InternedTypeID` to an [`IPRTypespecifier`].
 //!
-//! When all variables in the `node_variables` map are bound, type checking is done,
+//! When all variables in the `node_variables` map are bound and verified, type checking is done,
 //! the `node_types` and `type_interining_table` are then extracted into a [`IPRModuleTypeInfo`]
 //!
 use std::{collections::HashMap, process::exit};
@@ -1033,11 +1041,6 @@ impl ZeaTypeChecker {
         let (solved, frac, vars_solved, vars_total) = self.get_solving_stats();
         trace!("\tsolved {frac:.2}% ({vars_solved} of {vars_total}) of typevars");
         solved
-    }
-
-    fn trace_expr_typevar(&mut self, expr: &IPRExpression) {
-        let var = *self.get_inference_id(expr.id);
-        trace!("{var:?} for expr {expr:?}");
     }
 }
 

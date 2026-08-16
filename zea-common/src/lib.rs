@@ -84,11 +84,13 @@ impl CompilerError {
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompilerStage {
-    Parse = 0,
-    ExpandInit = 1,
-    TypeCheck = 2,
-    LexicalScopeAnalysis = 3,
-    IPRtoTHR = 4,
+    NonApplicable = 0,
+    Parse = 1,
+    ExpandInit = 2,
+    TypeCheck = 3,
+    LexicalScopeAnalysis = 4,
+    IPRtoTHR = 5,
+    CodeGen = 6,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +99,8 @@ pub enum CompilerErrorKind {
 
     StrayUnscopedIdent = 1,
     StrayPackedInit = 2,
+    GlobalStmtNonInit = 3,
+    NonGlobScopedSymbolDisambiguation = 4,
 }
 pub fn stray_packed_init() -> CompilerError {
     CompilerError::new(
@@ -110,6 +114,18 @@ pub fn stray_unscoped_ident() -> CompilerError {
         CompilerErrorKind::StrayUnscopedIdent,
     )
 }
+pub fn global_stmt_non_init() -> CompilerError {
+    CompilerError::new(
+        CompilerStage::NonApplicable,
+        CompilerErrorKind::GlobalStmtNonInit,
+    )
+}
+pub fn non_globscope_symb_disamb() -> CompilerError {
+    CompilerError::new(
+        CompilerStage::NonApplicable,
+        CompilerErrorKind::GlobalStmtNonInit,
+    )
+}
 #[macro_export]
 macro_rules! internal_compiler_error {
     (spi) => {{
@@ -119,5 +135,13 @@ macro_rules! internal_compiler_error {
     (sui) => {{
         use $crate::stray_unscoped_ident;
         unreachable!("{}", stray_unscoped_ident().pretty())
+    }};
+    (glob stmt non init) => {{
+        use $crate::global_stmt_non_init;
+        unreachable!("{}", global_stmt_non_init().pretty())
+    }};
+    (non globscope symb disamb) => {{
+        use $crate::non_globscope_symb_disamb;
+        unreachable!("{}", non_globscope_symb_disamb().pretty())
     }};
 }

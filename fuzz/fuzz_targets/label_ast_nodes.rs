@@ -2,11 +2,11 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
-use zea_ipr::ast::visitors::IPRVisitor;
+use zea_ipr::ast::ipr_walkers::IPRVisitor;
 use zea_ipr::ast::{
     ZeaNodeQuery,
     ipr::*,
-    visitors::{altering::AssignmentExpander, annotating::IPRHasUniqueIDs},
+    ipr_walkers::{transformers::AssignmentExpander, visitors::IPRHasUniqueIDs},
 };
 fuzz_target!(|data: &[u8]| {
     let mut uniques = IPRHasUniqueIDs::new();

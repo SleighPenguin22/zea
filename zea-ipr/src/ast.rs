@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_imports, unused_macro_rules, unused_macros)]
 use crate::ast::ipr::IPRASTNode;
 use crate::ast::ipr::IPRModule;
-use crate::ast::visitors::IPRVisitor;
+use crate::ast::ipr_walkers::IPRVisitor;
 /// This module contains the AST definition for the Zea language.
 /// Any node that encompasses some structure with meaningful data has an id, this id has the following guarantees:
 /// - the id is unique
@@ -27,7 +27,7 @@ use crate::impls::StructuralEq;
 use arbitrary::{Arbitrary, Unstructured};
 
 mod impls;
-pub mod visitors;
+pub mod ipr_walkers;
 
 pub mod ipr;
 pub mod thr;
@@ -102,19 +102,6 @@ pub(crate) mod test_ast_macros {
                }
            }
         };
-        {exp $($e:expr);+ $(;)?} => {
-            {
-                let be = crate::ast::BlockExpander::new();
-                let mut b: Statement = stmt!(block
-                StatementBlock {
-                    id: NodeId::sentinel(),
-                    statements: vec![$($e),+]
-               };);
-                b.accept_block_expander(&mut be);
-                let StatementKind::ExpandedBlock(eb) = b.kind else {panic!("expected expanded block")};
-                eb
-            }
-        }
     }
 
     pub(crate) use block;
@@ -367,8 +354,8 @@ pub(crate) mod test_ast_macros {
     pub(crate) use ztyp;
 }
 
-pub use crate::ast::visitors::altering::{BareNodeLabeler, NodeLabeler};
-pub use crate::ast::visitors::annotating::IPRScopedIdentifier;
+pub use crate::ast::ipr_walkers::transformers::{BareNodeLabeler, NodeLabeler};
+pub use crate::ast::ipr_walkers::visitors::IPRScopedIdentifier;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use zea_internal_macros::{ASTStructuralEq, VariantToStr};

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use log::trace;
 use qbe::{self as Q};
+use zea_common::internal_compiler_error;
 use zea_internal_macros::InternKey;
 use zea_ipr::{
     InternTable,
@@ -11,7 +12,7 @@ use zea_ipr::{
             FloatWidth, IntegerWidth, THRBlock, THRExprID, THRExpression, THRFunction, THRModule,
             THRStatement, THRSymbol, THRSymbolDecl, THRSymbolID, THRTypeSpecifier, TypedLiteral,
         },
-        visitors::annotating::SymbolKind,
+        ipr_walkers::visitors::SymbolKind,
     },
 };
 #[derive(Copy, Clone, Debug, PartialEq, Eq, InternKey)]
@@ -62,7 +63,7 @@ impl<'m> THRtoQBE<'m> {
         for stmt in glob_data.items.iter().copied() {
             let stmt = self.thr_module.get_statement(stmt);
             let THRStatement::Init { decl, val, .. } = *stmt else {
-                unreachable!("global statements can only be inits")
+                internal_compiler_error!(glob stmt non init)
             };
             self.emit_datadef(module, decl, val);
         }
@@ -285,10 +286,7 @@ impl<'m> THRtoQBE<'m> {
         let demangle = match ident.kind {
             SymbolKind::GlobalVar => "global_",
             SymbolKind::FunctionName => "func_",
-            SymbolKind::ImportItem => todo!(),
-            _ => unreachable!(
-                "only funcnames and globals can be disambiguated without a block context"
-            ),
+            _ => internal_compiler_error!(non globscope symb disamb),
         };
 
         format!("{prefix}{demangle}{}", ident.name)

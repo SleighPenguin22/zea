@@ -2,7 +2,7 @@
 
 use arbitrary::{Arbitrary, Unstructured};
 use libfuzzer_sys::fuzz_target;
-use zea_ipr::ast::{ipr::IPRModule, visitors::altering::AssignmentExpander};
+use zea_ipr::ast::{ipr::IPRModule, ipr_walkers::transformers::AssignmentExpander};
 
 fuzz_target!(|data: &[u8]| {
     let mut ud = Unstructured::new(data);
