@@ -2,8 +2,21 @@
 
 once you Zea it, you won't want to C it.
 
-Zea is a preprocessor for C whose main goal is to reduce the boilerplate required to simulate
-features of more modern lagnuages
+Zea is a C-like language whose main goal is to reduce the boilerplate required to simulate
+features of more modern languages
+
+The syntax looks quite similar to Rust, mostly because I like Rust's syntax :D
+
+# working features
+
+- emitting global integers into the object files
+- returning integer -literals, -locals and -globals from `main()`
+- thats about it right now
+
+# how to use
+- clone the project
+- run `cargo build --release`
+- run `./target/release/zea-driver --help` to show CLI usage
 
 Some features include:
 ## tuple-types and first-class syntax for them
@@ -12,7 +25,7 @@ Some features include:
 
 ### tuple-destructuring:
 to destructure a tuple, a tuple-pattern is used:
-`@(x,y) :(F32,F32) = coord;`
+`@(x,y) : (F32,F32) = coord;`
 `@(a,b,(c,d)) := some-tuple;`
 
 The pattern has the following grammar rule:
@@ -59,10 +72,10 @@ fn foo() -> U32 {
 ```
 
 ## defining datatypes
-Zea allows developers to define three kinds of datatypes: structs, tags and unions,
-with plans to add ergonomics for tagged-unions later.
+Zea allows three kinds of datatypes: structs, tags and unions,
+with plans to add ergonomics for tagged-unions (i.e. Rust enums) later.
 
-structs are compound-datatypes which can contains an amount of field of mixed types.
+structs are compound-datatypes which can contains any amount of field of mixed types.
 
 tags are like C-enums, literally just integers with a name, except that they are in a namespace now!
 
@@ -137,27 +150,26 @@ Unions are meant to be very primitive,
 as such, there is no way to check which field was last written to or read from.
 The size of a union is that of its largest variant, the above example would have a size of 64 bits.
 
-Unions can be used to cast pointers,
-thereby allowing you to interpret data as if it were of a different datatype. This is called *type-punning*
+Unions can be used to read bits of one type as if they were of another, this is called *type-punning*
 
 See the below example, where the famous [Fast Inverse Square Root from Quake](en.wikipedia.org/wiki/Fast_inverse_square_root)
 is implemented using type-punning.
 
 ```
 union Helper {
-    fptr: F64*,
-    uptr: U64*,
+    f: F64,
+    u: U64,
 }
 fn Q-rsqrt(f: F64) -> F64 {
-    x2 := number * 0.5;
-    // construct as F64*
-    i := Helper:fptr(&f);
+    x2 := f * 0.5;
+    // construct as F64
+    i := Helper:f(f);
     
-    // then read as U64* and write to the U64* variant
-    i.uptr = (0x5f3759df - (i.uptr >> 1));
+    // then read as U64 and write to the U64 variant
+    i.u = (0x5f3759df - (i.u >> 1));
 
-    // then read and copy the value of the F64* variant, which is now modified 
-    y := *i.fptr; 
+    // then read and copy the value of the F64 variant, which is now modified 
+    y := i.fptr; 
 
     y = y * (3.5 - (x2 * y * y)); // euler shit
     y // tadaaaaaaa we have (1 / sqrt(f))
