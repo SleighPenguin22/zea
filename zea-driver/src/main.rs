@@ -139,6 +139,7 @@ fn main() {
     info!("finished typechecking");
     if ccfg.print_ipr() {
         info!("after expansions:\n{}", module.indent_print(0));
+        info!("module Debug Print: {module:?}");
     }
 
     info!("lowering into THR...");

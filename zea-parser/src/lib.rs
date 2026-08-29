@@ -6,8 +6,6 @@ mod parser;
 use log::{error, info, log};
 
 #[cfg(feature = "lalrpop_parser")]
-pub use parser::ExprParser as ExpressionParser;
-#[cfg(feature = "lalrpop_parser")]
 pub use parser::ModParser as ModuleParser;
 use std::process::exit;
 

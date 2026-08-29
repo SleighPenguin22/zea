@@ -1,0 +1,14 @@
+@ keep-unused ;
+module main
+
+a := 4;
+
+b := a;
+
+@ inline = never, hot;
+fn main() -> U8 {
+	b := a;
+	unused := b;
+	c := 3;
+	c
+}

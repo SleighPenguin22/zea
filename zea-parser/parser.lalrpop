@@ -1,9 +1,10 @@
 use std::str::FromStr;
 use zea_ipr::ast::ipr::*;
+use zea_ipr::attributes::*;
 use zea_ipr::ast::{BinOp, UnOp, NodeId};
 use crate::{IPRModuleItem, separate_module_items};
 
-grammar<'ast>;
+grammar;
 
 Comma0<T>: Vec<T> = {
     => vec![],
@@ -27,9 +28,11 @@ TTypedIdent:IPRTypedIdentifier = {
 };
 
 pub Mod: IPRModule = {
-    <name:ModName> <imports:ModImports?> <exports:ModExports?> <(global_vars, functions, struct_definitions, tagged_unions):ModSymbols> => {
+    <attrs:AttrList> <name:ModName> <imports:ModImports?> <exports:ModExports?> <(global_vars, functions, struct_definitions, tagged_unions):ModSymbols> => {
+        let mut attributes: IPRModuleAttributes = Default::default();
+        attributes.update_from_attr_list(attrs);
         IPRModule {
-            attributes: Default::default(),
+            attributes,
             id: NodeId::sentinel(),
             name,
             imports: imports.unwrap_or(vec![]),
@@ -41,17 +44,25 @@ pub Mod: IPRModule = {
  }
 };
 
-Attr: (String,Option<String>) = {
-    "@" <key:ExprIdent> => (key,None),
-    "@" <key:ExprIdent> "=" <value:ExprIdent> => (key,Some(value))
+#[inline]
+RawAttr: (String,Option<String>) = {
+     <key:ExprIdent> => (key,None),
+     <key:ExprIdent> "=" <value:ExprIdent> => (key,Some(value))
 };
-
-AttrList: Vec<(String,Option<String>)> = {
-    Attr => vec![<>],
-    <head:Attr> <tail:AttrList> => {
-        let mut tail = tail;
-        tail.push(head);
-        tail
+#[inline]
+RawAttrList: Vec<(String,Option<String>)> = {
+    Comma1<RawAttr>
+}
+AttrList: Vec<ZeaAttribute> = {
+    => vec![],
+    "@" <RawAttrList> ";"=> {
+        let mut v = vec![];
+        for (key,val) in <> {
+            if let Ok(attr) = parse_raw_attribute(key,val) {
+                v.push(attr);
+            }
+        }
+        v
     }
 }
 
@@ -63,7 +74,7 @@ CondBranch: IPRBranch = {
     "if" <condition:Expr> <true_case:Block> "else" <false_case:Block> =>
         IPRBranch::if_else_block(condition, true_case.wrap_in_expression(), false_case.wrap_in_expression())
 };
-
+#[inline]
 ModName: String = {
     "module" <name:ExprIdent> => name
 };
@@ -84,7 +95,6 @@ Vec<IPRTaggedUnionDataTypeDefinition>
 ) = {
     ModSymbolsHelper => separate_module_items(<>)
 };
-
 ModSymbolsHelper: Vec<IPRModuleItem> = {
     => vec![],
     <cur: Init> <rest:ModSymbolsHelper> => {
@@ -136,6 +146,7 @@ Init: IPRInitializationBlock = {
         )
  },
 }
+#[inline]
 AssignPat: IPRAssignmentPattern = {
     <i:ExprIdent> => IPRAssignmentPattern::Identifier(i),
     "`" <AssignPatInner>
@@ -166,14 +177,17 @@ FuncCall: IPRFunctionCall = {
     }
 };
 
-
+#[inline]
 Func: IPRFunction = {
+    <attrs:AttrList>
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
     <body:Block> => {
         let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
+        let mut attributes: IPRFunctionAttributes = Default::default();
+        attributes.update_from_attr_list(attrs);
         IPRFunction {
-            attributes: Default::default(),
+            attributes,
             id: NodeId::sentinel(),
             name,
             params,
@@ -181,12 +195,15 @@ Func: IPRFunction = {
             body
         }
     },
+    <attrs:AttrList>
     "fn" <name:ExprIdent>
     "(" <args:Comma0<TTypedIdent>> ")"
     "->" <funcreturns:TType> <body:Block> => {
         let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
+        let mut attributes: IPRFunctionAttributes = Default::default();
+        attributes.update_from_attr_list(attrs);
         IPRFunction {
-            attributes: Default::default(),
+            attributes,
             id: NodeId::sentinel(),
             name,
             params,
@@ -200,7 +217,6 @@ TType:IPRTypeSpecifier = {
     <t:TType> "*" => {IPRTypeSpecifier::Pointer(Box::new(t))},
     "[" <t:TType> "]" => {IPRTypeSpecifier::ArrayOf(Box::new(t))},
 };
-
 Block: IPRBlockExpression = {
     "{" <statements:(<Stmt>)*> <tail:Expr?> "}" => {
         let tail = if let Some(tail) = tail {
@@ -208,8 +224,9 @@ Block: IPRBlockExpression = {
         } else {
             IPRExpression::unit()
         };
+        let attributes = Default::default();
         IPRBlockExpression {
-            attributes: Default::default(),
+            attributes,
             id: NodeId::sentinel(),
             statements,
             tail
@@ -233,8 +250,7 @@ Stmt: IPRStatement = {
     <call:FuncCall> ";" => call.wrap_in_statement(),
     <branch:CondBranch> ";" => branch.wrap_in_statement()
 };
-
-pub Expr: IPRExpression = ExprBranch;
+Expr: IPRExpression = ExprBranch;
 
 ExprBranch: IPRExpression = {
     <b:CondBranch> => b.wrap_in_expression(),
