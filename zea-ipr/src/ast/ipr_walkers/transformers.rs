@@ -13,10 +13,9 @@ use crate::ast::ipr_walkers::{
 };
 use crate::ast::{NodeId, ipr::*};
 use crate::visualisation::IndentPrint;
-use crate::{InternTable, ZeaError, impl_nodelabeler};
+use crate::{ZeaError, impl_nodelabeler};
 use arbitrary::{Arbitrary, Unstructured};
-use indexmap::set::MutableValues;
-use indexmap::{IndexMap, IndexSet};
+use interntable::{InternKey, InternTable, UsizeLike, internkey};
 use log::trace;
 use std::collections::{HashMap, HashSet};
 use std::env::Args;
@@ -244,8 +243,7 @@ impl Default for AssignmentExpander {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, InternKey)]
-pub struct BlockScopeIndex(u32);
+internkey!(BlockScopeIndex);
 
 impl BlockScopeIndex {
     pub fn sentinel() -> Self {
@@ -324,8 +322,7 @@ impl BlockLikeScope {
 pub struct IdentifierScoper {
     /// The scope-path to the currently analyzed scope
     scope_stack: Vec<BlockScopeIndex>,
-    /// A set of all unique scopes within the program
-    scope_arena: InternTable<BlockScopeIndex, BlockLikeScope>,
+    scopes: Vec<BlockLikeScope>,
     /// map an Ident-expression to a BlockScope and the nearest enclosing block.
     node_to_scope: HashMap<NodeId, BlockScopeIndex>,
 }
@@ -340,7 +337,9 @@ impl<'m> ZeaError<'m> for NotInScopeError {
     type ErrContext = (IdentifierScoper, IPRModule);
     fn zea_error_format(&self, ctx: &Self::ErrContext) -> String {
         let (scope_ctx, _module) = ctx;
-        let origin = scope_ctx.get_scope(self.scope_stack_top);
+        let origin = scope_ctx
+            .get_scope(self.scope_stack_top)
+            .expect("missing scope");
         let ident = &self.ident;
         let pretty_scope_kind = scopekind_to_pretty_string(origin.kind);
         let cur_scope = scope_ctx.current_scope().kind;
@@ -491,21 +490,15 @@ impl IdentifierScoper {
     pub fn new(module: &IPRModule) -> Self {
         let mut new = Self {
             scope_stack: Vec::with_capacity(16),
-            scope_arena: InternTable::new(),
             node_to_scope: HashMap::with_capacity(128),
+            scopes: Vec::with_capacity(5),
         };
-        new.build_global_scope_skeleton(module);
+        let global = Self::build_global_scope_skeleton(module);
+        new.scopes.push(global);
+        new.scope_stack.push(BlockScopeIndex::from_usize(0));
         new
     }
-    fn build_global_scope_skeleton(&mut self, module: &IPRModule) -> &mut BlockLikeScope {
-        let dummy_scope = BlockLikeScope {
-            origin: NodeId::sentinel(),
-            parent: BlockScopeIndex::sentinel(),
-            introductions: vec![],
-            children: vec![],
-            kind: ScopeKind::Global,
-        };
-
+    fn build_global_scope_skeleton(module: &IPRModule) -> BlockLikeScope {
         let global_scope = BlockLikeScope {
             origin: module.id,
             parent: BlockScopeIndex::sentinel(),
@@ -513,21 +506,13 @@ impl IdentifierScoper {
             children: vec![],
             kind: ScopeKind::Global,
         };
-        self.scope_arena.intern(dummy_scope);
-        let global_scope_id = self.scope_arena.intern(global_scope);
-
-        self.scope_stack.push(global_scope_id);
-        self.get_scope_mut(global_scope_id)
+        global_scope
     }
-    fn get_scope(&self, idx: BlockScopeIndex) -> &BlockLikeScope {
-        self.scope_arena
-            .get_by_id(idx)
-            .expect("invalid block scope index")
+    fn get_scope(&self, idx: BlockScopeIndex) -> Option<&BlockLikeScope> {
+        self.scopes.get(idx.0.into_usize())
     }
-    fn get_scope_mut(&mut self, idx: BlockScopeIndex) -> &mut BlockLikeScope {
-        self.scope_arena
-            .get_mut_by_id(idx)
-            .expect("invalid block scope index")
+    fn get_scope_mut(&mut self, idx: BlockScopeIndex) -> Option<&mut BlockLikeScope> {
+        self.scopes.get_mut(idx.0.into_usize())
     }
 
     fn enter_scope(&mut self, origin: NodeId, kind: ScopeKind) -> &mut BlockLikeScope {
@@ -539,38 +524,38 @@ impl IdentifierScoper {
             children: Vec::with_capacity(4),
             kind,
         };
-        let idx = self.scope_arena.intern(scope);
+        self.scopes.push(scope);
+        let idx = BlockScopeIndex::from_usize(self.scopes.len() - 1);
         self.scope_stack.push(idx);
-        self.get_scope_mut(parent).add_child(idx);
-        self.get_scope_mut(idx)
+        // ubwrap because the self.current_scope_idx() call will have panicked before this.
+        self.get_scope_mut(parent).unwrap().add_child(idx);
+        // unwrap because we literally just pushed this scope onto the stack
+        self.get_scope_mut(idx).unwrap()
     }
     fn exit_scope(&mut self) {
         assert!(!self.scope_stack.is_empty(), "cannot pop module scope");
         self.scope_stack.pop();
     }
     fn current_scope(&self) -> &BlockLikeScope {
-        let idx = self
-            .scope_stack
-            .last()
-            .expect("scope stack should not be empty");
-        self.get_scope(*idx)
-    }
-    fn current_scope_mut(&mut self) -> &mut BlockLikeScope {
-        let idx = self
-            .scope_stack
-            .last()
-            .expect("scope stack should not be empty");
-        self.get_scope_mut(*idx)
-    }
-    fn current_scope_idx(&self) -> BlockScopeIndex {
         self.scope_stack
             .last()
             .copied()
+            .and_then(|idx| self.get_scope(idx))
+            .expect("empty scope stack")
+    }
+    fn current_scope_mut(&mut self) -> &mut BlockLikeScope {
+        self.scope_stack
+            .last()
+            .copied()
+            .and_then(|idx| self.get_scope_mut(idx))
             .expect("scope stack should not be empty")
+    }
+    fn current_scope_idx(&self) -> BlockScopeIndex {
+        self.scope_stack.last().copied().expect("empty scope stack")
     }
     fn resolve(&mut self, ident: &str) -> Result<IPRScopedIdentifier, NotInScopeError> {
         let mut cur_scope_idx = self.current_scope_idx();
-        let mut cur_scope = self.get_scope_mut(cur_scope_idx);
+        let mut cur_scope = self.current_scope_mut();
 
         loop {
             if let Some(found) = cur_scope.introduces(ident) {
@@ -583,7 +568,9 @@ impl IdentifierScoper {
                     });
                 }
                 cur_scope_idx = cur_scope.parent;
-                cur_scope = self.get_scope_mut(cur_scope_idx);
+                cur_scope = self
+                    .get_scope_mut(cur_scope_idx)
+                    .expect("missin parent scope");
             }
         }
     }
@@ -610,7 +597,7 @@ impl IdentifierScoper {
     fn all_in_current_scope(&self) -> Vec<&IPRScopedIdentifier> {
         let mut res = Vec::with_capacity(64);
         for scope in self.scope_stack.iter() {
-            let scope = self.get_scope(*scope);
+            let scope = self.get_scope(*scope).unwrap();
             res.extend(&scope.introductions);
         }
         res

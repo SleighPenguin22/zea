@@ -1,22 +1,18 @@
 use std::collections::HashMap;
 
+use interntable::{InternTable, internkey};
 use log::trace;
 use qbe::{self as Q};
 use zea_common::internal_compiler_error;
-use zea_internal_macros::InternKey;
-use zea_ipr::{
-    InternTable,
-    ast::{
-        BinOp,
-        ipr_walkers::visitors::SymbolKind,
-        thr::{
-            FloatWidth, IntegerWidth, THRBlock, THRExprID, THRExpression, THRFunction, THRModule,
-            THRStatement, THRSymbol, THRSymbolDecl, THRSymbolID, THRTypeSpecifier, TypedLiteral,
-        },
+use zea_ipr::ast::{
+    BinOp,
+    ipr_walkers::visitors::SymbolKind,
+    thr::{
+        FloatWidth, IntegerWidth, THRBlock, THRExprID, THRExpression, THRFunction, THRModule,
+        THRStatement, THRSymbol, THRSymbolDecl, THRSymbolID, THRTypeSpecifier, TypedLiteral,
     },
 };
-#[derive(Copy, Clone, Debug, PartialEq, Eq, InternKey)]
-pub struct QBETypeID(u32);
+internkey!(QBETypeID);
 
 #[derive(Debug)]
 pub struct THRtoQBE<'m> {
@@ -195,8 +191,8 @@ impl<'m> THRtoQBE<'m> {
                 Some(self.emit_basetype_integer(*width, *signed))
             }
             THRTypeSpecifier::Float { width } => Some(self.emit_type_float(*width)),
-            THRTypeSpecifier::Pointer(_t) => Some(self.types.intern(Q::Type::Long)),
-            THRTypeSpecifier::Boolean => Some(self.types.intern(Q::Type::UnsignedByte)),
+            THRTypeSpecifier::Pointer(_t) => Some(self.types.get_or_intern(Q::Type::Long)),
+            THRTypeSpecifier::Boolean => Some(self.types.get_or_intern(Q::Type::UnsignedByte)),
             THRTypeSpecifier::Unit => None,
             THRTypeSpecifier::Never => None,
             THRTypeSpecifier::Struct { .. } => todo!(),
@@ -214,8 +210,8 @@ impl<'m> THRtoQBE<'m> {
                 self.emit_basetype_integer(*width, *signed)
             }
             THRTypeSpecifier::Float { width } => self.emit_type_float(*width),
-            THRTypeSpecifier::Pointer(_t) => self.types.intern(Q::Type::Long),
-            THRTypeSpecifier::Boolean => self.types.intern(Q::Type::Byte),
+            THRTypeSpecifier::Pointer(_t) => self.types.get_or_intern(Q::Type::Long),
+            THRTypeSpecifier::Boolean => self.types.get_or_intern(Q::Type::Byte),
             THRTypeSpecifier::Unit => todo!(),
             THRTypeSpecifier::Never => todo!(),
             THRTypeSpecifier::Struct {
@@ -242,7 +238,7 @@ impl<'m> THRtoQBE<'m> {
             (IntegerWidth::_64, true) => Q::Type::Long,
             (IntegerWidth::_64, false) => Q::Type::Long,
         };
-        self.types.intern(t)
+        self.types.get_or_intern(t)
     }
 
     fn emit_type_float(&mut self, width: FloatWidth) -> QBETypeID {
@@ -250,7 +246,7 @@ impl<'m> THRtoQBE<'m> {
             FloatWidth::_32 => Q::Type::Single,
             FloatWidth::_64 => Q::Type::Double,
         };
-        self.types.intern(t)
+        self.types.get_or_intern(t)
     }
 
     fn fresh_temporary(&mut self, name: &str) -> Q::Value {

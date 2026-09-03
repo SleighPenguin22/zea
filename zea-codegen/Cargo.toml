@@ -8,8 +8,8 @@ zea-ipr = {path = "../zea-ipr"}
 zea-common = {path = "../zea-common"}
 zea-internal-macros = { path = "../zea-internal-macros" }
 qbe = {path = "../qbe-rs"}
-indexmap = {version = "2.14.0", features = ["rayon"]}
 log = { version = "0.4.33", features = ["std"] }
+interntable = {path = "../../interntable"}
 
 [lib]
 doctest = false

@@ -39,20 +39,17 @@
 //! This is done by a later visitor pass, which provides a way to get the pred- and successors of a [`THRBlock`],
 //! which is then used by QBE or some other backend to generate its CFG.
 
-use crate::{
-    InternTable,
-    ast::{
-        BinOp, UnOp,
-        ipr::{
-            IPRBlockExpression, IPRExpression, IPRExpressionKind, IPRFunction,
-            IPRInitializationBlock, IPRInitializationKind, IPRModule, IPRSimpleInitialization,
-            IPRStatement, IPRStatementKind, IPRTypeSpecifier, IPRTypedIdentifier,
-        },
-        ipr_walkers::{transformers::IdentifierScoper, visitors::SymbolKind},
+use crate::ast::{
+    BinOp, UnOp,
+    ipr::{
+        IPRBlockExpression, IPRExpression, IPRExpressionKind, IPRFunction, IPRInitializationBlock,
+        IPRInitializationKind, IPRModule, IPRSimpleInitialization, IPRStatement, IPRStatementKind,
+        IPRTypeSpecifier, IPRTypedIdentifier,
     },
+    ipr_walkers::{transformers::IdentifierScoper, visitors::SymbolKind},
 };
 use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
-use indexmap::Equivalent;
+use interntable::{InternTable, internkey};
 use log::trace;
 use zea_common::{CompilerError, CompilerErrorKind, CompilerStage, internal_compiler_error};
 use zea_internal_macros::{InternKey, VariantToStr};
@@ -72,8 +69,7 @@ pub fn lower_module(
     thr_ctx.lower_module(&ipr_ctx)
 }
 
-#[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRTypeID(usize);
+internkey!(THRTypeID);
 
 impl THRTypeID {
     fn alignment(self, ctx: &THRInternTables) -> u64 {
@@ -110,16 +106,11 @@ impl THRTypeID {
         }
     }
 }
-#[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRExprID(usize);
-#[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRSymbolID(usize);
-#[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRStatementID(usize);
-#[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRBlockID(usize);
-#[derive(InternKey, Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct THRFunctionID(usize);
+internkey!(THRExprID);
+internkey!(THRSymbolID);
+internkey!(THRStatementID);
+internkey!(THRBlockID);
+internkey!(THRFunctionID);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct THRModule {
@@ -470,7 +461,7 @@ impl THRInternTables {
     pub fn with_integer_types() -> Self {
         let mut s = Self::default();
         for t in THR_INTEGER_TYPES.as_slice() {
-            s.types.intern(t.clone());
+            s.types.get_or_intern(t.clone());
         }
         s
     }
@@ -518,7 +509,7 @@ impl THRInternTables {
             IPRTypeSpecifier::ArrayOf(_) => todo!(),
             IPRTypeSpecifier::Never => THRTypeSpecifier::Never,
         };
-        self.types.intern(t)
+        self.types.get_or_intern(t)
     }
 
     fn lower_expression(
@@ -539,7 +530,7 @@ impl THRInternTables {
                     name: i.ident.clone(),
                     kind: i.kind,
                 };
-                let symbol = self.symbols.intern(symbol);
+                let symbol = self.symbols.get_or_intern(symbol);
                 THRExpression::Ident(symbol)
             }
             IPRExpressionKind::FunctionCall(_iprfunction_call) => {
@@ -562,7 +553,7 @@ impl THRInternTables {
             IPRExpressionKind::Block(_b) => todo!(),
             IPRExpressionKind::UnScopedIdent(_) => internal_compiler_error!(sui),
         };
-        self.expressions.intern(node)
+        self.expressions.get_or_intern(node)
     }
 
     fn lower_stmt(
@@ -578,7 +569,7 @@ impl THRInternTables {
                     THRLoweredStatement::Single(id)
                 } else {
                     let block = THRBlock { items: ids };
-                    let block = self.blocks.intern(block);
+                    let block = self.blocks.get_or_intern(block);
                     THRLoweredStatement::Multiple(block)
                 }
             }
@@ -625,7 +616,7 @@ impl THRInternTables {
             name: init.assignee.clone(),
             kind,
         };
-        let symbol = self.symbols.intern(symbol);
+        let symbol = self.symbols.get_or_intern(symbol);
         let value = self.lower_expression_maybe_segmented(ipr_ctx, &init.value, symbol);
         let typ = init.typ.as_ref().unwrap();
         let typ = self.lower_type(ipr_ctx, typ);
@@ -641,7 +632,7 @@ impl THRInternTables {
                 ipr_id: init.id,
             },
         };
-        self.statements.intern(stmt)
+        self.statements.get_or_intern(stmt)
     }
 
     fn lower_module(mut self, ipr_ctx: &IPRLoweringContext) -> THRModule {
@@ -653,7 +644,7 @@ impl THRInternTables {
             items.extend(ids);
         }
         let global_data_block = THRBlock { items };
-        let global_data_block = self.blocks.intern(global_data_block);
+        let global_data_block = self.blocks.get_or_intern(global_data_block);
 
         let funcs = &ipr_ctx.module.functions;
         let mut entry_point = None;
@@ -677,7 +668,7 @@ impl THRInternTables {
         let mut params = vec![];
         for param in f.params.iter() {
             let symbol = THRSymbol::func_param(param.name.clone());
-            let symbol = self.symbols.intern(symbol);
+            let symbol = self.symbols.get_or_intern(symbol);
 
             let typ = self.lower_type(ipr_ctx, &param.typ);
 
@@ -687,7 +678,7 @@ impl THRInternTables {
         let body: THRBlockID = self.lower_block(ipr_ctx, &f.body);
         let ret = self.lower_type(ipr_ctx, &f.returns);
         let f = THRFunction::new(f.name.clone(), params, body, ret);
-        self.functions.intern(f)
+        self.functions.get_or_intern(f)
     }
 
     fn lower_block(
@@ -704,17 +695,17 @@ impl THRInternTables {
                 }
                 THRLoweredStatement::Multiple(block_id) => {
                     let stmt = THRStatement::Jmp(block_id);
-                    let stmt = self.statements.intern(stmt);
+                    let stmt = self.statements.get_or_intern(stmt);
                     items.push(stmt);
                 }
             }
         }
         let tail = self.lower_expression(ipr_ctx, &body.tail);
         let tail = THRStatement::Ret(tail);
-        let tail = self.statements.intern(tail);
+        let tail = self.statements.get_or_intern(tail);
         items.push(tail);
         let b = THRBlock { items };
-        self.blocks.intern(b)
+        self.blocks.get_or_intern(b)
     }
 
     /// lower some block that is one of the branches of a segmented init:
@@ -768,17 +759,17 @@ impl THRInternTables {
                 }
                 THRLoweredStatement::Multiple(block_id) => {
                     let stmt = THRStatement::Jmp(block_id);
-                    let stmt = self.statements.intern(stmt);
+                    let stmt = self.statements.get_or_intern(stmt);
                     items.push(stmt);
                 }
             }
         }
         let last = self.lower_expression(ipr_ctx, &block.tail);
         let segment = THRStatement::SegmentReturn(target_symbol, last);
-        let segment = self.statements.intern(segment);
+        let segment = self.statements.get_or_intern(segment);
         items.push(segment);
         let b = THRBlock { items };
-        self.blocks.intern(b)
+        self.blocks.get_or_intern(b)
     }
 
     fn lower_expression_maybe_segmented(

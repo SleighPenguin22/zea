@@ -10,11 +10,7 @@ use crate::ast::ipr_walkers::{
 use crate::ast::{NodeId, ZeaNodeQuery, ipr::*};
 use crate::impls::StructuralEq;
 use arbitrary::Arbitrary;
-use indexmap::{IndexMap, IndexSet};
 use zea_common::internal_compiler_error;
-
-type NodeIdMap<T> = IndexMap<NodeId, T>;
-type NodeIdSet = IndexSet<NodeId>;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Arbitrary)]
 pub enum SymbolKind {
@@ -96,16 +92,16 @@ impl IPRScopedIdentifier {
 #[derive(Debug)]
 pub struct ScopeAnnotations {
     // Map some node id to its ScopedIdentifier counterpart.
-    identifiers: IndexSet<IPRScopedIdentifier>,
+    identifiers: HashSet<IPRScopedIdentifier>,
 }
 
 impl ScopeAnnotations {
     pub fn new() -> Self {
         Self {
-            identifiers: IndexSet::new(),
+            identifiers: HashSet::new(),
         }
     }
-    pub fn globals(&self) -> IndexSet<IPRScopedIdentifier> {
+    pub fn globals(&self) -> HashSet<IPRScopedIdentifier> {
         self.identifiers
             .iter()
             .filter(|&ident| ident.kind == SymbolKind::GlobalVar)

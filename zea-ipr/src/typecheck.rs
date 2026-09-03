@@ -122,15 +122,17 @@
 //! When all variables in the `node_variables` map are bound and verified, type checking is done,
 //! the `node_types` and `type_interining_table` are then extracted into a [`IPRModuleTypeInfo`]
 //!
-use std::{collections::HashMap, process::exit};
+use std::{
+    collections::{HashMap, HashSet},
+    process::exit,
+};
 
-use indexmap::{IndexMap, IndexSet};
+use interntable::{InternTable, internkey};
 use log::{error, trace};
 use zea_common::internal_compiler_error;
-use zea_internal_macros::InternKey;
 
 use crate::{
-    InternTable, ZeaError,
+    ZeaError,
     ast::{BinOp, NodeId, ipr::*},
     visualisation::IndentPrint,
 };
@@ -172,19 +174,11 @@ fn narrowest_int_type(literal: usize) -> IPRTypeSpecifier {
     }
 }
 
-/// The id that a concrete type gets during type-checking
-#[derive(Copy, Clone, Eq, PartialEq, Hash, InternKey)]
-pub struct InternedTypeId(usize);
+internkey!(InternedTypeId);
 
 impl InternedTypeId {
     fn as_typevar(self, table: &mut TypeVariableInterningTable) -> TypeVariable {
         table.interned_type_as_variable(self)
-    }
-}
-
-impl std::fmt::Debug for InternedTypeId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TypeConcreteId({})", self.0)
     }
 }
 
@@ -200,14 +194,14 @@ impl std::fmt::Debug for TypeVariable {
 
 struct TypeVariableInterningTable {
     typevar_disjoint_set: Vec<usize>,
-    solved_variables: IndexMap<TypeVariable, InternedTypeId>,
+    solved_variables: HashMap<TypeVariable, InternedTypeId>,
 }
 
 impl TypeVariableInterningTable {
     pub fn new() -> Self {
         Self {
             typevar_disjoint_set: vec![],
-            solved_variables: IndexMap::new(),
+            solved_variables: HashMap::new(),
         }
     }
 
@@ -347,8 +341,8 @@ impl TypeVariableInterningTable {
         self.solved_variables.get(&typevar).cloned()
     }
     /// Return all unique representatives in the table
-    pub fn disjoint_typevars(&self) -> IndexSet<TypeVariable> {
-        let mut res = IndexSet::new();
+    pub fn disjoint_typevars(&self) -> HashSet<TypeVariable> {
+        let mut res = HashSet::new();
 
         for t in self.typevar_disjoint_set.iter().map(|i| TypeVariable(*i)) {
             res.insert(self.follow_var(t));
@@ -380,7 +374,7 @@ impl TypeInterningTable {
     /// introduce some type into the table, generating an id associated with that specifier.
     /// If the type was already introduced, return its id
     pub fn intern(&mut self, typ: &IPRTypeSpecifier) -> InternedTypeId {
-        self.interned_types.intern(typ.clone())
+        self.interned_types.get_or_intern(typ.clone())
     }
 
     /// try to lookup some [`TypeSpecifier`] by its associated ID
