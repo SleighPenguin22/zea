@@ -127,7 +127,7 @@ use std::{
     process::exit,
 };
 
-use interntable::{InternTable, internkey};
+use interntable::{KeySet, internkey};
 use log::{error, trace};
 use zea_common::internal_compiler_error;
 
@@ -354,13 +354,13 @@ impl TypeVariableInterningTable {
 /// A table holding all unique types within a module.
 #[derive(Debug)]
 struct TypeInterningTable {
-    interned_types: InternTable<InternedTypeId, IPRTypeSpecifier>,
+    interned_types: KeySet<InternedTypeId, IPRTypeSpecifier>,
 }
 
 impl TypeInterningTable {
     pub fn new() -> Self {
         Self {
-            interned_types: InternTable::new(),
+            interned_types: KeySet::new(),
         }
     }
     pub fn with_builtin_types() -> Self {
@@ -409,7 +409,7 @@ pub enum IllegalTypeCoercionKind {
 /// - [`IPRFuncParams`]
 /// - [`IPRSimpleINitialization`]
 pub struct IPRModuleTypeInfo {
-    type_interning_table: InternTable<InternedTypeId, IPRTypeSpecifier>,
+    type_interning_table: KeySet<InternedTypeId, IPRTypeSpecifier>,
     node_types: HashMap<NodeId, InternedTypeId>,
 }
 

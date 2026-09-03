@@ -15,7 +15,7 @@ use crate::ast::{NodeId, ipr::*};
 use crate::visualisation::IndentPrint;
 use crate::{ZeaError, impl_nodelabeler};
 use arbitrary::{Arbitrary, Unstructured};
-use interntable::{InternKey, InternTable, UsizeLike, internkey};
+use interntable::{InternKey, KeySet, UsizeLike, internkey};
 use log::trace;
 use std::collections::{HashMap, HashSet};
 use std::env::Args;

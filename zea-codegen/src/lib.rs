@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use interntable::{InternTable, internkey};
+use interntable::{KeySet, internkey};
 use log::trace;
 use qbe::{self as Q};
 use zea_common::internal_compiler_error;
@@ -17,7 +17,7 @@ internkey!(QBETypeID);
 #[derive(Debug)]
 pub struct THRtoQBE<'m> {
     thr_module: &'m THRModule,
-    types: InternTable<QBETypeID, Q::Type>,
+    types: KeySet<QBETypeID, Q::Type>,
     symbol_table: HashMap<THRSymbolID, Q::Value>,
     temp_generator: usize,
     block_label_generator: usize,
@@ -39,7 +39,7 @@ impl<'m> THRtoQBE<'m> {
     pub fn new(module: &'m THRModule) -> Self {
         Self {
             thr_module: module,
-            types: InternTable::new(),
+            types: KeySet::new(),
             symbol_table: HashMap::with_capacity(64),
             temp_generator: 0,
             block_label_generator: 0,
