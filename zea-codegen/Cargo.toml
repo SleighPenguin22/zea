@@ -9,7 +9,7 @@ zea-common = {path = "../zea-common"}
 zea-internal-macros = { path = "../zea-internal-macros" }
 qbe = {path = "../qbe-rs"}
 log = { version = "0.4.33", features = ["std"] }
-interntable = {path = "../../interntable"}
+idset = "0.2.0"
 
 [lib]
 doctest = false

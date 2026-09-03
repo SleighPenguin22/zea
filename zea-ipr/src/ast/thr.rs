@@ -49,7 +49,7 @@ use crate::ast::{
     ipr_walkers::{transformers::IdentifierScoper, visitors::SymbolKind},
 };
 use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
-use interntable::{KeySet, internkey};
+use idset::{KeySet, internkey};
 use log::trace;
 use zea_common::{CompilerError, CompilerErrorKind, CompilerStage, internal_compiler_error};
 use zea_internal_macros::{InternKey, VariantToStr};

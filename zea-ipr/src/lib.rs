@@ -4,7 +4,6 @@ mod typecheck;
 pub use typecheck::typecheck_module;
 mod impls;
 pub mod visualisation;
-
 pub trait ZeaError<'m> {
     type ErrContext;
     fn zea_error_format(&'m self, ctx: &'m Self::ErrContext) -> String;

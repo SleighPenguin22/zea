@@ -15,7 +15,7 @@ use crate::ast::{NodeId, ipr::*};
 use crate::visualisation::IndentPrint;
 use crate::{ZeaError, impl_nodelabeler};
 use arbitrary::{Arbitrary, Unstructured};
-use interntable::{InternKey, KeySet, UsizeLike, internkey};
+use idset::{InternKey, KeySet, UsizeLike, internkey};
 use log::trace;
 use std::collections::{HashMap, HashSet};
 use std::env::Args;
@@ -509,10 +509,10 @@ impl IdentifierScoper {
         global_scope
     }
     fn get_scope(&self, idx: BlockScopeIndex) -> Option<&BlockLikeScope> {
-        self.scopes.get(idx.0.into_usize())
+        self.scopes.get(idx.into_usize())
     }
     fn get_scope_mut(&mut self, idx: BlockScopeIndex) -> Option<&mut BlockLikeScope> {
-        self.scopes.get_mut(idx.0.into_usize())
+        self.scopes.get_mut(idx.into_usize())
     }
 
     fn enter_scope(&mut self, origin: NodeId, kind: ScopeKind) -> &mut BlockLikeScope {

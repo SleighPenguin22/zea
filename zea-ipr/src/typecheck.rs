@@ -127,7 +127,7 @@ use std::{
     process::exit,
 };
 
-use interntable::{KeySet, internkey};
+use idset::{KeySet, internkey};
 use log::{error, trace};
 use zea_common::internal_compiler_error;
 

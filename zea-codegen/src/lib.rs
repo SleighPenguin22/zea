@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use interntable::{KeySet, internkey};
+use idset::{KeySet, internkey};
 use log::trace;
 use qbe::{self as Q};
 use zea_common::internal_compiler_error;
