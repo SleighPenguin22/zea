@@ -12,3 +12,7 @@ quote = "1.0.45"
 [lib]
 proc-macro = true
 doctest = false
+
+
+[lints]
+workspace = true

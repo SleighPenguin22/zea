@@ -21,3 +21,6 @@ default = ["lalrpop_parser"]
 
 [lib]
 doctest = false
+
+[lints]
+workspace = true

@@ -13,3 +13,6 @@ idset = "0.2.0"
 
 [lib]
 doctest = false
+
+[lints]
+workspace = true
