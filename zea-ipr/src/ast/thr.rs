@@ -381,6 +381,7 @@ pub enum THRStatement {
     Init {
         decl: THRSymbolDecl,
         val: THRExprID,
+        /// this node's corresponding NodeID from the IPR representation
         ipr_id: NodeId,
     },
     Jmp(THRBlockID),

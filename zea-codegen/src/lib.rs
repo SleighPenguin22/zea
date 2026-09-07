@@ -5,7 +5,7 @@ use log::trace;
 use qbe::{self as Q};
 use zea_common::internal_compiler_error;
 use zea_ipr::ast::{
-    BinOp,
+    BinOp, UnOp,
     ipr_walkers::visitors::SymbolKind,
     thr::{
         FloatWidth, IntegerWidth, THRBlock, THRExprID, THRExpression, THRFunction, THRModule,
@@ -22,6 +22,7 @@ pub struct THRtoQBE<'m> {
     temp_generator: usize,
     block_label_generator: usize,
 }
+
 /// The context necessary to construct QBE nodes for blocks within a function body
 #[allow(unused)]
 struct BlockContext<'b> {
@@ -62,7 +63,8 @@ impl<'m> THRtoQBE<'m> {
             let THRStatement::Init { decl, val, .. } = *stmt else {
                 internal_compiler_error!(glob stmt non init)
             };
-            self.emit_datadef(module, decl, val);
+            let d = self.prepare_datadef(module, decl, val);
+            module.add_data(d);
         }
     }
     /// recursively emit the instructions necessary to represent the given statement
@@ -300,12 +302,12 @@ impl<'m> THRtoQBE<'m> {
         }
     }
 
-    fn emit_datadef<'ctx, 'module: 'ctx>(
+    fn prepare_datadef<'ctx, 'module: 'ctx>(
         &'ctx mut self,
         module: &'module mut qbe::Module,
         decl: THRSymbolDecl,
         val: THRExprID,
-    ) -> &'module Q::DataDef {
+    ) -> Q::DataDef {
         let name = self.thr_module.get_symbol(decl.symbol);
         let name = self.disambiguate_global_symbol(name);
         let thr_typ = self.thr_module.get_type(decl.typ);
@@ -317,7 +319,18 @@ impl<'m> THRtoQBE<'m> {
             .cloned()
             .expect("emit_type should have interned the supplied typ")
             .into_abi();
-        let items = match self.thr_module.get_expr(val) {
+        let datalayout = self.prepare_datadef_layout(module, val, qbe_typ);
+        let d = Q::DataDef::new(Q::Linkage::public(), name, Some(align), datalayout);
+        d
+    }
+
+    fn prepare_datadef_layout<'ctx, 'module: 'ctx>(
+        &'ctx mut self,
+        module: &'module mut qbe::Module,
+        val: THRExprID,
+        qbe_typ: qbe::Type,
+    ) -> Vec<(qbe::Type, qbe::DataItem)> {
+        match self.thr_module.get_expr(val) {
             THRExpression::ConstInt(TypedLiteral { value, .. }) => {
                 let item = Q::DataItem::Const(*value);
                 vec![(qbe_typ, item)]
@@ -330,27 +343,42 @@ impl<'m> THRtoQBE<'m> {
                 let item = Q::DataItem::Const(*b as u64);
                 vec![(qbe_typ, item)]
             }
-            THRExpression::Binop(..) => todo!(),
-            THRExpression::Unop(..) => todo!(),
+            THRExpression::Binop(binop, id_a, id_b) => {
+                match self.eval_literal_expression_u64_binop(*binop, *id_a, *id_b) {
+                    Some(v) => {
+                        let item = Q::DataItem::Const(v);
+                        vec![(qbe_typ, item)]
+                    }
+                    None => todo!("value cannot be interpreted as u64"),
+                }
+            }
+            THRExpression::Unop(op, id_arg) => {
+                match self.eval_literal_expression_u64_unop(*op, *id_arg) {
+                    Some(v) => {
+                        let item = Q::DataItem::Const(v);
+                        vec![(qbe_typ, item)]
+                    }
+                    None => todo!("value cannot be interpreted as u64"),
+                }
+            }
             THRExpression::Ident(symbol) => {
                 let globs = &self.thr_module.get_global_data_block().items;
                 for glob in globs.iter() {
                     let stmt = self.thr_module.get_statement(*glob);
-                    match stmt {
-                        THRStatement::Init { decl, val, ipr_id }
-                            if decl.symbol == *symbol
-                                && !self.symbol_table.contains_key(&decl.symbol) =>
-                        {
-                            return self.emit_datadef(module, *decl, *val);
-                        }
-                        _ => {}
+                    if let THRStatement::Init {
+                        decl,
+                        val: refererred_val,
+                        ..
+                    } = stmt
+                        && (decl.symbol == *symbol && !self.symbol_table.contains_key(&decl.symbol))
+                    {
+                        // copy the data-representation, but rename it
+                        return self.prepare_datadef_layout(module, *refererred_val, qbe_typ);
                     };
                 }
                 unreachable!()
             }
-        };
-        let d = Q::DataDef::new(Q::Linkage::public(), name, Some(align), items);
-        module.add_data(d)
+        }
     }
 
     fn emit_function(&mut self, m: &mut Q::Module, func: &THRFunction) {
@@ -398,5 +426,53 @@ impl<'m> THRtoQBE<'m> {
         let mut s = self.thr_module.name.clone();
         s.push('_');
         s
+    }
+}
+impl<'m> THRtoQBE<'m> {
+    fn eval_literal_expression_u64(&self, id_root: THRExprID) -> Option<u64> {
+        let root = self.thr_module.get_expr(id_root);
+        match root {
+            THRExpression::ConstInt(TypedLiteral { value, .. }) => Some(*value),
+            THRExpression::ConstFloat(_) => None,
+            THRExpression::ConstBool(b) => Some(*b as u64),
+            THRExpression::Binop(inner_op, id_l, id_r) => {
+                self.eval_literal_expression_u64_binop(*inner_op, *id_l, *id_r)
+            }
+            THRExpression::Unop(inner_op, id_arg) => {
+                self.eval_literal_expression_u64_unop(*inner_op, *id_arg)
+            }
+            THRExpression::Ident(_) => None,
+        }
+    }
+    fn eval_literal_expression_u64_binop(
+        &self,
+        binop: BinOp,
+        id_l: THRExprID,
+        id_r: THRExprID,
+    ) -> Option<u64> {
+        let l = self.eval_literal_expression_u64(id_l)?;
+        let r = self.eval_literal_expression_u64(id_r)?;
+        Some(match binop {
+            BinOp::Add => l + r,
+            BinOp::Sub => l - r,
+            BinOp::Mul => l * r,
+            BinOp::Div => l / r,
+            BinOp::Mod => l % r,
+            BinOp::BitAnd => l & r,
+            BinOp::BitOr => l | r,
+            BinOp::BitXor => l ^ r,
+            BinOp::Subscript => todo!("subscript (a[b]) operations in THR"),
+            BinOp::Lsh => l << r,
+            BinOp::Rsh => l >> r,
+            _ => return None,
+        })
+    }
+    fn eval_literal_expression_u64_unop(&self, op: UnOp, id_arg: THRExprID) -> Option<u64> {
+        let arg = self.eval_literal_expression_u64(id_arg)?;
+        Some(match op {
+            // this assumes 2's complement
+            UnOp::Neg => !arg + 1,
+            UnOp::LogNot | UnOp::BitNot => !arg,
+        })
     }
 }
