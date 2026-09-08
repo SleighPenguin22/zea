@@ -387,12 +387,13 @@ impl Display for NodeId {
 /// This visitor provides a way to query a node by its id, the returned node is of type [`IPRASTNode`],
 /// which provides methods to destructure it into its inner node.
 /// This visitor is really only useful if you know the type of the node beforehands.
-pub struct ZeaNodeQuery {
+pub struct ZeaNodeQuery<'m> {
+    module: &'m IPRModule,
     id: NodeId,
 }
-impl ZeaNodeQuery {
-    pub fn query_ipr_node(id: NodeId, module: &IPRModule) -> Option<IPRASTNode> {
-        let mut s = Self { id };
+impl<'m> ZeaNodeQuery<'m> {
+    pub fn query_ipr_node(id: NodeId, module: &'m IPRModule) -> Option<IPRASTNode<'m>> {
+        let mut s = Self { id, module };
         match s.visit_module(module) {
             Ok(Some(n)) => Some(n),
             _ => None,
@@ -406,4 +407,12 @@ fn float_total_cmp(a: f64, b: f64) -> bool {
     } else {
         a == b
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_name() {}
 }

@@ -26,20 +26,74 @@ use crate::{
 
 use super::NodeId;
 
-#[derive(Debug, Arbitrary)]
-pub enum IPRASTNode {
-    Module(IPRModule),
-    Function(IPRFunction),
-    Block(IPRBlockExpression),
-    Branch(IPRBranch),
-    Expression(IPRExpression),
-    Statement(IPRStatement),
-    Call(IPRFunctionCall),
-    FuncParam(IPRFuncParam),
-    Init(IPRSimpleInitialization),
+#[derive(Debug)]
+pub enum IPRASTNode<'m> {
+    Module(&'m IPRModule),
+    Function(&'m IPRFunction),
+    Block(&'m IPRBlockExpression),
+    Branch(&'m IPRBranch),
+    Expression(&'m IPRExpression),
+    Statement(&'m IPRStatement),
+    Call(&'m IPRFunctionCall),
+    FuncParam(&'m IPRFuncParam),
+    Init(&'m IPRSimpleInitialization),
 }
 
-impl IPRASTNode {
+impl<'m> From<&'m IPRSimpleInitialization> for IPRASTNode<'m> {
+    fn from(v: &'m IPRSimpleInitialization) -> Self {
+        Self::Init(v)
+    }
+}
+
+impl<'m> From<&'m IPRFuncParam> for IPRASTNode<'m> {
+    fn from(v: &'m IPRFuncParam) -> Self {
+        Self::FuncParam(v)
+    }
+}
+
+impl<'m> From<&'m IPRFunctionCall> for IPRASTNode<'m> {
+    fn from(v: &'m IPRFunctionCall) -> Self {
+        Self::Call(v)
+    }
+}
+
+impl<'m> From<&'m IPRStatement> for IPRASTNode<'m> {
+    fn from(v: &'m IPRStatement) -> Self {
+        Self::Statement(v)
+    }
+}
+
+impl<'m> From<&'m IPRExpression> for IPRASTNode<'m> {
+    fn from(v: &'m IPRExpression) -> Self {
+        Self::Expression(v)
+    }
+}
+
+impl<'m> From<&'m IPRBranch> for IPRASTNode<'m> {
+    fn from(v: &'m IPRBranch) -> Self {
+        Self::Branch(v)
+    }
+}
+
+impl<'m> From<&'m IPRBlockExpression> for IPRASTNode<'m> {
+    fn from(v: &'m IPRBlockExpression) -> Self {
+        Self::Block(v)
+    }
+}
+
+impl<'m> From<&'m IPRFunction> for IPRASTNode<'m> {
+    fn from(v: &'m IPRFunction) -> Self {
+        Self::Function(v)
+    }
+}
+
+impl<'m> From<&'m IPRModule> for IPRASTNode<'m> {
+    fn from(v: &'m IPRModule) -> Self {
+        Self::Module(v)
+    }
+}
+
+impl IPRASTNode<'_> {
     fn id(&self) -> NodeId {
         match self {
             IPRASTNode::Module(m) => m.id,
@@ -62,61 +116,8 @@ impl IPRASTNode {
         }
     }
 }
-impl From<IPRSimpleInitialization> for IPRASTNode {
-    fn from(v: IPRSimpleInitialization) -> Self {
-        Self::Init(v)
-    }
-}
 
-impl From<IPRFuncParam> for IPRASTNode {
-    fn from(v: IPRFuncParam) -> Self {
-        Self::FuncParam(v)
-    }
-}
-
-impl From<IPRFunctionCall> for IPRASTNode {
-    fn from(v: IPRFunctionCall) -> Self {
-        Self::Call(v)
-    }
-}
-
-impl From<IPRStatement> for IPRASTNode {
-    fn from(v: IPRStatement) -> Self {
-        Self::Statement(v)
-    }
-}
-
-impl From<IPRExpression> for IPRASTNode {
-    fn from(v: IPRExpression) -> Self {
-        Self::Expression(v)
-    }
-}
-
-impl From<IPRBranch> for IPRASTNode {
-    fn from(v: IPRBranch) -> Self {
-        Self::Branch(v)
-    }
-}
-
-impl From<IPRBlockExpression> for IPRASTNode {
-    fn from(v: IPRBlockExpression) -> Self {
-        Self::Block(v)
-    }
-}
-
-impl From<IPRFunction> for IPRASTNode {
-    fn from(v: IPRFunction) -> Self {
-        Self::Function(v)
-    }
-}
-
-impl From<IPRModule> for IPRASTNode {
-    fn from(v: IPRModule) -> Self {
-        Self::Module(v)
-    }
-}
-
-impl IPRASTNode {
+impl IPRASTNode<'_> {
     pub fn as_module(&self) -> Option<&IPRModule> {
         if let Self::Module(v) = self {
             Some(v)
@@ -203,8 +204,8 @@ impl IPRModule {
         transformer
     }
 
-    pub fn visit_self_with<V: IPRVisitor + NodeLabeler>(
-        &mut self,
+    pub fn visit_self_with<'m, V: IPRVisitor<'m> + NodeLabeler>(
+        &'m mut self,
         labeler: impl NodeLabeler,
     ) -> Result<V, V::VisitorError> {
         let mut v: V = labeler.labeler_into();
@@ -212,8 +213,8 @@ impl IPRModule {
         Ok(v)
     }
 
-    pub fn transform_self_with<V: IPRTransfomer + NodeLabeler>(
-        &mut self,
+    pub fn transform_self_with<'m, V: IPRTransfomer<'m> + NodeLabeler>(
+        &'m mut self,
         labeler: impl NodeLabeler,
     ) -> Result<V, V::TransformerError> {
         let mut v: V = labeler.labeler_into();

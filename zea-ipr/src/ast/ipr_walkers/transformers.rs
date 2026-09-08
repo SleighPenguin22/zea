@@ -66,7 +66,7 @@ impl Default for BareNodeLabeler {
 
 impl_nodelabeler!(BareNodeLabeler);
 
-impl IPRTransfomer for BareNodeLabeler {
+impl IPRTransfomer<'_> for BareNodeLabeler {
     type TransformerOk = ();
     type TransformerError = ();
     fn visit_block(
@@ -154,7 +154,7 @@ pub struct AssignmentExpander {
 
 impl_nodelabeler!(AssignmentExpander, "unpack");
 
-impl IPRTransfomer for AssignmentExpander {
+impl IPRTransfomer<'_> for AssignmentExpander {
     type TransformerError = ();
     type TransformerOk = ();
     fn visit_initblock(
@@ -379,7 +379,7 @@ pub fn scope_module(mut module: IPRModule) -> IPRModule {
     module
 }
 
-impl IPRTransfomer for IdentifierScoper {
+impl IPRTransfomer<'_> for IdentifierScoper {
     type TransformerError = NotInScopeError;
     type TransformerOk = ();
     fn visit_expr(
@@ -610,7 +610,7 @@ pub struct InsertImplicitMainReturn {
 
 impl_nodelabeler!(InsertImplicitMainReturn, "mainreturns");
 
-impl IPRTransfomer for InsertImplicitMainReturn {
+impl IPRTransfomer<'_> for InsertImplicitMainReturn {
     type TransformerError = ();
     type TransformerOk = ();
     fn visit_module(

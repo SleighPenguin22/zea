@@ -229,7 +229,7 @@ impl IPRHasUniqueIDs {
     }
 }
 
-impl IPRVisitor for IPRHasUniqueIDs {
+impl IPRVisitor<'_> for IPRHasUniqueIDs {
     type VisitorOk = ();
     type VisitorError = NodeId;
     fn visit_expr(&mut self, expr: &IPRExpression) -> Result<Self::VisitorOk, Self::VisitorError> {
@@ -322,7 +322,7 @@ impl ExpressionCollector {
     }
 }
 
-impl IPRVisitor for ExpressionCollector {
+impl IPRVisitor<'_> for ExpressionCollector {
     type VisitorError = ();
     type VisitorOk = ();
     fn visit_expr(&mut self, expr: &IPRExpression) -> Result<Self::VisitorOk, Self::VisitorError> {
@@ -342,12 +342,15 @@ impl IPRVisitor for ExpressionCollector {
     }
 }
 
-impl IPRVisitor for ZeaNodeQuery {
+impl<'m> IPRVisitor<'m> for ZeaNodeQuery<'m> {
     type VisitorError = ();
-    type VisitorOk = Option<IPRASTNode>;
-    fn visit_branch(&mut self, branch: &IPRBranch) -> Result<Self::VisitorOk, Self::VisitorError> {
+    type VisitorOk = Option<IPRASTNode<'m>>;
+    fn visit_branch(
+        &mut self,
+        branch: &'m IPRBranch,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
         (self.id == branch.id)
-            .then_some(Some(IPRASTNode::Branch(branch.clone())))
+            .then_some(Some(IPRASTNode::Branch(branch)))
             .or_else(|| self.visit_expr(&branch.condition).ok())
             .or_else(|| self.visit_expr(&branch.true_case).ok())
             .or_else(|| {
@@ -359,12 +362,13 @@ impl IPRVisitor for ZeaNodeQuery {
             })
             .ok_or(())
     }
+
     fn visit_block(
         &mut self,
-        block: &IPRBlockExpression,
+        block: &'m IPRBlockExpression,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         (self.id == block.id)
-            .then_some(Some(IPRASTNode::Block(block.clone())))
+            .then_some(Some(IPRASTNode::Block(block)))
             .or_else(|| {
                 block
                     .statements
@@ -374,9 +378,12 @@ impl IPRVisitor for ZeaNodeQuery {
             .or_else(|| self.visit_expr(&block.tail).ok())
             .ok_or(())
     }
-    fn visit_module(&mut self, module: &IPRModule) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_module(
+        &mut self,
+        module: &'m IPRModule,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
         (self.id == module.id)
-            .then_some(Some(IPRASTNode::Module(module.clone())))
+            .then_some(Some(IPRASTNode::Module(module)))
             .or_else(|| {
                 module
                     .global_vars
@@ -397,9 +404,12 @@ impl IPRVisitor for ZeaNodeQuery {
             })
             .ok_or(())
     }
-    fn visit_expr(&mut self, expr: &IPRExpression) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_expr(
+        &mut self,
+        expr: &'m IPRExpression,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
         if self.id == expr.id {
-            Ok(Some(IPRASTNode::Expression(expr.clone())))
+            Ok(Some(IPRASTNode::Expression(expr)))
         } else {
             match &expr.kind {
                 IPRExpressionKind::Unit
@@ -422,9 +432,12 @@ impl IPRVisitor for ZeaNodeQuery {
             }
         }
     }
-    fn visit_stmt(&mut self, stmt: &IPRStatement) -> Result<Self::VisitorOk, Self::VisitorError> {
+    fn visit_stmt(
+        &mut self,
+        stmt: &'m IPRStatement,
+    ) -> Result<Self::VisitorOk, Self::VisitorError> {
         if self.id == stmt.id {
-            Ok(Some(stmt.clone().into()))
+            Ok(Some(IPRASTNode::Statement(stmt)))
         } else {
             match &stmt.kind {
                 IPRStatementKind::Initialization(init) => self.visit_initblock(init),
@@ -438,20 +451,20 @@ impl IPRVisitor for ZeaNodeQuery {
     }
     fn visit_call(
         &mut self,
-        call: &IPRFunctionCall,
+        call: &'m IPRFunctionCall,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         (self.id == call.id)
-            .then_some(Some(IPRASTNode::Call(call.clone())))
+            .then_some(Some(IPRASTNode::Call(call)))
             .or_else(|| self.visit_expr(call.subject.as_ref()).ok())
             .or_else(|| call.args.iter().find_map(|e| self.visit_expr(e).ok()))
             .ok_or(())
     }
     fn visit_funcdef(
         &mut self,
-        funcdef: &IPRFunction,
+        funcdef: &'m IPRFunction,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         (funcdef.id == self.id)
-            .then_some(Some(IPRASTNode::Function(funcdef.clone())))
+            .then_some(Some(IPRASTNode::Function(funcdef)))
             .or_else(|| {
                 funcdef
                     .params
@@ -463,20 +476,20 @@ impl IPRVisitor for ZeaNodeQuery {
     }
     fn visit_funcparam(
         &mut self,
-        param: &IPRFuncParam,
+        param: &'m IPRFuncParam,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         if self.id == param.id {
-            Ok(Some(IPRASTNode::FuncParam(param.clone())))
+            Ok(Some(IPRASTNode::FuncParam(param)))
         } else {
             Err(())
         }
     }
     fn visit_init(
         &mut self,
-        init: &IPRSimpleInitialization,
+        init: &'m IPRSimpleInitialization,
     ) -> Result<Self::VisitorOk, Self::VisitorError> {
         (self.id == init.id)
-            .then_some(Some(IPRASTNode::Init(init.clone())))
+            .then_some(Some(IPRASTNode::Init(init)))
             .or_else(|| self.visit_expr(&init.value).ok())
             .ok_or(())
     }
