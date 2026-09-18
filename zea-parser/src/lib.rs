@@ -10,8 +10,8 @@ pub use parser::ModParser as ModuleParser;
 use std::process::exit;
 
 pub use lalrpop_util::ParseError;
-use zea_ipr::ast::BareNodeLabeler;
-use zea_ipr::ast::ipr::*;
+use zea_irs::ast::BareNodeLabeler;
+use zea_irs::ast::ipr::*;
 pub fn parse_module(src: &'_ str) -> (IPRModule, BareNodeLabeler) {
     let p = ModuleParser::new();
     info!("parsing source file...");

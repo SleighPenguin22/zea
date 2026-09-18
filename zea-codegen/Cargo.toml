@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-zea-ipr = {path = "../zea-ipr"}
+zea-irs = {path = "../zea-irs"}
 zea-common = {path = "../zea-common"}
 zea-internal-macros = { path = "../zea-internal-macros" }
 qbe = {path = "../qbe-rs"}
