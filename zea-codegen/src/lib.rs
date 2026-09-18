@@ -4,7 +4,7 @@ use idset::{KeySet, internkey};
 use log::trace;
 use qbe::{self as Q};
 use zea_common::internal_compiler_error;
-use zea_ipr::ast::{
+use zea_irs::ast::{
     BinOp, UnOp,
     ipr_walkers::visitors::SymbolKind,
     thr::{

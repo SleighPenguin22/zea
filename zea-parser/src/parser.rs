@@ -1,9 +1,9 @@
 // auto-generated: "lalrpop 0.23.1"
 // sha3: 217d245df90b14e55f0bab47a26f9650d009395ed79f22097f0ca290bf3dae39
 use std::str::FromStr;
-use zea_ipr::ast::ipr::*;
-use zea_ipr::attributes::*;
-use zea_ipr::ast::{BinOp, UnOp, NodeId};
+use zea_irs::ast::ipr::*;
+use zea_irs::attributes::*;
+use zea_irs::ast::{BinOp, UnOp, NodeId};
 use crate::{IPRModuleItem, separate_module_items};
 #[allow(unused_extern_crates)]
 extern crate lalrpop_util as __lalrpop_util;
@@ -17,9 +17,9 @@ extern crate alloc;
 mod __parse__Mod {
 
     use std::str::FromStr;
-    use zea_ipr::ast::ipr::*;
-    use zea_ipr::attributes::*;
-    use zea_ipr::ast::{BinOp, UnOp, NodeId};
+    use zea_irs::ast::ipr::*;
+    use zea_irs::attributes::*;
+    use zea_irs::ast::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
@@ -6268,9 +6268,9 @@ pub use self::__parse__Mod::ModParser;
 mod __intern_token {
     #![allow(unused_imports)]
     use std::str::FromStr;
-    use zea_ipr::ast::ipr::*;
-    use zea_ipr::attributes::*;
-    use zea_ipr::ast::{BinOp, UnOp, NodeId};
+    use zea_irs::ast::ipr::*;
+    use zea_irs::attributes::*;
+    use zea_irs::ast::{BinOp, UnOp, NodeId};
     use crate::{IPRModuleItem, separate_module_items};
     #[allow(unused_extern_crates)]
     extern crate lalrpop_util as __lalrpop_util;
