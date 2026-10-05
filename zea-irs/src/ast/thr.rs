@@ -1,6 +1,7 @@
 //! This module contains the lowering of Immediate-Parsed-Representation (IPR) into Typed-Highlevel-Representation (THR)
-//! The main difference between these two is that IPR is a tree of [`Box`]'es,
-//! whereas THR has a bunch of interning tables that hold its nodes, and instead of [`Box`]'es,
+//! The main difference between these two is that IPR is a tree,
+//! whereas THR is flat and has a bunch of interning tables that hold its nodes.
+//! Instead of [`Box`]'es,
 //! you have indices into the interning tables.
 //!
 //! The interning tables are instatiations of the [`KeySet<Key, Value>`] generic type,
@@ -33,11 +34,44 @@
 //! like the `.value` or `.symbol` field in an [`THRInit`].
 //!
 //! At this stage, structs are also lowered into [`THRStructLayout`]'s,
-//! from which you can get byte-offsets for fields, their size and alignment
+//! from which you can get byte-offsets for fields, their size and alignment.
 //!
 //! What the THR does not directly provide is a control flow graph (CFG),
-//! This is done by a later visitor pass, which provides a way to get the pred- and successors of a [`THRBlock`],
+//! This is done by a later visitor pass,
+//! which provides a way to get the pred- and successors of a [`THRBlock`],
 //! which is then used by QBE or some other backend to generate its CFG.
+//!
+//!
+//!
+//! Grammar constructs are lowered as folllows:
+//!
+//! a block b in the following form:
+//!
+//! Since Zea is a value-oriented language, most constructs  evaluate to some kind of value.
+//! a block `{ var := val; var }` would evaulate to whatever `val` is,
+//! while `{ var := val; }` evaluates to `()`.
+//! likewise a branch `if cond { val1 } else { val2 }`
+//! (with `var1` and `var2` having the same type) would evaluate to
+//! one of the two `val`'s depending on `cond`. Each value-full construct emits a [`THRInit`]
+//! that assigns the constructs value to a syhnthesized, unique label like `_thr_construct1`
+//! or something similar (I will decide on that later)
+//!
+//! So the code
+//! ```
+//! a := { var := 3; var};
+//! ```
+//!
+//! lowers into:
+//! ```
+//! @blockN
+//!   var := 3;
+//!   _thr_construct1 := var;
+//!   a := _thr_construct1;
+//! ```
+//!
+//!
+
+use rayon::prelude::*;
 
 use crate::ast::{
     BinOp, UnOp,
@@ -227,13 +261,13 @@ pub enum THRTypeSpecifier {
 }
 
 impl THRTypeSpecifier {
-    pub const fn i_signed(width: IntegerWidth) -> Self {
+    pub const fn int_signed(width: IntegerWidth) -> Self {
         Self::Integer {
             width,
             signed: true,
         }
     }
-    pub const fn i_unsigned(width: IntegerWidth) -> Self {
+    pub const fn int_unsigned(width: IntegerWidth) -> Self {
         Self::Integer {
             width,
             signed: false,
@@ -249,7 +283,7 @@ pub struct THRStructLayout {
 impl THRStructLayout {
     pub fn alignment(&self, ctx: &THRKeySets) -> u64 {
         self.fields
-            .iter()
+            .par_iter()
             .map(|field| field.typ.alignment(ctx))
             .max()
             .unwrap_or(0)
@@ -257,23 +291,8 @@ impl THRStructLayout {
 
     pub fn width(&self, ctx: &THRKeySets) -> u64 {
         let struct_alignment = self.alignment(ctx);
-        let summed_fields = self.fields.iter().map(|f| f.typ.width(ctx)).sum();
-        Self::next_aligned_offset(summed_fields, struct_alignment)
-    }
-
-    /// calculate the closest multiple `m` of `required_alignment` s.t. `m >= cur_offset` && `m % required_alignment == 0`
-    fn next_aligned_offset(cur_offset: u64, required_alignment: u64) -> u64 {
-        match (cur_offset, required_alignment) {
-            (0, _) => 0,
-            (c, a) => {
-                if c > a {
-                    let (div, rem) = div_rem(c, a);
-                    if rem != 0 { (div + 1) * a } else { div * a }
-                } else {
-                    a
-                }
-            }
-        }
+        let summed_fields: u64 = self.fields.par_iter().map(|f| f.typ.width(ctx)).sum();
+        summed_fields.next_multiple_of(struct_alignment)
     }
 }
 
@@ -376,7 +395,7 @@ enum THRLoweredStatement {
     Multiple(THRBlockID),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum THRStatement {
     Init {
         decl: THRSymbolDecl,
@@ -384,14 +403,17 @@ pub enum THRStatement {
         /// this node's corresponding NodeID from the IPR representation
         ipr_id: NodeId,
     },
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum THRTerminator {
     Jmp(THRBlockID),
+    Branch {
+        cond: THRExprID,
+        bthen: THRBlockID,
+        belse: THRBlockID,
+    },
     Ret(THRExprID),
-    /// An assigment that is initialized by some branch,
-    /// all branches must terminate with a [`SegmentReturn`]
-    SegmentedAssign(THRSymbolDecl, Vec<THRBlockID>),
-    /// An instruction that signals a return,
-    /// except that it is paired to some [`SegmentedAssign`]
-    SegmentReturn(THRSymbolID, THRExprID),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -443,14 +465,14 @@ impl THRSymbol {
 }
 
 static THR_INTEGER_TYPES: [THRTypeSpecifier; 8] = [
-    THRTypeSpecifier::i_signed(IntegerWidth::_8),
-    THRTypeSpecifier::i_signed(IntegerWidth::_16),
-    THRTypeSpecifier::i_signed(IntegerWidth::_32),
-    THRTypeSpecifier::i_signed(IntegerWidth::_64),
-    THRTypeSpecifier::i_unsigned(IntegerWidth::_8),
-    THRTypeSpecifier::i_unsigned(IntegerWidth::_16),
-    THRTypeSpecifier::i_unsigned(IntegerWidth::_32),
-    THRTypeSpecifier::i_unsigned(IntegerWidth::_64),
+    THRTypeSpecifier::int_signed(IntegerWidth::_8),
+    THRTypeSpecifier::int_signed(IntegerWidth::_16),
+    THRTypeSpecifier::int_signed(IntegerWidth::_32),
+    THRTypeSpecifier::int_signed(IntegerWidth::_64),
+    THRTypeSpecifier::int_unsigned(IntegerWidth::_8),
+    THRTypeSpecifier::int_unsigned(IntegerWidth::_16),
+    THRTypeSpecifier::int_unsigned(IntegerWidth::_32),
+    THRTypeSpecifier::int_unsigned(IntegerWidth::_64),
 ];
 
 enum LoweredMaybeSegmentedExpr {
@@ -497,9 +519,9 @@ impl THRKeySets {
                 let width = IntegerWidth::try_from(*width)
                     .unwrap_or_else(|_| panic!("illegal integer width: {width}"));
                 if *signed {
-                    THRTypeSpecifier::i_signed(width)
+                    THRTypeSpecifier::int_signed(width)
                 } else {
-                    THRTypeSpecifier::i_unsigned(width)
+                    THRTypeSpecifier::int_unsigned(width)
                 }
             }
             IPRTypeSpecifier::Float { width: _ } => todo!(),
@@ -618,7 +640,7 @@ impl THRKeySets {
             kind,
         };
         let symbol = self.symbols.get_or_intern(symbol);
-        let value = self.lower_expression_maybe_segmented(ipr_ctx, &init.value, symbol);
+        let value = self.lower_init_value(ipr_ctx, &init.value, symbol);
         let typ = init.typ.as_ref().unwrap();
         let typ = self.lower_type(ipr_ctx, typ);
 
@@ -773,7 +795,7 @@ impl THRKeySets {
         self.blocks.get_or_intern(b)
     }
 
-    fn lower_expression_maybe_segmented(
+    fn lower_init_value(
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         expr: &IPRExpression,
@@ -861,16 +883,16 @@ mod tests {
         }
     }
     fn struct_field_i8(ctx: &mut THRKeySets) -> THRStructField {
-        struct_field(ctx, THRTypeSpecifier::i_signed(IntegerWidth::_8))
+        struct_field(ctx, THRTypeSpecifier::int_signed(IntegerWidth::_8))
     }
     fn struct_field_i32(ctx: &mut THRKeySets) -> THRStructField {
-        struct_field(ctx, THRTypeSpecifier::i_signed(IntegerWidth::_32))
+        struct_field(ctx, THRTypeSpecifier::int_signed(IntegerWidth::_32))
     }
     fn struct_field_i64(ctx: &mut THRKeySets) -> THRStructField {
-        struct_field(ctx, THRTypeSpecifier::i_signed(IntegerWidth::_64))
+        struct_field(ctx, THRTypeSpecifier::int_signed(IntegerWidth::_64))
     }
     fn struct_field_i16(ctx: &mut THRKeySets) -> THRStructField {
-        struct_field(ctx, THRTypeSpecifier::i_signed(IntegerWidth::_16))
+        struct_field(ctx, THRTypeSpecifier::int_signed(IntegerWidth::_16))
     }
 
     fn struct_size_invariant(layout: &THRStructLayout, ctx: &THRKeySets) {
