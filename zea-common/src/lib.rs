@@ -2,7 +2,7 @@ use clap::Parser;
 use log::LevelFilter;
 use std::path::PathBuf;
 #[derive(Parser, Debug)]
-#[command(version, about)]
+#[command(version, about, name = "zea")]
 pub struct CompilerConfig {
     path: PathBuf,
 
@@ -18,10 +18,16 @@ pub struct CompilerConfig {
 
     #[arg(short, long = "output")]
     out_file: Option<PathBuf>,
+    #[arg(long = "out-dir")]
+    out_dir: Option<PathBuf>,
     #[arg(short, long = "save-asm")]
     asm_file: Option<PathBuf>,
     #[arg(short, long = "save-qbe")]
     qbe_file: Option<PathBuf>,
+    #[arg(long, default_value_t = ModuleType::Bin)]
+    target_type: ModuleType,
+    #[arg(long, default_value_t = false)]
+    keep_files: bool,
 }
 
 impl CompilerConfig {
@@ -65,6 +71,39 @@ impl CompilerConfig {
     pub fn print_qbe_il(&self) -> bool {
         self.print_qbe_il
     }
+
+    pub fn module_type(&self) -> ModuleType {
+        self.target_type
+    }
+    pub fn out_dir(&self) -> std::io::Result<PathBuf> {
+        match &self.out_dir {
+            Some(path) => Ok(path.clone()),
+            None => std::env::current_dir(),
+        }
+    }
+
+    pub fn keep_files(&self) -> bool {
+        self.keep_files
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, clap::ValueEnum, Default)]
+pub enum ModuleType {
+    #[default]
+    Bin,
+    Lib,
+    Dll,
+}
+
+impl ToString for ModuleType {
+    fn to_string(&self) -> String {
+        match self {
+            ModuleType::Bin => "bin",
+            ModuleType::Lib => "lib",
+            ModuleType::Dll => "dll",
+        }
+        .to_string()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -101,6 +140,10 @@ pub enum CompilerErrorKind {
     StrayPackedInit = 2,
     GlobalStmtNonInit = 3,
     NonGlobScopedSymbolDisambiguation = 4,
+    /// A typ field is set to None after the type-checking phase
+    StrayUnknownType = 5,
+    EmptyFunctionBody,
+    NoEntryPoint,
 }
 pub fn stray_packed_init() -> CompilerError {
     CompilerError::new(
@@ -126,6 +169,7 @@ pub fn non_globscope_symb_disamb() -> CompilerError {
         CompilerErrorKind::GlobalStmtNonInit,
     )
 }
+
 #[macro_export]
 macro_rules! internal_compiler_error {
     (spi) => {{

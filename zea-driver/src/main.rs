@@ -27,6 +27,12 @@ fn out_path(ccfg: &CompilerConfig, module: &THRModule) -> PathBuf {
         PathBuf::from(format!("{}.out", module.name))
     }
 }
+
+fn temp_file_in_out_dir(ccfg: &CompilerConfig, suffix: String) -> (File, PathBuf) {
+    let temp_file = NamedTempFile::with_suffix_in(suffix, ccfg_out_dir(ccfg)).unwrap();
+    temp_file.keep().unwrap()
+}
+
 fn invoke_asm(ccfg: &CompilerConfig, module: &THRModule, asm_path: &Path) -> PathBuf {
     let out_path = out_path(ccfg, module);
     let status = std::process::Command::new("gcc")
@@ -51,9 +57,8 @@ fn invoke_qbe(ccfg: &CompilerConfig, module: &THRModule, qbe_path: &Path) -> Pat
         info!("saving assembly to {}", path.display());
         path
     } else {
-        let asm_temp = NamedTempFile::with_suffix_in(format!("_{}.s", module.name), "./").unwrap();
-        let (_, asm_temp) = asm_temp.keep().unwrap();
-        asm_temp
+        let (_file, asm_path) = temp_file_in_out_dir(ccfg, format!("_{}.S", module.name));
+        asm_path
     };
     let status = std::process::Command::new("qbe")
         .arg(qbe_path)
@@ -71,28 +76,30 @@ fn invoke_qbe(ccfg: &CompilerConfig, module: &THRModule, qbe_path: &Path) -> Pat
     trace!("saved compiled QBE module assembly to {}", path.display());
     path
 }
-fn write_qbe_il(ccfg: &CompilerConfig, module: &THRModule, il: &str) -> PathBuf {
+fn write_qbe_il(ccfg: &CompilerConfig, module: &THRModule, il_str: &str) -> PathBuf {
     let (mut f, path) = if let Some(path) = ccfg.qbe_file().cloned() {
         info!("saving QBE IL to {}", path.display());
         let f = File::create(path.as_path()).unwrap();
         (f, path)
     } else {
-        let temp = NamedTempFile::with_suffix_in(format!("_{}.qbe", module.name), "./").unwrap();
-        temp.keep().unwrap()
+        temp_file_in_out_dir(ccfg, format!("_{}.qbe", module.name))
     };
-    f.write_all(il.as_bytes()).unwrap();
+    f.write_all(il_str.as_bytes()).unwrap();
     path
 }
 
-fn cleanup_temp_files(ccfg: &CompilerConfig, qbe_il: &Path, asm: &Path) {
+fn cleanup_temp_files(ccfg: &CompilerConfig, qbe_il_path: &Path, asm_path: &Path) {
+    if ccfg.keep_files() {
+        return;
+    }
     if ccfg.asm_file().is_none() {
-        trace!("cleaning up {}", asm.display());
-        std::fs::remove_file(asm).unwrap()
+        trace!("cleaning up {}", asm_path.display());
+        std::fs::remove_file(asm_path).unwrap()
     }
 
     if ccfg.qbe_file().is_none() {
-        trace!("cleaning up {}", qbe_il.display());
-        std::fs::remove_file(qbe_il).unwrap()
+        trace!("cleaning up {}", qbe_il_path.display());
+        std::fs::remove_file(qbe_il_path).unwrap()
     }
 }
 fn exit(code: i32) -> ! {
@@ -124,6 +131,16 @@ fn read_to_string_wrapper(p: &Path) -> String {
     }
 }
 
+fn ccfg_out_dir(ccfg: &CompilerConfig) -> PathBuf {
+    match ccfg.out_dir() {
+        Ok(p) => p,
+        Err(e) => {
+            error!("cannot access current working directory: {}", e.kind());
+            exit(1)
+        }
+    }
+}
+
 fn main() {
     let ccfg = CompilerConfig::parse_args();
     colog::basic_builder().filter_level(ccfg.log_level()).init();
@@ -143,7 +160,13 @@ fn main() {
     }
 
     info!("lowering into THR...");
-    let lowered = zea_irs::ast::thr::lower_module(module, tinfo, scopes);
+    let lowered = match zea_irs::ast::thr::lower_module(module, tinfo, scopes, &ccfg) {
+        Ok(lowered) => lowered,
+        Err(e) => {
+            error!("{e:?}");
+            exit(1)
+        }
+    };
     if ccfg.print_thr() {
         info!("Typed Highlevel Representation:\n{:?}", lowered);
     }
