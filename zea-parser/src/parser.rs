@@ -6753,7 +6753,7 @@ fn __action25<
 {
     {
         let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
-        let mut attributes: IPRFunctionAttributes = Default::default();
+        let mut attributes: ZeaFunctionAttributes = Default::default();
         attributes.update_from_attr_list(attrs);
         IPRFunction {
             attributes,
@@ -6785,7 +6785,7 @@ fn __action26<
 {
     {
         let params: Vec<IPRFuncParam> = args.into_iter().map(IPRFuncParam::from).collect();
-        let mut attributes: IPRFunctionAttributes = Default::default();
+        let mut attributes: ZeaFunctionAttributes = Default::default();
         attributes.update_from_attr_list(attrs);
         IPRFunction {
             attributes,
