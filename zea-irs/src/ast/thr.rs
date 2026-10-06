@@ -121,9 +121,9 @@ impl THRTypeID {
             .get_by_id(self)
             .expect("struct field name should be interned at this point");
         match ty {
-            THRTypeSpecifier::Integer { width, signed: _ } => *width as usize,
-            THRTypeSpecifier::Float { width } => *width as usize,
-            THRTypeSpecifier::Pointer(inner) => inner.alignment(ctx),
+            THRTypeSpecifier::Integer { width, signed: _ } => width.num_bytes() as usize,
+            THRTypeSpecifier::Float { width } => width.num_bytes() as usize,
+            THRTypeSpecifier::Pointer(_inner) => todo!(), // this should depend on target's pointer width
             THRTypeSpecifier::Boolean => 1,
             THRTypeSpecifier::Unit => 0,
             THRTypeSpecifier::Never => 0,
