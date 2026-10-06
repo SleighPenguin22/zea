@@ -9,6 +9,46 @@ pub trait ZeaError<'m> {
     fn zea_error_format(&'m self, ctx: &'m Self::ErrContext) -> String;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, arbitrary::Arbitrary, PartialOrd, Ord)]
+pub enum ScalarTypeWidth {
+    _8,
+    _16,
+    _32,
+    _64,
+}
+
+impl ScalarTypeWidth {
+    pub const fn num_bits(self) -> u8 {
+        match self {
+            ScalarTypeWidth::_8 => 8,
+            ScalarTypeWidth::_16 => 16,
+            ScalarTypeWidth::_32 => 32,
+            ScalarTypeWidth::_64 => 64,
+        }
+    }
+    pub const fn num_bytes(self) -> u8 {
+        match self {
+            ScalarTypeWidth::_8 => 1,
+            ScalarTypeWidth::_16 => 2,
+            ScalarTypeWidth::_32 => 4,
+            ScalarTypeWidth::_64 => 8,
+        }
+    }
+}
+
+impl TryFrom<u8> for ScalarTypeWidth {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            8 => Ok(Self::_8),
+            16 => Ok(Self::_16),
+            32 => Ok(Self::_32),
+            64 => Ok(Self::_64),
+            _ => Err(value),
+        }
+    }
+}
+
 /// Supply a struct's Name to Implement the NodeLabeler trait for it.
 /// This macro requires the struct to have a `label: usize` field.
 ///
@@ -119,8 +159,8 @@ pub mod attributes {
     impl Default for IPRStructAttributes {
         fn default() -> Self {
             Self {
-                field_order: Default::default(),
-                alignment: Default::default(),
+                field_order: FieldOrderAttribute::Naive,
+                alignment: AlignmentAttribute::Inferred,
                 keep: KeepAttribute::Keep,
             }
         }
@@ -150,8 +190,8 @@ pub mod attributes {
             ]
         }
     }
-    #[derive(Debug, Copy, Clone, Arbitrary)]
-    pub struct IPRFunctionAttributes {
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Hash)]
+    pub struct ZeaFunctionAttributes {
         /// should this function be inlined?
         inline: InlineAttribute,
         /// is this function called often?
@@ -163,7 +203,7 @@ pub mod attributes {
         must_use: MustUseAttribute,
     }
 
-    impl Default for IPRFunctionAttributes {
+    impl Default for ZeaFunctionAttributes {
         fn default() -> Self {
             Self {
                 inline: InlineAttribute::AsNecessary,
@@ -173,7 +213,7 @@ pub mod attributes {
             }
         }
     }
-    impl AttrListLike for IPRFunctionAttributes {
+    impl AttrListLike for ZeaFunctionAttributes {
         fn update_from_attr_list(&mut self, list: Vec<ZeaAttribute>) {
             for attr in list {
                 match attr {
@@ -251,7 +291,7 @@ pub mod attributes {
         }
     }
 
-    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default, Hash)]
     pub enum TemperatureAttribute {
         Hot,
         Cold,
@@ -259,33 +299,33 @@ pub mod attributes {
         LukeWarm,
     }
 
-    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default, Hash)]
     pub enum FieldOrderAttribute {
         #[default]
-        ReprC,
+        Naive,
         Descending,
     }
-    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default, Hash)]
     pub enum AlignmentAttribute {
         #[default]
         Inferred,
         Explicit(usize),
     }
 
-    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default, Hash)]
     pub enum InlineAttribute {
         Always,
         #[default]
         AsNecessary,
         Never,
     }
-    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default, Hash)]
     pub enum KeepAttribute {
         #[default]
         Keep,
         EliminateUnused,
     }
-    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default)]
+    #[derive(Debug, Copy, Clone, Arbitrary, PartialEq, Eq, Default, Hash)]
     pub enum MustUseAttribute {
         #[default]
         MayDiscard,
@@ -342,7 +382,7 @@ pub mod attributes {
             ("inline", "never") => Ok(ZeaAttribute::Inline(InlineAttribute::Never)),
             ("inline", _) => Err(AttributeParseError::InvalidValueForKey(key, value)),
             ("fields", "desc") => Ok(ZeaAttribute::Ordering(FieldOrderAttribute::Descending)),
-            ("fields", "c") => Ok(ZeaAttribute::Ordering(FieldOrderAttribute::ReprC)),
+            ("fields", "c") => Ok(ZeaAttribute::Ordering(FieldOrderAttribute::Naive)),
             ("fields", _) => Err(AttributeParseError::InvalidValueForKey(key, value)),
             _ => Err(AttributeParseError::InvalidKey(key)),
         }

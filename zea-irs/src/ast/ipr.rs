@@ -10,7 +10,7 @@ use std::{
 use zea_internal_macros::ASTStructuralEq;
 
 use crate::{
-    ZeaError,
+    ScalarTypeWidth, ZeaError,
     ast::{
         BareNodeLabeler, BinOp, IPRScopedIdentifier, NodeLabeler, UnOp, ZeaNodeQuery,
         ipr_walkers::{
@@ -19,7 +19,7 @@ use crate::{
         },
     },
     attributes::{
-        IPRBlockAttributes, IPRBranchAttributes, IPRFunctionAttributes, IPRModuleAttributes,
+        IPRBlockAttributes, IPRBranchAttributes, IPRModuleAttributes, ZeaFunctionAttributes,
     },
     impls::StructuralEq,
 };
@@ -248,7 +248,7 @@ pub struct IPRFuncParam {
 /// Functions may be imported as many times as needed.
 #[derive(Debug, Clone, Arbitrary)]
 pub struct IPRFunction {
-    pub attributes: IPRFunctionAttributes,
+    pub attributes: ZeaFunctionAttributes,
     pub id: NodeId,
     pub name: String,
     pub params: Vec<IPRFuncParam>,
@@ -770,9 +770,14 @@ pub enum IPRTypeSpecifier {
     /// boolean type
     Bool,
     /// Integer type with width and sign
-    Integer { width: u8, signed: bool },
+    Integer {
+        width: ScalarTypeWidth,
+        signed: bool,
+    },
     /// Floating point type with width
-    Float { width: u8 },
+    Float {
+        width: ScalarTypeWidth,
+    },
 
     /// a pointer to a memory location containing something of the inner type
     Pointer(Box<IPRTypeSpecifier>),
@@ -784,15 +789,17 @@ pub enum IPRTypeSpecifier {
     // Option(Box<Type>),
     /// The diverging type, i.e. the type that `exit()` and `panic!()` return
     Never,
+
+    UserDefined(String),
 }
 
 impl Debug for IPRTypeSpecifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
             IPRTypeSpecifier::NonScalar(typ) => typ,
-            IPRTypeSpecifier::Float { width } => &format!("f{width}"),
+            IPRTypeSpecifier::Float { width } => &format!("f{}", width.num_bits()),
             IPRTypeSpecifier::Integer { width, signed } => {
-                &format!("{}{width}", if *signed { 'i' } else { 'u' })
+                &format!("{}{}", if *signed { 'I' } else { 'U' }, width.num_bits())
             }
             IPRTypeSpecifier::Bool => "Bool",
             IPRTypeSpecifier::ArrayOf(arr) => &format!("[{arr:?}]"),
@@ -801,6 +808,7 @@ impl Debug for IPRTypeSpecifier {
             // Type::Slice(slice) => &format!("&[{slice:?}]"),
             IPRTypeSpecifier::Unit => "()",
             IPRTypeSpecifier::Never => "!",
+            IPRTypeSpecifier::UserDefined(s) => s,
         };
 
         write!(f, "{}", str)
@@ -811,58 +819,62 @@ impl Debug for IPRTypeSpecifier {
 impl IPRTypeSpecifier {
     pub const fn t_U8() -> IPRTypeSpecifier {
         Self::Integer {
-            width: 8,
+            width: ScalarTypeWidth::_8,
             signed: false,
         }
     }
     pub const fn t_U16() -> IPRTypeSpecifier {
         Self::Integer {
-            width: 16,
+            width: ScalarTypeWidth::_16,
             signed: false,
         }
     }
     pub const fn t_U32() -> IPRTypeSpecifier {
         Self::Integer {
-            width: 32,
+            width: ScalarTypeWidth::_32,
             signed: false,
         }
     }
     pub const fn t_U64() -> IPRTypeSpecifier {
         Self::Integer {
-            width: 64,
+            width: ScalarTypeWidth::_64,
             signed: false,
         }
     }
     pub const fn t_I8() -> IPRTypeSpecifier {
         Self::Integer {
-            width: 8,
+            width: ScalarTypeWidth::_8,
             signed: true,
         }
     }
     pub const fn t_I16() -> IPRTypeSpecifier {
         Self::Integer {
-            width: 16,
+            width: ScalarTypeWidth::_16,
             signed: true,
         }
     }
     pub const fn t_I32() -> IPRTypeSpecifier {
         Self::Integer {
-            width: 32,
+            width: ScalarTypeWidth::_32,
             signed: true,
         }
     }
     pub const fn t_I64() -> IPRTypeSpecifier {
         Self::Integer {
-            width: 64,
+            width: ScalarTypeWidth::_64,
             signed: true,
         }
     }
 
     pub const fn t_F32() -> IPRTypeSpecifier {
-        Self::Float { width: 32 }
+        Self::Float {
+            width: ScalarTypeWidth::_32,
+        }
     }
     pub const fn t_F64() -> IPRTypeSpecifier {
-        Self::Float { width: 64 }
+        Self::Float {
+            width: ScalarTypeWidth::_64,
+        }
     }
 
     pub const fn t_Bool() -> Self {

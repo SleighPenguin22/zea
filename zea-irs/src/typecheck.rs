@@ -128,7 +128,7 @@ use std::{
 };
 
 use idset::{KeySet, internkey};
-use log::{error, trace};
+use log::{error, info, trace};
 use zea_common::internal_compiler_error;
 
 use crate::{
@@ -800,9 +800,9 @@ impl ZeaTypeChecker {
         let l_var = self.infer_expression(l)?;
         let r_var = self.infer_expression(r)?;
         let r_t = self.get_solved_typespec(r_var)?.clone();
-        let bool_t = self.get_bool_tvar();
-        let u64_t = self.get_u64_tvar();
-        match op {
+        let bool_tvar = self.get_bool_tvar();
+        let u64_tvar = self.get_u64_tvar();
+        let res_tvar = match op {
             BinOp::Add
             | BinOp::Sub
             | BinOp::Mul
@@ -820,8 +820,8 @@ impl ZeaTypeChecker {
                         Ok(r_var)
                     }
                     IPRTypeSpecifier::Bool => {
-                        self.hindley_milner_unify(var, u64_t)?;
-                        Ok(u64_t)
+                        self.hindley_milner_unify(var, u64_tvar)?;
+                        Ok(u64_tvar)
                     }
                     _ => Err(TypeCheckError::InvalidOperands(id, op)),
                 }
@@ -829,8 +829,8 @@ impl ZeaTypeChecker {
             BinOp::Subscript => todo!(),
             BinOp::LT | BinOp::GT => {
                 self.hindley_milner_unify(l_var, r_var)?;
-                self.hindley_milner_unify(var, bool_t)?;
-                Ok(bool_t)
+                self.hindley_milner_unify(var, bool_tvar)?;
+                Ok(bool_tvar)
             }
             BinOp::Eq
             | BinOp::Neq
@@ -839,12 +839,21 @@ impl ZeaTypeChecker {
             | BinOp::LogAnd
             | BinOp::LogOr
             | BinOp::LogXor => {
-                self.hindley_milner_unify(r_var, bool_t)?;
+                self.hindley_milner_unify(r_var, bool_tvar)?;
                 self.hindley_milner_unify(l_var, r_var)?;
-                self.hindley_milner_unify(var, bool_t)?;
-                Ok(bool_t)
+                self.hindley_milner_unify(var, bool_tvar)?;
+                Ok(bool_tvar)
             }
-        }
+        }?;
+        let interned: InternedType = self
+            .get_solved_interned_type(res_tvar)
+            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(res_tvar))?;
+        self.node_types.insert(id, interned);
+        Ok(res_tvar)
+    }
+
+    fn get_solved_interned_type(&self, tvar: TypeVariable) -> Option<InternedType> {
+        self.typevar_solving.get_solved(tvar)
     }
 }
 
@@ -855,7 +864,7 @@ impl ZeaTypeChecker {
     pub fn check_module_panicking(mut self, module: &mut IPRModule) -> IPRModuleTypeInfo {
         match self.check_module(module) {
             Ok(_) => {}
-            Err(_) => {
+            Err(_e) => {
                 error!("exiting...");
                 exit(1)
             }
@@ -866,13 +875,19 @@ impl ZeaTypeChecker {
         self.introduce_module(module)?;
         self.trace_solved_stats();
 
-        while self.check_module_once(module).is_ok() {
-            let solved = self.trace_solved_stats();
-            if solved {
-                self.check_module_once(module)?;
-                break;
+        loop {
+            let status = self.check_module_once(module);
+            match status {
+                Ok(()) => {
+                    let solved = self.trace_solved_stats();
+                    if solved {
+                        self.check_module_once(module)?;
+                        break;
+                    }
+                    self.typevar_solving.compress_paths()?;
+                }
+                Err(e) => return Err(e),
             }
-            self.typevar_solving.compress_paths()?;
         }
         Ok(())
     }
@@ -888,6 +903,7 @@ impl ZeaTypeChecker {
                 }
                 Err(other) => {
                     error!("TYPE ERROR: {}", other.zea_error_format(self));
+                    info!("GOT HERE");
                     return Err(other);
                 }
             }

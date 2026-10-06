@@ -369,6 +369,7 @@ fn walk_type<'m, V: IPRVisitor<'m>>(
             v.visit_type(t.as_ref())?;
         }
         IPRTypeSpecifier::Never => {}
+        IPRTypeSpecifier::UserDefined(_) => {}
     };
     Ok(V::VisitorOk::default())
 }
@@ -588,6 +589,7 @@ fn walk_mut_type<'m, V: IPRTransfomer<'m>>(
             v.visit_type(t.as_mut())?;
         }
         IPRTypeSpecifier::Never => {}
+        IPRTypeSpecifier::UserDefined(_) => {}
     };
     Ok(V::TransformerOk::default())
 }

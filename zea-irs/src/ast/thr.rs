@@ -71,49 +71,58 @@
 //!
 //!
 
+use std::collections::HashMap;
+
 use rayon::prelude::*;
 
-use crate::ast::{
-    BinOp, UnOp,
-    ipr::{
-        IPRBlockExpression, IPRExpression, IPRExpressionKind, IPRFunction, IPRInitializationBlock,
-        IPRInitializationKind, IPRModule, IPRSimpleInitialization, IPRStatement, IPRStatementKind,
-        IPRTypeSpecifier, IPRTypedIdentifier,
+use crate::{
+    ScalarTypeWidth,
+    ast::{
+        BinOp, UnOp,
+        ipr::{
+            IPRBlockExpression, IPRExpression, IPRExpressionKind, IPRFunction,
+            IPRInitializationBlock, IPRInitializationKind, IPRModule, IPRSimpleInitialization,
+            IPRStatement, IPRStatementKind, IPRTypeSpecifier, IPRTypedIdentifier,
+        },
+        ipr_walkers::{transformers::IdentifierScoper, visitors::SymbolKind},
     },
-    ipr_walkers::{transformers::IdentifierScoper, visitors::SymbolKind},
+    attributes::{ZeaAttribute, ZeaFunctionAttributes},
 };
 use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
-use idset::{KeySet, internkey};
+use idset::{InternKey, KeySet, KeyVec, PreKeyVec, internkey};
 use log::trace;
-use zea_common::{CompilerError, CompilerErrorKind, CompilerStage, internal_compiler_error};
-use zea_internal_macros::{InternKey, VariantToStr};
+use zea_common::{
+    CompilerConfig, CompilerError, CompilerErrorKind, CompilerStage, ModuleType,
+    internal_compiler_error,
+};
+use zea_internal_macros::InternKey;
 
 pub fn lower_module(
     module: IPRModule,
     types: IPRModuleTypeInfo,
     ident_scopes: IdentifierScoper,
-) -> THRModule {
+    compiler_config: &CompilerConfig,
+) -> Result<THRModule, CompilerError> {
     let thr_ctx = THRKeySets::with_integer_types();
     let ipr_ctx = IPRLoweringContext {
         module,
         types,
         ident_scopes,
-        cf_stack: vec![],
     };
-    thr_ctx.lower_module(&ipr_ctx)
+    thr_ctx.lower_module(&ipr_ctx, compiler_config)
 }
 
 internkey!(THRTypeID);
 
 impl THRTypeID {
-    fn alignment(self, ctx: &THRKeySets) -> u64 {
+    fn alignment(self, ctx: &THRKeySets) -> usize {
         let ty = ctx
             .types
             .get_by_id(self)
             .expect("struct field name should be interned at this point");
         match ty {
-            THRTypeSpecifier::Integer { width, signed: _ } => *width as u64,
-            THRTypeSpecifier::Float { width } => *width as u64,
+            THRTypeSpecifier::Integer { width, signed: _ } => *width as usize,
+            THRTypeSpecifier::Float { width } => *width as usize,
             THRTypeSpecifier::Pointer(inner) => inner.alignment(ctx),
             THRTypeSpecifier::Boolean => 1,
             THRTypeSpecifier::Unit => 0,
@@ -123,14 +132,14 @@ impl THRTypeID {
         }
     }
 
-    fn width(self, ctx: &THRKeySets) -> u64 {
+    fn width(self, ctx: &THRKeySets) -> usize {
         let ty = ctx
             .types
             .get_by_id(self)
             .expect("struct field name should be interned at this point");
         match ty {
-            THRTypeSpecifier::Integer { width, signed: _ } => *width as u64,
-            THRTypeSpecifier::Float { width } => *width as u64,
+            THRTypeSpecifier::Integer { width, signed: _ } => *width as usize,
+            THRTypeSpecifier::Float { width } => *width as usize,
             THRTypeSpecifier::Pointer(inner) => inner.width(ctx),
             THRTypeSpecifier::Boolean => 1,
             THRTypeSpecifier::Unit => 0,
@@ -143,38 +152,31 @@ impl THRTypeID {
 internkey!(THRExprID);
 internkey!(THRSymbolID);
 internkey!(THRStatementID);
-internkey!(THRBlockID);
 internkey!(THRFunctionID);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct THRModule {
     interned: THRKeySets,
-    global_data_block: THRBlockID,
-    entry_point: THRFunctionID,
+    global_data_block: Vec<THRStatementID>,
+    start_symbol: Option<THRFunctionID>,
     pub name: String,
     ipr_id: NodeId,
 }
 
 impl THRModule {
-    pub fn global_data_block(&self) -> THRBlockID {
-        self.global_data_block
-    }
-    pub fn get_global_data_block(&self) -> &THRBlock {
-        self.interned
-            .blocks
-            .get_by_id(self.global_data_block)
-            .unwrap()
+    pub fn global_data_block(&self) -> &[THRStatementID] {
+        &self.global_data_block
     }
 
-    pub fn entry_point(&self) -> THRFunctionID {
-        self.entry_point
+    pub fn entry_point(&self) -> Option<THRFunctionID> {
+        self.start_symbol
     }
 
-    pub fn get_block(&self, block: THRBlockID) -> &THRBlock {
-        self.interned.blocks.get_by_id(block).unwrap()
-    }
     pub fn get_type(&self, typ: THRTypeID) -> &THRTypeSpecifier {
         self.interned.types.get_by_id(typ).unwrap()
+    }
+    pub fn get_type_of_expr(&self, expr: THRExprID) -> Option<THRTypeID> {
+        self.interned.expr_types.get(&expr).copied()
     }
     pub fn get_function(&self, func: THRFunctionID) -> &THRFunction {
         self.interned.functions.get_by_id(func).unwrap()
@@ -191,14 +193,14 @@ impl THRModule {
     pub fn get_expr(&self, expr: THRExprID) -> &THRExpression {
         self.interned.expressions.get_by_id(expr).unwrap()
     }
-    pub fn alignment_of_layout(&self, typ: &THRStructLayout) -> u64 {
+    pub fn alignment_of_layout(&self, typ: &THRStructValueLayout) -> usize {
         typ.alignment(&self.interned)
     }
-    pub fn width_of(&self, typ: THRTypeID) -> u64 {
+    pub fn width_of(&self, typ: THRTypeID) -> usize {
         typ.width(&self.interned)
     }
 
-    pub fn alignment_of(&self, typ: THRTypeID) -> u64 {
+    pub fn alignment_of(&self, typ: THRTypeID) -> usize {
         typ.alignment(&self.interned)
     }
 }
@@ -209,110 +211,77 @@ pub struct THRKeySets {
     symbols: KeySet<THRSymbolID, THRSymbol>,
     types: KeySet<THRTypeID, THRTypeSpecifier>,
     statements: KeySet<THRStatementID, THRStatement>,
-    blocks: KeySet<THRBlockID, THRBlock>,
     functions: KeySet<THRFunctionID, THRFunction>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum IntegerWidth {
-    _8 = 1,
-    _16 = 2,
-    _32 = 4,
-    _64 = 8,
-}
-
-impl TryFrom<u8> for IntegerWidth {
-    type Error = u8;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            8 => Ok(Self::_8),
-            16 => Ok(Self::_16),
-            32 => Ok(Self::_32),
-            64 => Ok(Self::_64),
-            _ => Err(value),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FloatWidth {
-    _32 = 4,
-    _64 = 8,
+    expr_types: HashMap<THRExprID, THRTypeID>,
+    thr_construct_eval_counter: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum THRTypeSpecifier {
     Integer {
-        width: IntegerWidth,
+        width: ScalarTypeWidth,
         signed: bool,
     },
     Float {
-        width: FloatWidth,
+        width: ScalarTypeWidth,
     },
     Pointer(THRTypeID),
     Boolean,
     Unit,
     Never,
     Struct {
-        name: String,
-        layout: THRStructLayout,
+        name: Box<str>,
+        layout: THRStructValueLayout,
     },
-    Tuple(THRStructLayout),
+    Tuple(THRStructValueLayout),
 }
 
 impl THRTypeSpecifier {
-    pub const fn int_signed(width: IntegerWidth) -> Self {
+    pub const fn int_signed(width: ScalarTypeWidth) -> Self {
         Self::Integer {
             width,
             signed: true,
         }
     }
-    pub const fn int_unsigned(width: IntegerWidth) -> Self {
+    pub const fn int_unsigned(width: ScalarTypeWidth) -> Self {
         Self::Integer {
             width,
             signed: false,
         }
     }
 }
-
+/// The layout of some struct-type
+///
+/// This layout has the field-ordering applied already
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct THRStructLayout {
-    pub ordering: StructOrdering,
-    pub fields: Vec<THRStructField>,
+pub struct THRStructValueLayout {
+    pub fields: Box<[THRStructField]>,
+    /// field names, used to emit debug info
+    ///
+    /// These are resolved to offsets during the lowering into THR
+    pub debug_field_names: Box<[Box<str>]>,
 }
-impl THRStructLayout {
-    pub fn alignment(&self, ctx: &THRKeySets) -> u64 {
+impl THRStructValueLayout {
+    pub fn alignment(&self, ctx: &THRKeySets) -> usize {
         self.fields
             .par_iter()
             .map(|field| field.typ.alignment(ctx))
             .max()
-            .unwrap_or(0)
+            .unwrap_or(1usize)
     }
 
-    pub fn width(&self, ctx: &THRKeySets) -> u64 {
+    pub fn width(&self, ctx: &THRKeySets) -> usize {
         let struct_alignment = self.alignment(ctx);
-        let summed_fields: u64 = self.fields.par_iter().map(|f| f.typ.width(ctx)).sum();
+        let summed_fields: usize = self.fields.par_iter().map(|f| f.typ.width(ctx)).sum();
         summed_fields.next_multiple_of(struct_alignment)
     }
-}
-
-fn div_rem(x: u64, y: u64) -> (u64, u64) {
-    let quot = x.checked_div_euclid(y).unwrap_or(0);
-    let rem = x.checked_rem_euclid(y).unwrap_or(0);
-    (quot, rem)
-}
-/// Specify the ordering of a [`THRStructLayout`], note that fields are always aligned
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub enum StructOrdering {
-    /// Do not reorder fields
-    Naive,
-    /// Order fields in descending size
-    Descending,
+    pub fn offset_of_field_idx(&self, field_idx: usize) -> Option<usize> {
+        self.fields.get(field_idx).map(|f| f.offset)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct THRStructField {
-    pub name: String,
     pub typ: THRTypeID,
     pub offset: usize,
 }
@@ -339,23 +308,23 @@ impl THRExpression {
 
 /// used to provide an Eq and Hash impl for floats.
 pub trait NumericLiteral: Copy + Clone + PartialEq {
-    fn canonical(&self) -> Self;
+    fn canonical(self) -> Self;
 }
 
 impl NumericLiteral for u64 {
-    fn canonical(&self) -> Self {
-        *self
+    fn canonical(self) -> Self {
+        self
     }
 }
 
 impl NumericLiteral for f64 {
-    fn canonical(&self) -> Self {
-        if self.is_nan() { f64::NAN } else { *self }
+    fn canonical(self) -> Self {
+        if self.is_nan() { f64::NAN } else { self }
     }
 }
 impl NumericLiteral for bool {
-    fn canonical(&self) -> Self {
-        *self
+    fn canonical(self) -> Self {
+        self
     }
 }
 
@@ -385,17 +354,7 @@ impl std::hash::Hash for TypedLiteral<u64> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct THRBlock {
-    pub items: Vec<THRStatementID>,
-}
-
-enum THRLoweredStatement {
-    Single(THRStatementID),
-    Multiple(THRBlockID),
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum THRStatement {
     Init {
         decl: THRSymbolDecl,
@@ -403,19 +362,17 @@ pub enum THRStatement {
         /// this node's corresponding NodeID from the IPR representation
         ipr_id: NodeId,
     },
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum THRTerminator {
-    Jmp(THRBlockID),
     Branch {
         cond: THRExprID,
-        bthen: THRBlockID,
-        belse: THRBlockID,
+        bthen: Box<[THRStatementID]>,
+        belse: Box<[THRStatementID]>,
     },
     Ret(THRExprID),
 }
 
+/// A symbol declaration, binds a symbol to a type
+///
+/// Used mostly in [`THRStatements`], and ident-expressions in [`THRExpressions`]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct THRSymbolDecl {
     pub symbol: THRSymbolID,
@@ -429,32 +386,46 @@ impl THRSymbolDecl {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct THRFunction {
-    pub name: String,
-    pub params: Vec<THRSymbolDecl>,
-    pub body: THRBlockID,
-    pub ret: THRTypeID,
+    pub name: Box<str>,
+    pub params: Box<[THRSymbolDecl]>,
+    pub body: Box<[THRStatementID]>,
+    pub returns: THRTypeID,
+    pub attributes: ZeaFunctionAttributes,
+    pub ipr_id: NodeId,
 }
 
 impl THRFunction {
-    pub fn new(name: String, params: Vec<THRSymbolDecl>, body: THRBlockID, ret: THRTypeID) -> Self {
+    pub fn new(
+        name: String,
+        params: Vec<THRSymbolDecl>,
+        body: Vec<THRStatementID>,
+        returns: THRTypeID,
+        attributes: ZeaFunctionAttributes,
+        ipr_id: NodeId,
+    ) -> Self {
         Self {
-            name,
-            params,
-            body,
-            ret,
+            name: name.into_boxed_str(),
+            params: params.into_boxed_slice(),
+            body: body.into_boxed_slice(),
+            returns,
+            attributes,
+            ipr_id,
         }
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct THRSymbol {
-    pub name: String,
+    pub name: Box<str>,
     pub kind: SymbolKind,
 }
 
 impl THRSymbol {
     pub fn new(name: String, kind: SymbolKind) -> Self {
-        Self { name, kind }
+        Self {
+            name: name.into_boxed_str(),
+            kind,
+        }
     }
     pub fn func_param(name: String) -> Self {
         Self::new(name, SymbolKind::FunctionParam)
@@ -465,22 +436,40 @@ impl THRSymbol {
 }
 
 static THR_INTEGER_TYPES: [THRTypeSpecifier; 8] = [
-    THRTypeSpecifier::int_signed(IntegerWidth::_8),
-    THRTypeSpecifier::int_signed(IntegerWidth::_16),
-    THRTypeSpecifier::int_signed(IntegerWidth::_32),
-    THRTypeSpecifier::int_signed(IntegerWidth::_64),
-    THRTypeSpecifier::int_unsigned(IntegerWidth::_8),
-    THRTypeSpecifier::int_unsigned(IntegerWidth::_16),
-    THRTypeSpecifier::int_unsigned(IntegerWidth::_32),
-    THRTypeSpecifier::int_unsigned(IntegerWidth::_64),
+    THRTypeSpecifier::int_signed(ScalarTypeWidth::_8),
+    THRTypeSpecifier::int_signed(ScalarTypeWidth::_16),
+    THRTypeSpecifier::int_signed(ScalarTypeWidth::_32),
+    THRTypeSpecifier::int_signed(ScalarTypeWidth::_64),
+    THRTypeSpecifier::int_unsigned(ScalarTypeWidth::_8),
+    THRTypeSpecifier::int_unsigned(ScalarTypeWidth::_16),
+    THRTypeSpecifier::int_unsigned(ScalarTypeWidth::_32),
+    THRTypeSpecifier::int_unsigned(ScalarTypeWidth::_64),
 ];
 
-enum LoweredMaybeSegmentedExpr {
-    Segmented(Vec<THRBlockID>),
-    NotSegmented(THRExprID),
-}
-
 impl THRKeySets {
+    /// Generate an identifier for a language construct
+    ///
+    /// i.e. a block:
+    ///
+    /// ```
+    /// a := { 3 };
+    /// ```
+    ///
+    /// becomes:
+    ///
+    /// ```
+    /// ThrConstruct.0 := 3;
+    /// a := ThrConstruct.0;
+    /// ```
+    pub fn label_construct_eval(&mut self, kind: SymbolKind) -> THRSymbolID {
+        let name = format!("ThrConstruct.{}", self.thr_construct_eval_counter);
+        let symb = THRSymbol {
+            name: name.into_boxed_str(),
+            kind,
+        };
+        self.symbols.get_or_intern(symb)
+    }
+
     pub fn with_integer_types() -> Self {
         let mut s = Self::default();
         for t in THR_INTEGER_TYPES.as_slice() {
@@ -516,21 +505,20 @@ impl THRKeySets {
             IPRTypeSpecifier::Unit => THRTypeSpecifier::Unit,
             IPRTypeSpecifier::Bool => THRTypeSpecifier::Boolean,
             IPRTypeSpecifier::Integer { width, signed } => {
-                let width = IntegerWidth::try_from(*width)
-                    .unwrap_or_else(|_| panic!("illegal integer width: {width}"));
                 if *signed {
-                    THRTypeSpecifier::int_signed(width)
+                    THRTypeSpecifier::int_signed(*width)
                 } else {
-                    THRTypeSpecifier::int_unsigned(width)
+                    THRTypeSpecifier::int_unsigned(*width)
                 }
             }
-            IPRTypeSpecifier::Float { width: _ } => todo!(),
+            IPRTypeSpecifier::Float { width } => THRTypeSpecifier::Float { width: *width },
             IPRTypeSpecifier::Pointer(inner) => {
                 let inner_id = self.lower_type(_ipr_ctx, inner);
                 THRTypeSpecifier::Pointer(inner_id)
             }
-            IPRTypeSpecifier::ArrayOf(_) => todo!(),
+            IPRTypeSpecifier::ArrayOf(_) => todo!("implement array types"),
             IPRTypeSpecifier::Never => THRTypeSpecifier::Never,
+            IPRTypeSpecifier::UserDefined(name) => todo!(),
         };
         self.types.get_or_intern(t)
     }
@@ -539,7 +527,7 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         expr: &IPRExpression,
-    ) -> THRExprID {
+    ) -> (THRExprID, THRTypeID) {
         let ipr_t = ipr_ctx.types.lookup(expr.id);
         let thr_t = self.lower_type(ipr_ctx, ipr_t);
         let node = match &expr.kind {
@@ -550,7 +538,7 @@ impl THRKeySets {
             IPRExpressionKind::StringLiteral(_) => todo!(),
             IPRExpressionKind::ScopedIdent(i) => {
                 let symbol = THRSymbol {
-                    name: i.ident.clone(),
+                    name: i.ident.clone().into_boxed_str(),
                     kind: i.kind,
                 };
                 let symbol = self.symbols.get_or_intern(symbol);
@@ -560,8 +548,8 @@ impl THRKeySets {
                 todo!()
             }
             IPRExpressionKind::BinOpExpr(op, l, r) => {
-                let l = self.lower_expression(ipr_ctx, l.as_ref());
-                let r = self.lower_expression(ipr_ctx, r.as_ref());
+                let (l, _) = self.lower_expression(ipr_ctx, l.as_ref());
+                let (r, _) = self.lower_expression(ipr_ctx, r.as_ref());
                 THRExpression::binop(*op, l, r)
             }
             IPRExpressionKind::UnOpExpr(_op, _arg) => {
@@ -576,41 +564,26 @@ impl THRKeySets {
             IPRExpressionKind::Block(_b) => todo!(),
             IPRExpressionKind::UnScopedIdent(_) => internal_compiler_error!(sui),
         };
-        self.expressions.get_or_intern(node)
+        let e = self.expressions.get_or_intern(node);
+        self.expr_types.insert(e, thr_t);
+        (e, thr_t)
     }
 
     fn lower_stmt(
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         stmt: &IPRStatement,
-    ) -> THRLoweredStatement {
+    ) -> Result<Vec<THRStatementID>, CompilerError> {
         match &stmt.kind {
             IPRStatementKind::Initialization(init) => {
-                let ids = self.lower_init_block(ipr_ctx, init, SymbolKind::LocalVar);
-                if ids.len() == 1 {
-                    let id = ids[0];
-                    THRLoweredStatement::Single(id)
-                } else {
-                    let block = THRBlock { items: ids };
-                    let block = self.blocks.get_or_intern(block);
-                    THRLoweredStatement::Multiple(block)
-                }
+                let recursive_inits = self.lower_init_block(ipr_ctx, init, SymbolKind::LocalVar)?;
+                Ok(recursive_inits)
             }
-            IPRStatementKind::Reassignment(_iprreassignment) => {
-                todo!()
-            }
-            IPRStatementKind::FunctionCall(_iprfunction_call) => {
-                todo!()
-            }
-            IPRStatementKind::Return(_iprexpression) => {
-                todo!()
-            }
-            IPRStatementKind::Block(_iprblock_expression) => {
-                todo!()
-            }
-            IPRStatementKind::IfThenElse(_iprbranch) => {
-                todo!()
-            }
+            IPRStatementKind::Reassignment(_iprreassignment) => Ok(todo!()),
+            IPRStatementKind::FunctionCall(_iprfunction_call) => Ok(todo!()),
+            IPRStatementKind::Return(_iprexpression) => Ok(todo!()),
+            IPRStatementKind::Block(_iprblock_expression) => Ok(todo!()),
+            IPRStatementKind::IfThenElse(_iprbranch) => Ok(todo!()),
         }
     }
 
@@ -619,199 +592,155 @@ impl THRKeySets {
         ipr_ctx: &IPRLoweringContext,
         init_block: &IPRInitializationBlock,
         kind: SymbolKind,
-    ) -> Vec<THRStatementID> {
+    ) -> Result<Vec<THRStatementID>, CompilerError> {
         let IPRInitializationKind::Unpacked(inits) = &init_block.kind else {
             internal_compiler_error!(spi)
         };
-        inits
+        Ok(inits
             .iter()
-            .map(|init| self.lower_init(ipr_ctx, init, kind))
-            .collect()
+            .map(|init| self.lower_init_single(ipr_ctx, init, kind))
+            .collect())?
     }
 
-    fn lower_init(
+    /// Lower a single IPR initialization
+    ///
+    /// recursively emits statements necessary to compute the value of this one
+    fn lower_init_single(
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         init: &IPRSimpleInitialization,
         kind: SymbolKind,
-    ) -> THRStatementID {
+    ) -> Result<THRStatementID, CompilerError> {
         let symbol = THRSymbol {
-            name: init.assignee.clone(),
+            name: init.assignee.clone().into_boxed_str(),
             kind,
         };
         let symbol = self.symbols.get_or_intern(symbol);
-        let value = self.lower_init_value(ipr_ctx, &init.value, symbol);
-        let typ = init.typ.as_ref().unwrap();
-        let typ = self.lower_type(ipr_ctx, typ);
+        let (value, value_t) = self.lower_expression(ipr_ctx, &init.value);
 
-        let thr_decl = THRSymbolDecl { symbol, typ };
-        let stmt = match value {
-            LoweredMaybeSegmentedExpr::Segmented(block) => {
-                THRStatement::SegmentedAssign(thr_decl, block)
-            }
-            LoweredMaybeSegmentedExpr::NotSegmented(expr) => THRStatement::Init {
-                decl: thr_decl,
-                val: expr,
-                ipr_id: init.id,
+        let tail_eval_init = THRStatement::Init {
+            decl: THRSymbolDecl {
+                symbol,
+                typ: value_t,
             },
+            val: value,
+            ipr_id: init.id,
         };
-        self.statements.get_or_intern(stmt)
+        Ok(self.statements.get_or_intern(tail_eval_init))
     }
 
-    fn lower_module(mut self, ipr_ctx: &IPRLoweringContext) -> THRModule {
+    fn lower_module(
+        mut self,
+        ipr_ctx: &IPRLoweringContext,
+        compiler_config: &CompilerConfig,
+    ) -> Result<THRModule, CompilerError> {
         let globs = &ipr_ctx.module.global_vars;
-        let mut items = vec![];
+        let mut global_data_block: Vec<THRStatementID> = vec![];
         for glob in globs.iter() {
             trace!("lowering global {}", glob.id);
-            let ids = self.lower_init_block(ipr_ctx, glob, SymbolKind::GlobalVar);
-            items.extend(ids);
+            let ids = self.lower_init_block(ipr_ctx, glob, SymbolKind::GlobalVar)?;
+            global_data_block.extend(ids);
         }
-        let global_data_block = THRBlock { items };
-        let global_data_block = self.blocks.get_or_intern(global_data_block);
 
         let funcs = &ipr_ctx.module.functions;
         let mut entry_point = None;
         for f in funcs.iter() {
-            let func_id: THRFunctionID = self.lower_function(ipr_ctx, f);
-            if f.name == "main" {
+            let func_id: THRFunctionID = self.lower_function(ipr_ctx, f)?;
+            if f.name == "main" && compiler_config.module_type() == ModuleType::Bin {
                 entry_point = Some(func_id);
             }
         }
-
-        THRModule {
+        if entry_point.is_none() && compiler_config.module_type() == ModuleType::Bin {
+            return Err(CompilerError::new(
+                CompilerStage::IPRtoTHR,
+                CompilerErrorKind::NoEntryPoint,
+            ));
+        }
+        Ok(THRModule {
             interned: self,
             global_data_block,
-            entry_point: entry_point.expect("missing entry point"),
+            start_symbol: entry_point,
             name: ipr_ctx.module.name.clone(),
             ipr_id: ipr_ctx.module.id,
-        }
+        })
     }
 
-    fn lower_function(&mut self, ipr_ctx: &IPRLoweringContext, f: &IPRFunction) -> THRFunctionID {
-        let mut params = vec![];
-        for param in f.params.iter() {
-            let symbol = THRSymbol::func_param(param.name.clone());
-            let symbol = self.symbols.get_or_intern(symbol);
+    fn lower_function(
+        &mut self,
+        ipr_ctx: &IPRLoweringContext,
+        IPRFunction {
+            attributes,
+            id,
+            name,
+            params,
+            returns,
+            body,
+        }: &IPRFunction,
+    ) -> Result<THRFunctionID, CompilerError> {
+        let returns = self.lower_type(ipr_ctx, returns);
 
+        let mut thr_params = Vec::with_capacity(params.len());
+        for param in params {
+            let param_symbol = THRSymbol::new(param.name.clone(), SymbolKind::FunctionParam);
+            let param_symbol = self.symbols.get_or_intern(param_symbol);
             let typ = self.lower_type(ipr_ctx, &param.typ);
-
-            let param = THRSymbolDecl::new(symbol, typ);
-            params.push(param);
+            let param = THRSymbolDecl::new(param_symbol, typ);
+            thr_params.push(param);
         }
-        let body: THRBlockID = self.lower_block(ipr_ctx, &f.body);
-        let ret = self.lower_type(ipr_ctx, &f.returns);
-        let f = THRFunction::new(f.name.clone(), params, body, ret);
-        self.functions.get_or_intern(f)
+
+        let mut thr_body = Vec::with_capacity(body.statements.len());
+        for stmt in &body.statements {
+            let stmts = self.lower_stmt(ipr_ctx, &stmt)?;
+            thr_body.extend(stmts);
+        }
+        let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, &body.tail);
+        let ret_stmt = self.statements.get_or_intern(THRStatement::Ret(tail_expr));
+        thr_body.push(ret_stmt);
+
+        let func = THRFunction::new(
+            name.clone(),
+            thr_params,
+            thr_body,
+            returns,
+            *attributes,
+            *id,
+        );
+        Ok(self.functions.get_or_intern(func))
     }
 
     fn lower_block(
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         body: &IPRBlockExpression,
-    ) -> THRBlockID {
+    ) -> Result<Vec<THRStatementID>, CompilerError> {
         let mut items: Vec<THRStatementID> = vec![];
 
         for stmt in body.statements.iter() {
-            match self.lower_stmt(ipr_ctx, stmt) {
-                THRLoweredStatement::Single(stmt_id) => {
-                    items.push(stmt_id);
-                }
-                THRLoweredStatement::Multiple(block_id) => {
-                    let stmt = THRStatement::Jmp(block_id);
-                    let stmt = self.statements.get_or_intern(stmt);
-                    items.push(stmt);
-                }
-            }
+            let stmts = self.lower_stmt(ipr_ctx, stmt)?;
+            items.extend(stmts);
         }
-        let tail = self.lower_expression(ipr_ctx, &body.tail);
-        let tail = THRStatement::Ret(tail);
-        let tail = self.statements.get_or_intern(tail);
+        let tail_eval_init = self.synthesize_tail_expr_init(ipr_ctx, &body.tail);
+        let tail = self.statements.get_or_intern(tail_eval_init);
         items.push(tail);
-        let b = THRBlock { items };
-        self.blocks.get_or_intern(b)
+        Ok(items)
     }
 
-    /// lower some block that is one of the branches of a segmented init:
-    /// ```ignore
-    /// x := {y:= 5; y};
-    ///
-    /// ```
-    /// with the equivalent IPR:
-    /// ```ignore
-    /// Init {
-    ///   "x"
-    ///   Block {
-    ///     Init {
-    ///       "y"
-    ///       5
-    ///     },
-    ///     BlockTail { Ident "y"}
-    ///   }
-    /// }
-    /// ```
-    /// which would be lowered into the THR
-    /// ```ignore
-    /// symbol 0 : local x
-    /// symbol 1 : local y
-    ///
-    /// expr 0 : literal<u8> 5
-    /// expr 1 : ident symbol 1
-    ///
-    /// block 0 (global) : {
-    ///   segmented-init symbol 0 [block 1]
-    /// }
-    ///
-    /// block 1 : {
-    ///   init (symbol 1 expr 0)
-    ///   phi-return (block 0 expr 1)
-    /// }
-    /// ```
-    /// that is, the block needs to terminate with an assignment to the target symbol
-    fn lower_block_segmented(
+    fn synthesize_tail_expr_init(
         &mut self,
         ipr_ctx: &IPRLoweringContext,
-        block: &IPRBlockExpression,
-        target_symbol: THRSymbolID,
-    ) -> THRBlockID {
-        let mut items: Vec<THRStatementID> = vec![];
-
-        for stmt in block.statements.iter() {
-            match self.lower_stmt(ipr_ctx, stmt) {
-                THRLoweredStatement::Single(stmt_id) => {
-                    items.push(stmt_id);
-                }
-                THRLoweredStatement::Multiple(block_id) => {
-                    let stmt = THRStatement::Jmp(block_id);
-                    let stmt = self.statements.get_or_intern(stmt);
-                    items.push(stmt);
-                }
-            }
-        }
-        let last = self.lower_expression(ipr_ctx, &block.tail);
-        let segment = THRStatement::SegmentReturn(target_symbol, last);
-        let segment = self.statements.get_or_intern(segment);
-        items.push(segment);
-        let b = THRBlock { items };
-        self.blocks.get_or_intern(b)
-    }
-
-    fn lower_init_value(
-        &mut self,
-        ipr_ctx: &IPRLoweringContext,
-        expr: &IPRExpression,
-        target_symbol: THRSymbolID,
-    ) -> LoweredMaybeSegmentedExpr {
-        match &expr.kind {
-            IPRExpressionKind::Block(block) => {
-                LoweredMaybeSegmentedExpr::Segmented(vec![self.lower_block_segmented(
-                    ipr_ctx,
-                    block,
-                    target_symbol,
-                )])
-            }
-            IPRExpressionKind::IfThenElse(_iprbranch) => todo!(),
-            _ => LoweredMaybeSegmentedExpr::NotSegmented(self.lower_expression(ipr_ctx, expr)),
-        }
+        tail_expr: &IPRExpression,
+    ) -> THRStatement {
+        let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, tail_expr);
+        let tail_eval_decl = self.label_construct_eval(SymbolKind::LocalVar);
+        let tail_eval_init = THRStatement::Init {
+            decl: THRSymbolDecl {
+                symbol: tail_eval_decl,
+                typ: tail_expr_t,
+            },
+            val: tail_expr,
+            ipr_id: NodeId::sentinel(),
+        };
+        tail_eval_init
     }
 }
 
@@ -819,7 +748,6 @@ struct IPRLoweringContext {
     module: IPRModule,
     types: IPRModuleTypeInfo,
     ident_scopes: IdentifierScoper,
-    cf_stack: Vec<THRBlockID>,
 }
 
 impl std::fmt::Debug for THRKeySets {
@@ -853,13 +781,6 @@ impl std::fmt::Debug for THRKeySets {
             s.fmt(f)?;
             std::fmt::Display::fmt(&"\n\t", f)?;
         }
-        std::fmt::Display::fmt(&"\rBLOCKS:\n\t", f)?;
-        for (i, s) in self.blocks.iter().enumerate() {
-            i.fmt(f)?;
-            std::fmt::Display::fmt(&"\t", f)?;
-            s.fmt(f)?;
-            std::fmt::Display::fmt(&"\n\t", f)?;
-        }
         std::fmt::Display::fmt(&"\rFUNCTIONS:\n\t", f)?;
         for (i, s) in self.functions.iter().enumerate() {
             i.fmt(f)?;
@@ -877,38 +798,37 @@ mod tests {
 
     fn struct_field(ctx: &mut THRKeySets, typ: THRTypeSpecifier) -> THRStructField {
         THRStructField {
-            name: "".to_string(),
             typ: ctx.types.get_or_intern(typ),
             offset: 0,
         }
     }
     fn struct_field_i8(ctx: &mut THRKeySets) -> THRStructField {
-        struct_field(ctx, THRTypeSpecifier::int_signed(IntegerWidth::_8))
+        struct_field(ctx, THRTypeSpecifier::int_signed(ScalarTypeWidth::_8))
     }
     fn struct_field_i32(ctx: &mut THRKeySets) -> THRStructField {
-        struct_field(ctx, THRTypeSpecifier::int_signed(IntegerWidth::_32))
+        struct_field(ctx, THRTypeSpecifier::int_signed(ScalarTypeWidth::_32))
     }
     fn struct_field_i64(ctx: &mut THRKeySets) -> THRStructField {
-        struct_field(ctx, THRTypeSpecifier::int_signed(IntegerWidth::_64))
+        struct_field(ctx, THRTypeSpecifier::int_signed(ScalarTypeWidth::_64))
     }
     fn struct_field_i16(ctx: &mut THRKeySets) -> THRStructField {
-        struct_field(ctx, THRTypeSpecifier::int_signed(IntegerWidth::_16))
+        struct_field(ctx, THRTypeSpecifier::int_signed(ScalarTypeWidth::_16))
     }
 
-    fn struct_size_invariant(layout: &THRStructLayout, ctx: &THRKeySets) {
+    fn struct_size_invariant(layout: &THRStructValueLayout, ctx: &THRKeySets) {
         let s = layout.width(ctx);
         let a = layout.alignment(ctx);
         assert_eq!(s % a, 0, "size {s} should be a multiple of alignment{a}");
     }
-    fn run_layout_cases(
-        cases: Vec<(StructOrdering, Vec<THRStructField>, usize, usize)>,
-        ctx: &THRKeySets,
-    ) {
-        for (ordering, fields, size, align) in cases {
-            let s = THRStructLayout { ordering, fields };
+    fn run_layout_cases(cases: Vec<(Vec<THRStructField>, usize, usize)>, ctx: &THRKeySets) {
+        for (fields, size, align) in cases {
+            let s = THRStructValueLayout {
+                fields: fields.into_boxed_slice(),
+                debug_field_names: Box::new([]),
+            };
 
-            assert_eq!(s.width(ctx), size as u64);
-            assert_eq!(s.alignment(ctx), align as u64);
+            assert_eq!(s.width(ctx), size);
+            assert_eq!(s.alignment(ctx), align);
             struct_size_invariant(&s, ctx);
         }
     }
@@ -921,34 +841,26 @@ mod tests {
         let i64 = struct_field_i64(&mut ctx);
 
         let basic_cases = [
-            (StructOrdering::Naive, vec![i8.clone()], 1usize, 1usize),
-            (StructOrdering::Naive, vec![i8.clone(), i8.clone()], 2, 1),
+            (vec![i8.clone()], 1usize, 1usize),
+            (vec![i8.clone(), i8.clone()], 2, 1),
+            (vec![i8.clone(), i8.clone(), i8.clone(), i8.clone()], 4, 1),
+            (vec![i16.clone()], 2, 2),
+            (vec![i16.clone(), i16.clone()], 4, 2),
             (
-                StructOrdering::Naive,
-                vec![i8.clone(), i8.clone(), i8.clone(), i8.clone()],
-                4,
-                1,
-            ),
-            (StructOrdering::Naive, vec![i16.clone()], 2, 2),
-            (StructOrdering::Naive, vec![i16.clone(), i16.clone()], 4, 2),
-            (
-                StructOrdering::Naive,
                 vec![i16.clone(), i16.clone(), i16.clone(), i16.clone()],
                 8,
                 2,
             ),
-            (StructOrdering::Naive, vec![i32.clone()], 4, 4),
-            (StructOrdering::Naive, vec![i32.clone(), i32.clone()], 8, 4),
+            (vec![i32.clone()], 4, 4),
+            (vec![i32.clone(), i32.clone()], 8, 4),
             (
-                StructOrdering::Naive,
                 vec![i32.clone(), i32.clone(), i32.clone(), i32.clone()],
                 16,
                 4,
             ),
-            (StructOrdering::Naive, vec![i64.clone()], 8, 8),
-            (StructOrdering::Naive, vec![i64.clone(), i64.clone()], 16, 8),
+            (vec![i64.clone()], 8, 8),
+            (vec![i64.clone(), i64.clone()], 16, 8),
             (
-                StructOrdering::Naive,
                 vec![i64.clone(), i64.clone(), i64.clone(), i64.clone()],
                 32,
                 8,
@@ -956,27 +868,12 @@ mod tests {
         ];
 
         let mixed_fields = [
-            (
-                StructOrdering::Naive,
-                vec![i16.clone(), i8.clone()],
-                4usize,
-                2usize,
-            ),
-            (StructOrdering::Naive, vec![i32.clone(), i8.clone()], 8, 4),
-            (
-                StructOrdering::Naive,
-                vec![i32.clone(), i8.clone(), i32.clone()],
-                12,
-                4,
-            ),
-            (StructOrdering::Naive, vec![i64.clone(), i8.clone()], 16, 8),
-            (StructOrdering::Naive, vec![i64.clone(), i8.clone()], 16, 8),
-            (
-                StructOrdering::Naive,
-                vec![i64.clone(), i8.clone(), i64.clone()],
-                24,
-                8,
-            ),
+            (vec![i16.clone(), i8.clone()], 4usize, 2usize),
+            (vec![i32.clone(), i8.clone()], 8, 4),
+            (vec![i32.clone(), i8.clone(), i32.clone()], 12, 4),
+            (vec![i64.clone(), i8.clone()], 16, 8),
+            (vec![i64.clone(), i8.clone()], 16, 8),
+            (vec![i64.clone(), i8.clone(), i64.clone()], 24, 8),
         ];
 
         run_layout_cases(basic_cases.to_vec(), &ctx);
