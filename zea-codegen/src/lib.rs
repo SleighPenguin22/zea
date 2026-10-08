@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use idset::{KeySet, internkey};
-use log::trace;
+use log::{error, trace};
 use qbe::{self as Q};
-use zea_common::internal_compiler_error;
+use zea_common::CompilerError;
 use zea_irs::{
     ScalarTypeWidth,
     ast::{
@@ -49,26 +49,29 @@ impl<'m> THRtoQBE<'m> {
             block_label_generator: 0,
         }
     }
-
-    pub fn lower(&mut self) -> Q::Module {
+    pub fn lower(&mut self) -> Result<Q::Module, CompilerError> {
         let mut m = Q::Module::new();
-        self.walk_global_data_blocks(&mut m);
+        self.walk_global_data_blocks(&mut m)?;
         for func in self.thr_module.functions().iter() {
             self.emit_function(&mut m, func);
         }
-        m
+        Ok(m)
     }
     /// Walk the global data block of a THR module
-    fn walk_global_data_blocks(&mut self, module: &mut Q::Module) {
+    fn walk_global_data_blocks(&mut self, module: &mut Q::Module) -> Result<(), CompilerError> {
         let glob_data = self.thr_module.global_data_block();
         for stmt in glob_data.iter().copied() {
             let stmt = self.thr_module.get_statement(stmt);
             let THRStatement::Init { decl, val, .. } = *stmt else {
-                internal_compiler_error!(glob stmt non init)
+                return Err(CompilerError::new(
+                    zea_common::CompilerStage::CodeGen,
+                    zea_common::CompilerErrorKind::GlobalNonInitStmt,
+                ));
             };
-            let d = self.prepare_datadef(module, decl, val);
+            let d = self.prepare_datadef(module, decl, val)?;
             module.add_data(d);
         }
+        Ok(())
     }
     /// recursively emit the instructions necessary to represent the given statement
     fn emit_stmt(&mut self, bctx: &mut BlockContext, stmt: &THRStatement) {
@@ -117,7 +120,7 @@ impl<'m> THRtoQBE<'m> {
             }
             _ => {
                 let q_typ = self.emit_lvalue_type_and_get(typ);
-                let temp = Q::Value::Temporary(self.disambiguate_nonglobal_symbol(bctx, symb));
+                let temp = Q::Value::Temporary(self.disambiguate_symbol_local_usage(bctx, symb));
                 bctx.sig
                     .assign_instr(temp.clone(), q_typ, Q::Instr::Copy(val_qbe));
                 self.symbol_table.insert(symb_id, temp.clone());
@@ -144,7 +147,7 @@ impl<'m> THRtoQBE<'m> {
             THRExpression::Unop(..) => todo!(),
             THRExpression::Ident(i) => {
                 let symbol = self.thr_module.get_symbol(*i);
-                let disamb = self.disambiguate_nonglobal_symbol(bctx, symbol);
+                let disamb = self.disambiguate_symbol_local_usage(bctx, symbol);
                 match symbol.kind {
                     SymbolKind::LocalVar | SymbolKind::FunctionParam => Q::Value::Temporary(disamb),
                     SymbolKind::GlobalVar => Q::Value::Global(disamb),
@@ -360,7 +363,9 @@ impl<'m> THRtoQBE<'m> {
     fn get_module_func_prefix(&self, bctx: &BlockContext) -> String {
         format!("{}_{}_", self.thr_module.name, bctx.sig.name)
     }
-    fn disambiguate_nonglobal_symbol(&self, bctx: &BlockContext, ident: &THRSymbol) -> String {
+    /// demangle a symbol that is used in a local context;
+    /// Any usage of a symbol within a basic-block/function body
+    fn disambiguate_symbol_local_usage(&self, bctx: &BlockContext, ident: &THRSymbol) -> String {
         let prefix = self.get_module_prefix();
         let demangle = match ident.kind {
             SymbolKind::LocalVar => &format!("{}_local_", bctx.sig.name),
@@ -372,15 +377,23 @@ impl<'m> THRtoQBE<'m> {
 
         format!("{prefix}{demangle}{}", ident.name)
     }
-    fn disambiguate_global_symbol(&self, ident: &THRSymbol) -> String {
+
+    /// demangle a symbol that is used in a global context, i.e.
+    /// any usage of a global symbol within a global context.
+    fn disambiguate_symbol_global_usage(&self, ident: &THRSymbol) -> Result<String, CompilerError> {
         let prefix = self.get_module_prefix();
         let demangle = match ident.kind {
             SymbolKind::GlobalVar => "global_",
             SymbolKind::FunctionName => "func_",
-            _ => internal_compiler_error!(non globscope symb disamb),
+            _ => {
+                return Err(CompilerError::new(
+                    zea_common::CompilerStage::CodeGen,
+                    zea_common::CompilerErrorKind::InvalidNonGlobalSymbolUsage,
+                ));
+            }
         };
 
-        format!("{prefix}{demangle}{}", ident.name)
+        Ok(format!("{prefix}{demangle}{}", ident.name))
     }
 
     #[allow(unused)]
@@ -398,9 +411,9 @@ impl<'m> THRtoQBE<'m> {
         module: &'module mut qbe::Module,
         decl: THRSymbolDecl,
         val: THRExprID,
-    ) -> Q::DataDef {
+    ) -> Result<Q::DataDef, CompilerError> {
         let name = self.thr_module.get_symbol(decl.symbol);
-        let name = self.disambiguate_global_symbol(name);
+        let name = self.disambiguate_symbol_global_usage(name)?;
         let thr_typ = self.thr_module.get_type(decl.typ);
         let qbe_typ_id = self.emit_lvalue_type(thr_typ);
         let align = self.thr_module.alignment_of(decl.typ);
@@ -412,7 +425,7 @@ impl<'m> THRtoQBE<'m> {
             .into_abi();
         let datalayout = self.prepare_datadef_layout(module, val, qbe_typ);
         let d = Q::DataDef::new(Q::Linkage::public(), name, Some(align as u64), datalayout);
-        d
+        Ok(d)
     }
 
     fn prepare_datadef_layout<'ctx, 'module: 'ctx>(
@@ -482,7 +495,7 @@ impl<'m> THRtoQBE<'m> {
     }
     fn build_function_signature(&mut self, func: &THRFunction) -> Q::Function {
         let return_ty = self.thr_module.get_type(func.returns);
-        let return_ty = self.emit_return_type_and_get(return_ty).cloned();
+        let return_ty_qbe = self.emit_return_type_and_get(return_ty).cloned();
         let mut arguments = vec![];
         for param in func.params.iter() {
             let typ = self.thr_module.get_type(param.typ);
@@ -495,7 +508,7 @@ impl<'m> THRtoQBE<'m> {
             Q::Linkage::public(),
             func.name.clone(),
             arguments,
-            return_ty,
+            return_ty_qbe,
         )
     }
 

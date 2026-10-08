@@ -91,10 +91,7 @@ use crate::{
 use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
 use idset::{InternKey, KeySet, KeyVec, PreKeyVec, internkey};
 use log::trace;
-use zea_common::{
-    CompilerConfig, CompilerError, CompilerErrorKind, CompilerStage, ModuleType,
-    internal_compiler_error,
-};
+use zea_common::{CompilerConfig, CompilerError, CompilerErrorKind, CompilerStage, ModuleType};
 use zea_internal_macros::InternKey;
 
 pub fn lower_module(
@@ -527,7 +524,7 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         expr: &IPRExpression,
-    ) -> (THRExprID, THRTypeID) {
+    ) -> Result<(THRExprID, THRTypeID), CompilerError> {
         let ipr_t = ipr_ctx.types.lookup(expr.id);
         let thr_t = self.lower_type(ipr_ctx, ipr_t);
         let node = match &expr.kind {
@@ -548,8 +545,8 @@ impl THRKeySets {
                 todo!()
             }
             IPRExpressionKind::BinOpExpr(op, l, r) => {
-                let (l, _) = self.lower_expression(ipr_ctx, l.as_ref());
-                let (r, _) = self.lower_expression(ipr_ctx, r.as_ref());
+                let (l, _) = self.lower_expression(ipr_ctx, l.as_ref())?;
+                let (r, _) = self.lower_expression(ipr_ctx, r.as_ref())?;
                 THRExpression::binop(*op, l, r)
             }
             IPRExpressionKind::UnOpExpr(_op, _arg) => {
@@ -562,11 +559,16 @@ impl THRKeySets {
                 todo!()
             }
             IPRExpressionKind::Block(_b) => todo!(),
-            IPRExpressionKind::UnScopedIdent(_) => internal_compiler_error!(sui),
+            IPRExpressionKind::UnScopedIdent(_) => {
+                return Err(CompilerError::new(
+                    CompilerStage::CodeGen,
+                    CompilerErrorKind::StrayUnscopedIdent,
+                ));
+            }
         };
         let e = self.expressions.get_or_intern(node);
         self.expr_types.insert(e, thr_t);
-        (e, thr_t)
+        Ok((e, thr_t))
     }
 
     fn lower_stmt(
@@ -594,7 +596,10 @@ impl THRKeySets {
         kind: SymbolKind,
     ) -> Result<Vec<THRStatementID>, CompilerError> {
         let IPRInitializationKind::Unpacked(inits) = &init_block.kind else {
-            internal_compiler_error!(spi)
+            return Err(CompilerError::new(
+                CompilerStage::IPRtoTHR,
+                CompilerErrorKind::StrayPackedInit,
+            ));
         };
         Ok(inits
             .iter()
@@ -616,7 +621,7 @@ impl THRKeySets {
             kind,
         };
         let symbol = self.symbols.get_or_intern(symbol);
-        let (value, value_t) = self.lower_expression(ipr_ctx, &init.value);
+        let (value, value_t) = self.lower_expression(ipr_ctx, &init.value)?;
 
         let tail_eval_init = THRStatement::Init {
             decl: THRSymbolDecl {
@@ -629,9 +634,9 @@ impl THRKeySets {
         Ok(self.statements.get_or_intern(tail_eval_init))
     }
 
-    fn lower_module(
+    fn lower_module<'a>(
         mut self,
-        ipr_ctx: &IPRLoweringContext,
+        ipr_ctx: &'a IPRLoweringContext,
         compiler_config: &CompilerConfig,
     ) -> Result<THRModule, CompilerError> {
         let globs = &ipr_ctx.module.global_vars;
@@ -693,7 +698,7 @@ impl THRKeySets {
             let stmts = self.lower_stmt(ipr_ctx, &stmt)?;
             thr_body.extend(stmts);
         }
-        let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, &body.tail);
+        let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, &body.tail)?;
         let ret_stmt = self.statements.get_or_intern(THRStatement::Ret(tail_expr));
         thr_body.push(ret_stmt);
 
@@ -719,7 +724,7 @@ impl THRKeySets {
             let stmts = self.lower_stmt(ipr_ctx, stmt)?;
             items.extend(stmts);
         }
-        let tail_eval_init = self.synthesize_tail_expr_init(ipr_ctx, &body.tail);
+        let tail_eval_init = self.synthesize_tail_expr_init(ipr_ctx, &body.tail)?;
         let tail = self.statements.get_or_intern(tail_eval_init);
         items.push(tail);
         Ok(items)
@@ -729,8 +734,8 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         tail_expr: &IPRExpression,
-    ) -> THRStatement {
-        let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, tail_expr);
+    ) -> Result<THRStatement, CompilerError> {
+        let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, tail_expr)?;
         let tail_eval_decl = self.label_construct_eval(SymbolKind::LocalVar);
         let tail_eval_init = THRStatement::Init {
             decl: THRSymbolDecl {
@@ -740,7 +745,7 @@ impl THRKeySets {
             val: tail_expr,
             ipr_id: NodeId::sentinel(),
         };
-        tail_eval_init
+        Ok(tail_eval_init)
     }
 }
 

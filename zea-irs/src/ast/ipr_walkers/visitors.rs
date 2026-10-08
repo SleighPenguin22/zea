@@ -10,7 +10,7 @@ use crate::ast::ipr_walkers::{
 use crate::ast::{NodeId, ZeaNodeQuery, ipr::*};
 use crate::impls::StructuralEq;
 use arbitrary::Arbitrary;
-use zea_common::internal_compiler_error;
+use zea_common::CompilerError;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Arbitrary)]
 pub enum SymbolKind {
@@ -118,24 +118,38 @@ impl ScopeAnnotations {
         }
     }
 
-    fn gather_idents_local_stmt(&mut self, init: &IPRInitializationBlock) {
+    fn gather_idents_local_stmt(
+        &mut self,
+        init: &IPRInitializationBlock,
+    ) -> Result<(), CompilerError> {
         let IPRInitializationKind::Unpacked(u) = &init.kind else {
-            internal_compiler_error!(spi)
+            return Err(CompilerError::new(
+                zea_common::CompilerStage::LexicalScopeAnalysis,
+                zea_common::CompilerErrorKind::StrayPackedInit,
+            ));
         };
         for init in u.iter() {
             self.identifiers
                 .insert(IPRScopedIdentifier::from_local_init(init));
         }
+        Ok(())
     }
 
-    fn gather_idents_global_init(&mut self, init: &IPRInitializationBlock) {
+    fn gather_idents_global_init(
+        &mut self,
+        init: &IPRInitializationBlock,
+    ) -> Result<(), CompilerError> {
         let IPRInitializationKind::Unpacked(u) = &init.kind else {
-            internal_compiler_error!(spi)
+            return Err(CompilerError::new(
+                zea_common::CompilerStage::LexicalScopeAnalysis,
+                zea_common::CompilerErrorKind::StrayPackedInit,
+            ));
         };
         for init in u.iter() {
             self.identifiers
                 .insert(IPRScopedIdentifier::from_global_init(init));
         }
+        Ok(())
     }
 
     fn gather_idents_func_def(&mut self, func_def: &IPRFunction) {
@@ -151,15 +165,16 @@ impl ScopeAnnotations {
             self.gather_idents_stmt(stmt);
         }
     }
-    fn gather_idents_stmt(&mut self, stmt: &IPRStatement) {
+    fn gather_idents_stmt(&mut self, stmt: &IPRStatement) -> Result<(), CompilerError> {
         match &stmt.kind {
-            IPRStatementKind::Initialization(init) => self.gather_idents_local_stmt(init),
+            IPRStatementKind::Initialization(init) => self.gather_idents_local_stmt(init)?,
             IPRStatementKind::Reassignment(reinit) => self.gather_idents_expr(&reinit.value),
             IPRStatementKind::FunctionCall(call) => self.gather_idents_call(call),
             IPRStatementKind::Return(e) => self.gather_idents_expr(e),
             IPRStatementKind::Block(eb) => self.gather_idents_block(eb),
             IPRStatementKind::IfThenElse(ite) => self.gather_idents_branch(ite),
-        }
+        };
+        Ok(())
     }
 
     fn gather_idents_expr(&mut self, expr: &IPRExpression) {

@@ -6,11 +6,12 @@ use std::{
     hash::{Hash, Hasher},
     process::exit,
 };
+use zea_common::ZeaError;
 
 use zea_internal_macros::ASTStructuralEq;
 
 use crate::{
-    ScalarTypeWidth, ZeaError,
+    ScalarTypeWidth,
     ast::{
         BareNodeLabeler, BinOp, IPRScopedIdentifier, NodeLabeler, UnOp, ZeaNodeQuery,
         ipr_walkers::{
@@ -223,16 +224,6 @@ impl IPRModule {
 
     pub fn simplify_assignments_after(&mut self, labeler: impl NodeLabeler) -> AssignmentExpander {
         self.transform_self_with(labeler).unwrap()
-    }
-    pub fn scope_idents_diverging(mut self) -> (Self, IdentifierScoper) {
-        let mut scoper = IdentifierScoper::new(&self);
-        match scoper.visit_module(&mut self) {
-            Ok(_) => (self, scoper),
-            Err(e) => {
-                error!("{}", e.zea_error_format(&(scoper, self)));
-                exit(1)
-            }
-        }
     }
 }
 #[derive(Debug, Clone, Arbitrary)]

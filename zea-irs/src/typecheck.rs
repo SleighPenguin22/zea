@@ -129,18 +129,20 @@ use std::{
 
 use idset::{KeySet, internkey};
 use log::{error, info, trace};
-use zea_common::internal_compiler_error;
+use zea_common::{CompilerError, ZeaError, ZeaErrorMessage, ice_bail};
 
 use crate::{
-    ZeaError,
     ast::{BinOp, NodeId, ipr::*},
     visualisation::IndentPrint,
 };
-pub fn typecheck_module(module: &mut IPRModule) -> IPRModuleTypeInfo {
-    let mut tc = ZeaTypeChecker::new();
+pub fn typecheck_module(
+    mut tc: ZeaTypeChecker,
+    module: &mut IPRModule,
+) -> Result<IPRModuleTypeInfo, TypeCheckError> {
     tc.introduce_module(module)
         .expect("error introducing module");
-    tc.check_module_panicking(module)
+    tc.check_module(module)?;
+    Ok(tc.finish())
 }
 
 const BUILTIN_SCALAR_TYPES: [IPRTypeSpecifier; 10] = [
@@ -229,11 +231,10 @@ impl TypeVariableSolving {
             .expect("missing expected type variable")
     }
 
-    fn union(&mut self, a: TypeVariable, b: TypeVariable) -> Result<(), TypeCheckError> {
+    fn union(&mut self, a: TypeVariable, b: TypeVariable) {
         let follow_a = self.follow_var(a);
         let follow_a_representative = self.follow_once_mut(follow_a);
         *follow_a_representative = b.0;
-        Ok(())
     }
 
     /// Update all paths to point directly at their representative.
@@ -266,7 +267,7 @@ impl TypeVariableSolving {
     /// }
     ///
     /// ````
-    fn compress_paths(&mut self) -> Result<(), TypeCheckError> {
+    fn compress_paths(&mut self) {
         for t in self.typevar_disjoint_set.clone().iter() {
             let idx = *t;
             let (idx_repr, len) = self.follow_with_path_length(idx);
@@ -280,7 +281,6 @@ impl TypeVariableSolving {
                 }
             }
         }
-        Ok(())
     }
     /// follow some index to its representative, and count how many steps where needed to get there
     fn follow_with_path_length(&self, t: usize) -> (usize, usize) {
@@ -375,7 +375,7 @@ impl InternConcreteTypes {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum TypeCheckError {
+pub enum TypeCheckError {
     IllegalTypeCoercion(InternedType, InternedType, IllegalTypeCoercionKind),
     ExpectedSolvedTypeVariable(TypeVariable),
     InvalidOperands(NodeId, BinOp),
@@ -420,24 +420,25 @@ impl IPRModuleTypeInfo {
     }
 }
 
-impl<'m> ZeaError<'m> for TypeCheckError {
-    type ErrContext = ZeaTypeChecker;
-    fn zea_error_format(&'m self, ctx: &'m Self::ErrContext) -> String {
+impl zea_common::ZeaError<ZeaTypeChecker> for TypeCheckError {
+    fn zea_error_format(&self, ctx: &ZeaTypeChecker) -> ZeaErrorMessage {
         match self {
             Self::IllegalTypeCoercion(a, b, kind) => {
                 let t_a = ctx.interned_types.get_specifier_by_id(*a);
                 let t_b = ctx.interned_types.get_specifier_by_id(*b);
-                format!("illegal type coercion of types {t_a:?} and {t_b:?}: {kind:?}")
+                ZeaErrorMessage {
+                    msg: format!("illegal type coercion of types {t_a:?} and {t_b:?}: {kind:?}"),
+                }
             }
-            Self::InvalidOperands(id, op) => {
-                format!("illegal operands for operator {op:?} in {id:?}",)
-            }
+            Self::InvalidOperands(id, op) => ZeaErrorMessage {
+                msg: format!("illegal operands for operator {op:?} in {id:?}",),
+            },
             _ => todo!(),
         }
     }
 }
 
-struct ZeaTypeChecker {
+pub struct ZeaTypeChecker {
     /// intern types
     interned_types: InternConcreteTypes,
     /// Keep track of which type variable solves to which concrete type
@@ -481,7 +482,7 @@ impl ZeaTypeChecker {
         &mut self,
         inf_var: TypeVariable,
         typ: &IPRTypeSpecifier,
-    ) -> Result<(), TypeCheckError> {
+    ) -> Result<(), CompilerError> {
         let t_id = self.interned_types.get_or_intern(typ);
         trace!("\tsolving type variable {inf_var:?} of literal to type {typ:?}");
         self.typevar_solving.set_solved(inf_var, t_id);
@@ -532,7 +533,7 @@ impl ZeaTypeChecker {
             }
             (None, None) => {
                 trace!("\tunifying variables {a:?} and {b:?}",);
-                self.typevar_solving.union(a, b)?;
+                self.typevar_solving.union(a, b);
                 Ok(self.typevar_solving.follow_var(a))
             }
         }
@@ -610,6 +611,12 @@ impl ZeaTypeChecker {
             _ => Err(IllegalTypeCoercionKind::InconvertibleTypes),
         }
     }
+
+    pub fn typecheck_module(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
+        self.introduce_module(module)?;
+        self.check_module(module)?;
+        Ok(())
+    }
 }
 
 // ================================================================================================
@@ -617,13 +624,20 @@ impl ZeaTypeChecker {
 // ================================================================================================
 impl ZeaTypeChecker {
     /// recursively generate typevars for the given assignment block
-    fn introduce_assignment_block(&mut self, assigment: &IPRInitializationBlock) {
+    fn introduce_assignment_block(
+        &mut self,
+        assigment: &IPRInitializationBlock,
+    ) -> Result<(), TypeCheckError> {
         let IPRInitializationKind::Unpacked(inits) = &assigment.kind else {
-            internal_compiler_error!(sui)
+            ice_bail!(CompilerError::new(
+                zea_common::CompilerStage::TypeCheck,
+                zea_common::CompilerErrorKind::StrayPackedInit,
+            ));
         };
         for init in inits.iter() {
             self.introduce_assignment(init);
         }
+        Ok(())
     }
 
     /// recursively generate typevars for the assignments's symbol and its value
@@ -635,7 +649,7 @@ impl ZeaTypeChecker {
         self.introduce_expression(&init.value);
     }
 
-    fn introduce_expression(&mut self, expr: &IPRExpression) {
+    fn introduce_expression(&mut self, expr: &IPRExpression) -> Result<(), CompilerError> {
         let inf_var = self.get_inference_id(expr.id);
         match &expr.kind {
             IPRExpressionKind::Unit => {
@@ -663,7 +677,10 @@ impl ZeaTypeChecker {
             }
             IPRExpressionKind::StringLiteral(_) => todo!(),
             IPRExpressionKind::UnScopedIdent(_) => {
-                internal_compiler_error!(sui)
+                return Err(CompilerError::new(
+                    zea_common::CompilerStage::TypeCheck,
+                    zea_common::CompilerErrorKind::StrayUnscopedIdent,
+                ));
             }
             IPRExpressionKind::ScopedIdent(_) => {}
             IPRExpressionKind::FunctionCall(_) => todo!(),
@@ -684,7 +701,8 @@ impl ZeaTypeChecker {
                 }
                 self.introduce_expression(&b.tail);
             }
-        }
+        };
+        Ok(())
     }
 
     fn introduce_module(&mut self, module: &IPRModule) -> Result<(), TypeCheckError> {
@@ -705,15 +723,16 @@ impl ZeaTypeChecker {
         }
         self.introduce_expression(&b.tail);
     }
-    fn introduce_stmt(&mut self, s: &IPRStatement) {
+    fn introduce_stmt(&mut self, s: &IPRStatement) -> Result<(), TypeCheckError> {
         match &s.kind {
-            IPRStatementKind::Initialization(i) => self.introduce_assignment_block(i),
+            IPRStatementKind::Initialization(i) => self.introduce_assignment_block(i)?,
             IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
             IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
             IPRStatementKind::Return(_iprexpression) => todo!(),
             IPRStatementKind::Block(_iprblock_expression) => todo!(),
             IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
-        }
+        };
+        Ok(())
     }
 
     fn introduce_function(&mut self, f: &IPRFunction) {
@@ -776,7 +795,10 @@ impl ZeaTypeChecker {
                 todo!("member access inference")
             }
             IPRExpressionKind::UnScopedIdent(_) => {
-                internal_compiler_error!(sui)
+                ice_bail!(CompilerError::new(
+                    zea_common::CompilerStage::TypeCheck,
+                    zea_common::CompilerErrorKind::StrayUnscopedIdent,
+                ));
             }
         }?;
 
@@ -861,16 +883,6 @@ impl ZeaTypeChecker {
 // check_ methods
 // ================================================================================================
 impl ZeaTypeChecker {
-    pub fn check_module_panicking(mut self, module: &mut IPRModule) -> IPRModuleTypeInfo {
-        match self.check_module(module) {
-            Ok(_) => {}
-            Err(_e) => {
-                error!("exiting...");
-                exit(1)
-            }
-        }
-        self.finish()
-    }
     pub fn check_module(&mut self, module: &mut IPRModule) -> Result<(), TypeCheckError> {
         self.introduce_module(module)?;
         self.trace_solved_stats();
@@ -884,7 +896,7 @@ impl ZeaTypeChecker {
                         self.check_module_once(module)?;
                         break;
                     }
-                    self.typevar_solving.compress_paths()?;
+                    self.typevar_solving.compress_paths();
                 }
                 Err(e) => return Err(e),
             }
@@ -902,8 +914,6 @@ impl ZeaTypeChecker {
                     self.trace_insufficient_info_for_solving(t);
                 }
                 Err(other) => {
-                    error!("TYPE ERROR: {}", other.zea_error_format(self));
-                    info!("GOT HERE");
                     return Err(other);
                 }
             }
@@ -916,7 +926,6 @@ impl ZeaTypeChecker {
                     self.trace_insufficient_info_for_solving(t);
                 }
                 Err(other) => {
-                    error!("{}", other.zea_error_format(self));
                     return Err(other);
                 }
             }
@@ -973,7 +982,10 @@ impl ZeaTypeChecker {
         assign: &mut IPRInitializationBlock,
     ) -> Result<(), TypeCheckError> {
         let IPRInitializationKind::Unpacked(inits) = &mut assign.kind else {
-            internal_compiler_error!(spi)
+            ice_bail!(CompilerError::new(
+                zea_common::CompilerStage::TypeCheck,
+                zea_common::CompilerErrorKind::StrayPackedInit,
+            ))
         };
         for init in inits.iter_mut() {
             trace!("\tchecking simple assigment for symbol `{}`", init.assignee);
@@ -1082,15 +1094,13 @@ mod tests {
         assert_ne!(table.follow_var(t1), t2);
         assert_ne!(table.follow_var(t2), t1);
 
-        table
-            .union(t1, t2)
-            .expect("unioning existing typevars should work");
+        table.union(t1, t2);
 
         assert_ne!(table.follow_var(t1), t1);
         assert_eq!(table.follow_var(t1), t2);
 
         let t3 = table.fresh_var();
-        table.union(t3, t1).unwrap();
+        table.union(t3, t1);
         assert_eq!(table.follow_var(t3), t2);
         assert_eq!(table.follow_var(t2), t2);
         assert_eq!(table.follow_var(t1), t2);
@@ -1106,7 +1116,7 @@ mod tests {
         let (_, t2_length) = table.follow_with_path_length(t2.0);
         assert_eq!(t2_length, 0);
 
-        table.compress_paths().unwrap();
+        table.compress_paths();
         path_compression_invariant(&table);
     }
 
@@ -1119,8 +1129,8 @@ mod tests {
         let t4 = table.fresh_var();
         let t5 = table.fresh_var();
 
-        table.union(t1, t2).unwrap();
-        table.union(t2, t3).unwrap();
+        table.union(t1, t2);
+        table.union(t2, t3);
         table.union(t3, t4).unwrap();
         table.union(t4, t5).unwrap();
 

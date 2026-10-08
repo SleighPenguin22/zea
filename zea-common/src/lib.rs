@@ -106,10 +106,30 @@ impl ToString for ModuleType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct CompilerError {
-    stage: CompilerStage,
-    kind: CompilerErrorKind,
+    pub stage: CompilerStage,
+    pub kind: CompilerErrorKind,
+}
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ZeaErrorMessage {
+    pub msg: String,
+}
+impl std::fmt::Display for ZeaErrorMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.msg.fmt(f)
+    }
+}
+
+pub trait ZeaError<T>: Sized {
+    fn zea_error_format(&self, ctx: &T) -> ZeaErrorMessage;
+    fn into_zea_error(self, ctx: &T, stage: CompilerStage) -> CompilerError {
+        let msg = self.zea_error_format(ctx);
+        CompilerError {
+            stage,
+            kind: CompilerErrorKind::Other(msg),
+        }
+    }
 }
 impl CompilerError {
     pub const fn new(stage: CompilerStage, kind: CompilerErrorKind) -> Self {
@@ -117,7 +137,7 @@ impl CompilerError {
     }
     pub fn pretty(&self) -> String {
         let s = self.stage;
-        let k = self.kind;
+        let k = &self.kind;
         format!("INTERNAL COMPILER ERROR: {s:?} : {k:?}")
     }
 }
@@ -132,60 +152,25 @@ pub enum CompilerStage {
     CodeGen = 6,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompilerErrorKind {
-    IntegerOverflow = 0,
+    IntegerOverflow,
 
-    StrayUnscopedIdent = 1,
-    StrayPackedInit = 2,
-    GlobalStmtNonInit = 3,
-    NonGlobScopedSymbolDisambiguation = 4,
+    StrayUnscopedIdent,
+    StrayPackedInit,
+    GlobalNonInitStmt,
+    InvalidNonGlobalSymbolUsage,
     /// A typ field is set to None after the type-checking phase
-    StrayUnknownType = 5,
+    StrayUnknownType,
     EmptyFunctionBody,
     NoEntryPoint,
+    Other(ZeaErrorMessage),
 }
-pub fn stray_packed_init() -> CompilerError {
-    CompilerError::new(
-        CompilerStage::ExpandInit,
-        CompilerErrorKind::StrayPackedInit,
-    )
-}
-pub fn stray_unscoped_ident() -> CompilerError {
-    CompilerError::new(
-        CompilerStage::LexicalScopeAnalysis,
-        CompilerErrorKind::StrayUnscopedIdent,
-    )
-}
-pub fn global_stmt_non_init() -> CompilerError {
-    CompilerError::new(
-        CompilerStage::NonApplicable,
-        CompilerErrorKind::GlobalStmtNonInit,
-    )
-}
-pub fn non_globscope_symb_disamb() -> CompilerError {
-    CompilerError::new(
-        CompilerStage::NonApplicable,
-        CompilerErrorKind::GlobalStmtNonInit,
-    )
-}
-
 #[macro_export]
-macro_rules! internal_compiler_error {
-    (spi) => {{
-        use $crate::stray_packed_init;
-        unreachable!("{}", stray_packed_init().pretty())
-    }};
-    (sui) => {{
-        use $crate::stray_unscoped_ident;
-        unreachable!("{}", stray_unscoped_ident().pretty())
-    }};
-    (glob stmt non init) => {{
-        use $crate::global_stmt_non_init;
-        unreachable!("{}", global_stmt_non_init().pretty())
-    }};
-    (non globscope symb disamb) => {{
-        use $crate::non_globscope_symb_disamb;
-        unreachable!("{}", non_globscope_symb_disamb().pretty())
+macro_rules! ice_bail {
+    ($err:expr) => {{
+        let err: CompilerError = $err;
+        log::error!("{}", err.pretty());
+        exit(1)
     }};
 }

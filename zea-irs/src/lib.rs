@@ -1,13 +1,9 @@
 /// The AST's for the ZEA language
 pub mod ast;
 mod typecheck;
-pub use typecheck::typecheck_module;
+pub use typecheck::{ZeaTypeChecker, typecheck_module};
 mod impls;
 pub mod visualisation;
-pub trait ZeaError<'m> {
-    type ErrContext;
-    fn zea_error_format(&'m self, ctx: &'m Self::ErrContext) -> String;
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, arbitrary::Arbitrary, PartialOrd, Ord)]
 pub enum ScalarTypeWidth {

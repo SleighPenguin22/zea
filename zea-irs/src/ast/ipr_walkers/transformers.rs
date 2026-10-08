@@ -5,15 +5,15 @@
 //! - [`IdentifierScoper`]: disambguate identifier-expression and annotate them with their binding site
 //! - [`InsertImplicitMainReturn`]: insert a return 0 inside the `main` function, if it exists
 
-use crate::ast::ipr_walkers::visitors::{IPRScopedIdentifier, SymbolKind};
+use crate::ast::ipr_walkers::visitors::{IPRScopedIdentifier, ScopeAnnotations, SymbolKind};
 use crate::ast::ipr_walkers::{
     IPRTransfomer, IPRVisitor, walk_mut_block, walk_mut_branch, walk_mut_call, walk_mut_expr,
     walk_mut_funcdef, walk_mut_initblock, walk_mut_module, walk_mut_reassignment, walk_mut_stmt,
     walk_mut_structdef, walk_mut_unpacked_init,
 };
 use crate::ast::{NodeId, ipr::*};
+use crate::impl_nodelabeler;
 use crate::visualisation::IndentPrint;
-use crate::{ZeaError, impl_nodelabeler};
 use arbitrary::{Arbitrary, Unstructured};
 use idset::{InternKey, KeySet, UsizeLike, internkey};
 use log::trace;
@@ -21,7 +21,9 @@ use std::collections::{HashMap, HashSet};
 use std::env::Args;
 use std::ops::IndexMut;
 use std::process::exit;
-use zea_common::{CompilerConfig, internal_compiler_error};
+use zea_common::{
+    CompilerConfig, CompilerError, CompilerStage, ZeaError, ZeaErrorMessage, ice_bail,
+};
 use zea_internal_macros::{InternKey, VariantToStr};
 
 pub trait NodeLabeler: Sized {
@@ -333,20 +335,13 @@ pub struct NotInScopeError {
     scope_stack_top: BlockScopeIndex,
 }
 
-impl<'m> ZeaError<'m> for NotInScopeError {
-    type ErrContext = (IdentifierScoper, IPRModule);
-    fn zea_error_format(&self, ctx: &Self::ErrContext) -> String {
-        let (scope_ctx, _module) = ctx;
-        let origin = scope_ctx
-            .get_scope(self.scope_stack_top)
-            .expect("missing scope");
+impl ZeaError<IdentifierScoper> for NotInScopeError {
+    fn zea_error_format(&self, ctx: &IdentifierScoper) -> ZeaErrorMessage {
+        let origin = ctx.get_scope(self.scope_stack_top).expect("missing scope");
         let ident = &self.ident;
         let pretty_scope_kind = scopekind_to_pretty_string(origin.kind);
-        let cur_scope = scope_ctx.current_scope().kind;
-        let in_scope = scope_ctx
-            .all_in_current_scope()
-            .into_iter()
-            .map(|i| &i.ident);
+        let cur_scope = ctx.current_scope().kind;
+        let in_scope = ctx.all_in_current_scope().into_iter().map(|i| &i.ident);
         let mut buffer = format!(
             "(in {cur_scope:?}): identifier `{ident}` not found within {pretty_scope_kind}, identifiers in scope:\n"
         );
@@ -354,7 +349,14 @@ impl<'m> ZeaError<'m> for NotInScopeError {
         for i in in_scope {
             buffer += &format!("- {i}\n");
         }
-        buffer
+        ZeaErrorMessage { msg: buffer }
+    }
+    fn into_zea_error(self, ctx: &IdentifierScoper, stage: CompilerStage) -> CompilerError {
+        let msg = self.zea_error_format(ctx);
+        CompilerError {
+            stage,
+            kind: zea_common::CompilerErrorKind::Other(msg),
+        }
     }
 }
 
@@ -367,16 +369,15 @@ fn scopekind_to_pretty_string(scopekind: ScopeKind) -> &'static str {
     }
 }
 
-pub fn scope_module(mut module: IPRModule) -> IPRModule {
+pub fn scope_module(
+    mut module: IPRModule,
+) -> (IdentifierScoper, Result<IPRModule, NotInScopeError>) {
     let mut scoper = IdentifierScoper::new(&module);
-    match scoper.visit_module(&mut module) {
-        Ok(_) => {}
-        Err(e) => {
-            eprintln!("{}", e.zea_error_format(&(scoper, module)));
-            exit(1)
-        }
-    }
-    module
+    let t = match scoper.visit_module(&mut module) {
+        Ok(t) => t,
+        Err(e) => return (scoper, Err(e)),
+    };
+    (scoper, Ok(module))
 }
 
 impl IPRTransfomer<'_> for IdentifierScoper {
@@ -429,7 +430,10 @@ impl IPRTransfomer<'_> for IdentifierScoper {
         // global variables may not be initialized with function calls; they should be constants.
         for glob in module.global_vars.iter_mut() {
             let IPRInitializationKind::Unpacked(u) = &mut glob.kind else {
-                internal_compiler_error!(spi)
+                ice_bail!(CompilerError::new(
+                    zea_common::CompilerStage::LexicalScopeAnalysis,
+                    zea_common::CompilerErrorKind::StrayPackedInit,
+                ));
             };
             trace!("scoping global inits {u:?}");
             for init in u {
