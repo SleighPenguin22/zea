@@ -318,7 +318,6 @@ impl TypeVariableSolving {
 
     /// add a known type to the table,
     /// such that all type variable within that set now point to the given interned type ID.
-    /// Applies path compression
     pub fn set_solved(&mut self, variable: TypeVariable, to: InternedType) {
         let variable = self.follow_var(variable);
         self.solved_variables.insert(variable, to);
@@ -746,7 +745,6 @@ impl ZeaTypeChecker {
             self.set_solved_typespec(t_id, typ)
                 .expect("cannot set-solved func param");
             self.node_types.insert(*id, t);
-            todo!()
         }
         self.interned_types.get_or_intern(&f.returns);
         self.introduce_block(&f.body)
@@ -852,18 +850,12 @@ impl ZeaTypeChecker {
                 }
             }
             BinOp::Subscript => todo!(),
-            BinOp::LT | BinOp::GT => {
+            BinOp::LT | BinOp::GT | BinOp::Eq | BinOp::Neq | BinOp::Geq | BinOp::Leq => {
                 self.hindley_milner_unify(l_var, r_var)?;
                 self.hindley_milner_unify(var, bool_tvar)?;
                 Ok(bool_tvar)
             }
-            BinOp::Eq
-            | BinOp::Neq
-            | BinOp::Geq
-            | BinOp::Leq
-            | BinOp::LogAnd
-            | BinOp::LogOr
-            | BinOp::LogXor => {
+            BinOp::LogAnd | BinOp::LogOr | BinOp::LogXor => {
                 self.hindley_milner_unify(r_var, bool_tvar)?;
                 self.hindley_milner_unify(l_var, r_var)?;
                 self.hindley_milner_unify(var, bool_tvar)?;

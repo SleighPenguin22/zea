@@ -516,7 +516,7 @@ impl THRKeySets {
             }
             IPRTypeSpecifier::ArrayOf(_) => todo!("implement array types"),
             IPRTypeSpecifier::Never => THRTypeSpecifier::Never,
-            IPRTypeSpecifier::UserDefined(name) => todo!(),
+            IPRTypeSpecifier::UserDefined(_name) => todo!(),
         };
         self.types.get_or_intern(t)
     }
@@ -582,11 +582,11 @@ impl THRKeySets {
                 let recursive_inits = self.lower_init_block(ipr_ctx, init, SymbolKind::LocalVar)?;
                 Ok(recursive_inits)
             }
-            IPRStatementKind::Reassignment(_iprreassignment) => Ok(todo!()),
-            IPRStatementKind::FunctionCall(_iprfunction_call) => Ok(todo!()),
-            IPRStatementKind::Return(_iprexpression) => Ok(todo!()),
-            IPRStatementKind::Block(_iprblock_expression) => Ok(todo!()),
-            IPRStatementKind::IfThenElse(_iprbranch) => Ok(todo!()),
+            IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
+            IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
+            IPRStatementKind::Return(_iprexpression) => todo!(),
+            IPRStatementKind::Block(_iprblock_expression) => todo!(),
+            IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
         }
     }
 

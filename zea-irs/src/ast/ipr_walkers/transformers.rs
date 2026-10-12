@@ -330,26 +330,55 @@ pub struct IdentifierScoper {
 }
 
 #[derive(Debug)]
-pub struct NotInScopeError {
-    ident: String,
-    scope_stack_top: BlockScopeIndex,
+pub enum ScopeResolutionError {
+    NotInScopeError {
+        ident: String,
+        scope_stack_top: BlockScopeIndex,
+    },
+    DuplicateBinding {
+        ident: String,
+        first_binding: IPRScopedIdentifier,
+        scope_stack_top: BlockScopeIndex,
+    },
 }
 
-impl ZeaUserError for NotInScopeError {
+impl ZeaUserError for ScopeResolutionError {
     type ZeaUserErrorContext = IdentifierScoper;
     fn zea_error_format(&self, ctx: &IdentifierScoper) -> ZeaErrorMessage {
-        let origin = ctx.get_scope(self.scope_stack_top).expect("missing scope");
-        let ident = &self.ident;
-        let pretty_scope_kind = scopekind_to_pretty_string(origin.kind);
-        let cur_scope = ctx.current_scope().kind;
-        let in_scope = ctx.all_in_current_scope().into_iter().map(|i| &i.ident);
-        let mut buffer = format!(
-            "(in {cur_scope:?}): identifier `{ident}` not found within {pretty_scope_kind}, identifiers in scope:\n"
-        );
+        let buffer = match self {
+            ScopeResolutionError::NotInScopeError {
+                ident,
+                scope_stack_top,
+            } => {
+                let origin = ctx.get_scope(*scope_stack_top).expect("missing scope");
+                let ident = &ident;
+                let pretty_scope_kind = scopekind_to_pretty_string(origin.kind);
+                let cur_scope = ctx.current_scope().kind;
+                let in_scope = ctx.all_in_current_scope().into_iter().map(|i| &i.ident);
+                let mut buffer = format!(
+                    "undefined symbol usage:\n\
+                    (in {cur_scope:?}): identifier `{ident}` \
+                    not in scope within {pretty_scope_kind}\n\
+                    symbols in scope:\n"
+                );
 
-        for i in in_scope {
-            buffer += &format!("- {i}\n");
-        }
+                for i in in_scope {
+                    buffer += &format!("- {i}\n");
+                }
+                buffer
+            }
+            ScopeResolutionError::DuplicateBinding {
+                ident,
+                first_binding,
+                scope_stack_top: _,
+            } => {
+                let ident = &ident;
+                let cur_scope = ctx.current_scope().kind;
+                format!(
+                    "duplicate binding error:\n(in {cur_scope:?}): the symbol `{ident}` was already defined earlier here:\n{first_binding:?}"
+                )
+            }
+        };
         ZeaErrorMessage {
             msg: buffer,
             loc: None,
@@ -370,7 +399,7 @@ pub fn scope_module(
     mut module: IPRModule,
 ) -> (
     IdentifierScoper,
-    Result<IPRModule, ZeaError<NotInScopeError>>,
+    Result<IPRModule, ZeaError<ScopeResolutionError>>,
 ) {
     let mut scoper = IdentifierScoper::new(&module);
     if let Err(e) = scoper.visit_module(&mut module) {
@@ -380,7 +409,7 @@ pub fn scope_module(
 }
 
 impl IPRTransfomer<'_> for IdentifierScoper {
-    type TransformerError = ZeaError<NotInScopeError>;
+    type TransformerError = ZeaError<ScopeResolutionError>;
     type TransformerOk = ();
     fn visit_expr(
         &mut self,
@@ -459,10 +488,20 @@ impl IPRTransfomer<'_> for IdentifierScoper {
         &mut self,
         funcdef: &mut IPRFunction,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
+        trace!("entering func {}", funcdef.name,);
         let scope = self.enter_scope(funcdef.body.id, ScopeKind::Function);
-        trace!("entering func {}", funcdef.name);
         for param in funcdef.params.iter() {
-            scope.add_introduction(IPRScopedIdentifier::from_func_param(param));
+            let scoped_param = IPRScopedIdentifier::from_func_param(param);
+            if let Some(p) = scope.introduces(&param.name)
+                && p.kind == SymbolKind::FunctionParam
+            {
+                return Err(ZeaError::User(ScopeResolutionError::DuplicateBinding {
+                    ident: param.name.clone(),
+                    first_binding: p.clone(),
+                    scope_stack_top: self.current_scope_idx(),
+                }));
+            }
+            scope.add_introduction(scoped_param);
         }
         walk_mut_block(self, &mut funcdef.body)?;
         self.exit_scope();
@@ -506,7 +545,7 @@ impl IdentifierScoper {
     pub fn scope_module(
         &mut self,
         mut module: IPRModule,
-    ) -> Result<IPRModule, ZeaError<NotInScopeError>> {
+    ) -> Result<IPRModule, ZeaError<ScopeResolutionError>> {
         self.visit_module(&mut module).map(|_| module)
     }
 
@@ -536,13 +575,12 @@ impl IdentifierScoper {
             children: Vec::with_capacity(4),
             kind,
         };
+
         self.scopes.push(scope);
         let idx = BlockScopeIndex::from_usize(self.scopes.len() - 1);
         self.scope_stack.push(idx);
-        // ubwrap because the self.current_scope_idx() call will have panicked before this.
         self.get_scope_mut(parent).unwrap().add_child(idx);
-        // unwrap because we literally just pushed this scope onto the stack
-        self.get_scope_mut(idx).unwrap()
+        self.current_scope_mut()
     }
     fn exit_scope(&mut self) {
         assert!(!self.scope_stack.is_empty(), "cannot pop module scope");
@@ -565,8 +603,8 @@ impl IdentifierScoper {
     fn current_scope_idx(&self) -> BlockScopeIndex {
         self.scope_stack.last().copied().expect("empty scope stack")
     }
-    fn resolve(&mut self, ident: &str) -> Result<IPRScopedIdentifier, NotInScopeError> {
-        let mut cur_scope_idx = self.current_scope_idx();
+    fn resolve(&mut self, ident: &str) -> Result<IPRScopedIdentifier, ScopeResolutionError> {
+        let original_scope = self.current_scope_idx();
         let mut cur_scope = self.current_scope_mut();
 
         loop {
@@ -574,14 +612,14 @@ impl IdentifierScoper {
                 return Ok(found.clone());
             } else {
                 if cur_scope.is_module_root() {
-                    return Err(NotInScopeError {
+                    return Err(ScopeResolutionError::NotInScopeError {
                         ident: String::from(ident),
-                        scope_stack_top: cur_scope_idx,
+                        scope_stack_top: original_scope,
                     });
                 }
-                cur_scope_idx = cur_scope.parent;
+                let cur_scope_parent = cur_scope.parent;
                 cur_scope = self
-                    .get_scope_mut(cur_scope_idx)
+                    .get_scope_mut(cur_scope_parent)
                     .expect("missin parent scope");
             }
         }
@@ -598,7 +636,7 @@ impl IdentifierScoper {
     fn visit_branch_twig(
         &mut self,
         twig: &mut IPRExpression,
-    ) -> Result<(), ZeaError<NotInScopeError>> {
+    ) -> Result<(), ZeaError<ScopeResolutionError>> {
         if let Some(twig) = branch_twig_as_block(twig) {
             self.enter_scope(twig.id, ScopeKind::BranchTwig);
             walk_mut_block(self, twig)?;

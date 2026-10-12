@@ -114,7 +114,6 @@ impl<'m> THRtoQBE<'m> {
         let val_qbe = self.emit_expr(bctx, value, typ);
         // an expression with unit-type cannot be stored, as it holds no data.
         // it may however have side effects, so it must still be emitted
-        //
         let typ = self.thr_module.get_type(typ);
         match typ {
             THRTypeSpecifier::Unit | THRTypeSpecifier::Never => {

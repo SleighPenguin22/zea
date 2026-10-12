@@ -206,7 +206,7 @@ fn main() {
     info!("commencing typechecking...");
     let mut tc = ZeaTypeChecker::new();
     let status = tc.typecheck_module(&mut scoped_module);
-    let _ = error_unpack(status, &tc);
+    error_unpack(status, &tc);
     let tinfo = tc.finish();
     info!("finished typechecking");
     if ccfg.print_ipr() {

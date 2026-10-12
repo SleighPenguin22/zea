@@ -124,11 +124,11 @@ where
     }
 }
 
-impl<E> From<E> for ZeaError<E>
+impl<UserErr> From<UserErr> for ZeaError<UserErr>
 where
-    E: ZeaUserError,
+    UserErr: ZeaUserError,
 {
-    fn from(v: E) -> Self {
+    fn from(v: UserErr) -> Self {
         Self::User(v)
     }
 }
