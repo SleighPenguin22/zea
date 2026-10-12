@@ -740,6 +740,10 @@ impl ZeaTypeChecker {
     fn introduce_function(&mut self, f: &IPRFunction) -> TypeCheckResult<()> {
         for param in f.params.iter() {
             let IPRFuncParam { typ, id, .. } = param;
+            trace!(
+                "solving function param {}:{} with id {}",
+                f.name, param.name, id
+            );
             let t = self.interned_types.get_or_intern(typ);
             let t_id = self.get_inference_id(*id);
             self.set_solved_typespec(t_id, typ)
@@ -946,15 +950,15 @@ impl ZeaTypeChecker {
         for stmt in body.statements.iter_mut() {
             self.check_stmt(stmt)?;
         }
-        let tvar = self.infer_expression(&body.tail)?;
+        let tail_tvar = self.infer_expression(&body.tail)?;
         let block_rets = self
             .typevar_solving
-            .get_solved(tvar)
-            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(tvar))?;
-        self.hindley_milner_unify(tvar_block, tvar)?;
+            .get_solved(tail_tvar)
+            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(tail_tvar))?;
+        self.hindley_milner_unify(tvar_block, tail_tvar)?;
         self.node_types.insert(body.id, block_rets);
         self.node_types.insert(body.tail.id, block_rets);
-        Ok(tvar)
+        Ok(tail_tvar)
     }
 
     fn check_stmt(&mut self, stmt: &mut IPRStatement) -> TypeCheckResult<()> {

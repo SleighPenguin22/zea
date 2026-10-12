@@ -104,6 +104,9 @@ impl IPRTransfomer<'_> for BareNodeLabeler {
         funcdef: &mut IPRFunction,
     ) -> Result<Self::TransformerOk, Self::TransformerError> {
         self.update_label(&mut funcdef.id);
+        for param in &mut funcdef.params {
+            self.update_label(&mut param.id);
+        }
         walk_mut_funcdef(self, funcdef)
     }
     fn visit_init(
