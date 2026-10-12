@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use idset::{KeySet, internkey};
 use log::{error, trace};
 use qbe::{self as Q};
-use zea_common::CompilerError;
+use zea_common::InternalCompilerError;
 use zea_irs::{
     ScalarTypeWidth,
     ast::{
@@ -49,7 +49,7 @@ impl<'m> THRtoQBE<'m> {
             block_label_generator: 0,
         }
     }
-    pub fn lower(&mut self) -> Result<Q::Module, CompilerError> {
+    pub fn lower(&mut self) -> Result<Q::Module, InternalCompilerError> {
         let mut m = Q::Module::new();
         self.walk_global_data_blocks(&mut m)?;
         for func in self.thr_module.functions().iter() {
@@ -58,12 +58,15 @@ impl<'m> THRtoQBE<'m> {
         Ok(m)
     }
     /// Walk the global data block of a THR module
-    fn walk_global_data_blocks(&mut self, module: &mut Q::Module) -> Result<(), CompilerError> {
+    fn walk_global_data_blocks(
+        &mut self,
+        module: &mut Q::Module,
+    ) -> Result<(), InternalCompilerError> {
         let glob_data = self.thr_module.global_data_block();
         for stmt in glob_data.iter().copied() {
             let stmt = self.thr_module.get_statement(stmt);
             let THRStatement::Init { decl, val, .. } = *stmt else {
-                return Err(CompilerError::new(
+                return Err(InternalCompilerError::new(
                     zea_common::CompilerStage::CodeGen,
                     zea_common::CompilerErrorKind::GlobalNonInitStmt,
                 ));
@@ -95,7 +98,7 @@ impl<'m> THRtoQBE<'m> {
                 let instr = Q::Instr::Ret(Some(temp));
                 bctx.sig.add_instr(instr);
             }
-            THRStatement::Branch { cond, bthen, belse } => todo!(),
+            THRStatement::Branch { .. } => todo!(),
         }
     }
     /// Given all components of an initialization, construct the QBE nodes necessary for it.
@@ -380,13 +383,16 @@ impl<'m> THRtoQBE<'m> {
 
     /// demangle a symbol that is used in a global context, i.e.
     /// any usage of a global symbol within a global context.
-    fn disambiguate_symbol_global_usage(&self, ident: &THRSymbol) -> Result<String, CompilerError> {
+    fn disambiguate_symbol_global_usage(
+        &self,
+        ident: &THRSymbol,
+    ) -> Result<String, InternalCompilerError> {
         let prefix = self.get_module_prefix();
         let demangle = match ident.kind {
             SymbolKind::GlobalVar => "global_",
             SymbolKind::FunctionName => "func_",
             _ => {
-                return Err(CompilerError::new(
+                return Err(InternalCompilerError::new(
                     zea_common::CompilerStage::CodeGen,
                     zea_common::CompilerErrorKind::InvalidNonGlobalSymbolUsage,
                 ));
@@ -411,7 +417,7 @@ impl<'m> THRtoQBE<'m> {
         module: &'module mut qbe::Module,
         decl: THRSymbolDecl,
         val: THRExprID,
-    ) -> Result<Q::DataDef, CompilerError> {
+    ) -> Result<Q::DataDef, InternalCompilerError> {
         let name = self.thr_module.get_symbol(decl.symbol);
         let name = self.disambiguate_symbol_global_usage(name)?;
         let thr_typ = self.thr_module.get_type(decl.typ);

@@ -14,35 +14,52 @@ use std::{
 };
 use tempfile::NamedTempFile;
 use zea_codegen::THRtoQBE;
-use zea_common::{CompilerConfig, CompilerError, ZeaError};
+use zea_common::{CompilerConfig, InternalCompilerError, ZeaError, ZeaUserError};
 use zea_irs::ast::{
+    NodeLabeler,
     ipr_walkers::{
-        IPRTransfomer,
-        transformers::{IdentifierScoper, scope_module},
+        self, IPRTransfomer,
+        transformers::{self, AssignmentExpander, IdentifierScoper, scope_module},
     },
-    thr::THRModule,
+    thr::{THRKeySets, THRModule},
 };
 use zea_irs::visualisation::IndentPrint;
 use zea_irs::{ZeaTypeChecker, typecheck_module};
 use zea_parser::parse_module;
 
-/// exit with an ICE message when an operation fails
-fn exit_on_ice<T>(res: Result<T, CompilerError>) -> T {
+/// 'unwrap' an error, providing context that the user-error needs
+/// as to supply the user with helpful info,
+///
+///
+/// In the case of an internal compiler error (ICE),
+/// bail with a message and cause.
+fn error_unpack<T, UserErr: ZeaUserError>(
+    res: Result<T, ZeaError<UserErr>>,
+    ctx: &UserErr::ZeaUserErrorContext,
+) -> T {
     match res {
         Ok(t) => t,
-        Err(e) => {
-            error!("{}", e.pretty());
+        Err(ZeaError::User(e)) => {
+            let msg = e.zea_error_format(ctx);
+            error!("{msg}");
             exit(1);
+        }
+        Err(ZeaError::Internal(ice)) => {
+            let msg = ice.pretty();
+            error!("{msg}");
+            exit(2);
         }
     }
 }
-fn exit_on_user_error<'s, 'c, T, C, E: ZeaError<C>>(res: Result<T, E>, ctx: &'c C) -> T {
+/// 'unwrap' an internal compiler error (ICE),
+/// bail with a message and cause.
+fn error_unpack_ice<T>(res: Result<T, InternalCompilerError>) -> T {
     match res {
         Ok(t) => t,
-        Err(e) => {
-            let msg = e.zea_error_format(ctx);
-            error!("{}", msg);
-            exit(1);
+        Err(ice) => {
+            let msg = ice.pretty();
+            error!("{msg}");
+            exit(2);
         }
     }
 }
@@ -172,37 +189,40 @@ fn main() {
     let ccfg = CompilerConfig::parse_args();
     colog::basic_builder().filter_level(ccfg.log_level()).init();
     let src = read_to_string_wrapper(ccfg.path());
-    let (mut module, generator) = parse_module(&src);
+    let (mut module, labeler) = parse_module(&src);
 
-    let a = module.simplify_assignments_after(generator);
-    module.insert_implicit_main_return(a);
+    let mut expander = transformers::AssignmentExpander::from_labeler(labeler);
+    expander.visit_module(&mut module).expect("infallible");
 
-    let (scoper, status) = scope_module(module);
-    let mut scoped_module = exit_on_user_error(status, &scoper);
+    let mut insert_main_return0 = transformers::InsertImplicitMainReturn::from_labeler(expander);
+    insert_main_return0
+        .visit_module(&mut module)
+        .expect("infallible");
+
+    let mut scoper = IdentifierScoper::new(&module);
+    let status = scoper.scope_module(module);
+    let mut scoped_module = error_unpack(status, &scoper);
+
     info!("commencing typechecking...");
     let mut tc = ZeaTypeChecker::new();
     let status = tc.typecheck_module(&mut scoped_module);
-    exit_on_user_error(status, &tc);
+    let _ = error_unpack(status, &tc);
     let tinfo = tc.finish();
     info!("finished typechecking");
     if ccfg.print_ipr() {
         info!("after expansions:\n{}", scoped_module.indent_print(0));
-        info!("module Debug Print: {scoped_module:?}");
     }
 
     info!("lowering into THR...");
-    let lowered = exit_on_ice(zea_irs::ast::thr::lower_module(
-        scoped_module,
-        tinfo,
-        scoper,
-        &ccfg,
-    ));
+    let thr_ctx = THRKeySets::new();
+    let status = thr_ctx.lower_module(scoped_module, tinfo, scoper, &ccfg);
+    let lowered = error_unpack_ice(status);
     if ccfg.print_thr() {
         info!("Typed Highlevel Representation:\n{:?}", lowered);
     }
 
     let mut codegen = THRtoQBE::new(&lowered);
-    let qbe = exit_on_ice(codegen.lower());
+    let qbe = error_unpack_ice(codegen.lower());
     let il = format!("{qbe}");
     if ccfg.print_qbe_il() {
         info!("Generated QBE IL:\n{il}");

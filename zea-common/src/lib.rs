@@ -106,32 +106,59 @@ impl ToString for ModuleType {
     }
 }
 
-#[derive(Debug)]
-pub struct CompilerError {
+#[derive(Debug, Clone)]
+pub enum ZeaError<E>
+where
+    E: ZeaUserError,
+{
+    User(E),
+    Internal(InternalCompilerError),
+}
+
+impl<E> From<InternalCompilerError> for ZeaError<E>
+where
+    E: ZeaUserError,
+{
+    fn from(v: InternalCompilerError) -> Self {
+        Self::Internal(v)
+    }
+}
+
+impl<E> From<E> for ZeaError<E>
+where
+    E: ZeaUserError,
+{
+    fn from(v: E) -> Self {
+        Self::User(v)
+    }
+}
+
+/// A Zea User error that requires some context to print a message
+///
+///
+pub trait ZeaUserError: Sized {
+    type ZeaUserErrorContext: ?Sized;
+    fn zea_error_format(&self, ctx: &Self::ZeaUserErrorContext) -> ZeaErrorMessage;
+    fn into_zea_error(self) -> ZeaError<Self> {
+        ZeaError::User(self)
+    }
+}
+#[derive(Debug, Clone, Copy)]
+pub struct InternalCompilerError {
     pub stage: CompilerStage,
     pub kind: CompilerErrorKind,
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ZeaErrorMessage {
     pub msg: String,
+    pub loc: Option<(usize, usize)>,
 }
 impl std::fmt::Display for ZeaErrorMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.msg.fmt(f)
     }
 }
-
-pub trait ZeaError<T>: Sized {
-    fn zea_error_format(&self, ctx: &T) -> ZeaErrorMessage;
-    fn into_zea_error(self, ctx: &T, stage: CompilerStage) -> CompilerError {
-        let msg = self.zea_error_format(ctx);
-        CompilerError {
-            stage,
-            kind: CompilerErrorKind::Other(msg),
-        }
-    }
-}
-impl CompilerError {
+impl InternalCompilerError {
     pub const fn new(stage: CompilerStage, kind: CompilerErrorKind) -> Self {
         Self { stage, kind }
     }
@@ -152,7 +179,7 @@ pub enum CompilerStage {
     CodeGen = 6,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompilerErrorKind {
     IntegerOverflow,
 
@@ -164,12 +191,14 @@ pub enum CompilerErrorKind {
     StrayUnknownType,
     EmptyFunctionBody,
     NoEntryPoint,
-    Other(ZeaErrorMessage),
 }
+
+type ZeaResult<T, E> = Result<T, ZeaError<E>>;
+
 #[macro_export]
 macro_rules! ice_bail {
     ($err:expr) => {{
-        let err: CompilerError = $err;
+        let err: InternalCompilerError = $err;
         log::error!("{}", err.pretty());
         exit(1)
     }};

@@ -91,23 +91,10 @@ use crate::{
 use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
 use idset::{InternKey, KeySet, KeyVec, PreKeyVec, internkey};
 use log::trace;
-use zea_common::{CompilerConfig, CompilerError, CompilerErrorKind, CompilerStage, ModuleType};
+use zea_common::{
+    CompilerConfig, CompilerErrorKind, CompilerStage, InternalCompilerError, ModuleType,
+};
 use zea_internal_macros::InternKey;
-
-pub fn lower_module(
-    module: IPRModule,
-    types: IPRModuleTypeInfo,
-    ident_scopes: IdentifierScoper,
-    compiler_config: &CompilerConfig,
-) -> Result<THRModule, CompilerError> {
-    let thr_ctx = THRKeySets::with_integer_types();
-    let ipr_ctx = IPRLoweringContext {
-        module,
-        types,
-        ident_scopes,
-    };
-    thr_ctx.lower_module(&ipr_ctx, compiler_config)
-}
 
 internkey!(THRTypeID);
 
@@ -444,6 +431,20 @@ static THR_INTEGER_TYPES: [THRTypeSpecifier; 8] = [
 ];
 
 impl THRKeySets {
+    pub fn lower_module<'a>(
+        self,
+        module: IPRModule,
+        tinfo: IPRModuleTypeInfo,
+        scopes: IdentifierScoper,
+        compiler_config: &CompilerConfig,
+    ) -> Result<THRModule, InternalCompilerError> {
+        let ipr_ctx: IPRLoweringContext = IPRLoweringContext {
+            module,
+            types: tinfo,
+            ident_scopes: scopes,
+        };
+        self._lower_module(&ipr_ctx, compiler_config)
+    }
     /// Generate an identifier for a language construct
     ///
     /// i.e. a block:
@@ -467,7 +468,7 @@ impl THRKeySets {
         self.symbols.get_or_intern(symb)
     }
 
-    pub fn with_integer_types() -> Self {
+    pub fn new() -> Self {
         let mut s = Self::default();
         for t in THR_INTEGER_TYPES.as_slice() {
             s.types.get_or_intern(t.clone());
@@ -524,7 +525,7 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         expr: &IPRExpression,
-    ) -> Result<(THRExprID, THRTypeID), CompilerError> {
+    ) -> Result<(THRExprID, THRTypeID), InternalCompilerError> {
         let ipr_t = ipr_ctx.types.lookup(expr.id);
         let thr_t = self.lower_type(ipr_ctx, ipr_t);
         let node = match &expr.kind {
@@ -560,7 +561,7 @@ impl THRKeySets {
             }
             IPRExpressionKind::Block(_b) => todo!(),
             IPRExpressionKind::UnScopedIdent(_) => {
-                return Err(CompilerError::new(
+                return Err(InternalCompilerError::new(
                     CompilerStage::CodeGen,
                     CompilerErrorKind::StrayUnscopedIdent,
                 ));
@@ -575,7 +576,7 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         stmt: &IPRStatement,
-    ) -> Result<Vec<THRStatementID>, CompilerError> {
+    ) -> Result<Vec<THRStatementID>, InternalCompilerError> {
         match &stmt.kind {
             IPRStatementKind::Initialization(init) => {
                 let recursive_inits = self.lower_init_block(ipr_ctx, init, SymbolKind::LocalVar)?;
@@ -594,9 +595,9 @@ impl THRKeySets {
         ipr_ctx: &IPRLoweringContext,
         init_block: &IPRInitializationBlock,
         kind: SymbolKind,
-    ) -> Result<Vec<THRStatementID>, CompilerError> {
+    ) -> Result<Vec<THRStatementID>, InternalCompilerError> {
         let IPRInitializationKind::Unpacked(inits) = &init_block.kind else {
-            return Err(CompilerError::new(
+            return Err(InternalCompilerError::new(
                 CompilerStage::IPRtoTHR,
                 CompilerErrorKind::StrayPackedInit,
             ));
@@ -615,7 +616,7 @@ impl THRKeySets {
         ipr_ctx: &IPRLoweringContext,
         init: &IPRSimpleInitialization,
         kind: SymbolKind,
-    ) -> Result<THRStatementID, CompilerError> {
+    ) -> Result<THRStatementID, InternalCompilerError> {
         let symbol = THRSymbol {
             name: init.assignee.clone().into_boxed_str(),
             kind,
@@ -634,11 +635,11 @@ impl THRKeySets {
         Ok(self.statements.get_or_intern(tail_eval_init))
     }
 
-    fn lower_module<'a>(
+    fn _lower_module<'a>(
         mut self,
         ipr_ctx: &'a IPRLoweringContext,
         compiler_config: &CompilerConfig,
-    ) -> Result<THRModule, CompilerError> {
+    ) -> Result<THRModule, InternalCompilerError> {
         let globs = &ipr_ctx.module.global_vars;
         let mut global_data_block: Vec<THRStatementID> = vec![];
         for glob in globs.iter() {
@@ -656,7 +657,7 @@ impl THRKeySets {
             }
         }
         if entry_point.is_none() && compiler_config.module_type() == ModuleType::Bin {
-            return Err(CompilerError::new(
+            return Err(InternalCompilerError::new(
                 CompilerStage::IPRtoTHR,
                 CompilerErrorKind::NoEntryPoint,
             ));
@@ -681,7 +682,7 @@ impl THRKeySets {
             returns,
             body,
         }: &IPRFunction,
-    ) -> Result<THRFunctionID, CompilerError> {
+    ) -> Result<THRFunctionID, InternalCompilerError> {
         let returns = self.lower_type(ipr_ctx, returns);
 
         let mut thr_params = Vec::with_capacity(params.len());
@@ -698,7 +699,7 @@ impl THRKeySets {
             let stmts = self.lower_stmt(ipr_ctx, &stmt)?;
             thr_body.extend(stmts);
         }
-        let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, &body.tail)?;
+        let (tail_expr, _tail_expr_t) = self.lower_expression(ipr_ctx, &body.tail)?;
         let ret_stmt = self.statements.get_or_intern(THRStatement::Ret(tail_expr));
         thr_body.push(ret_stmt);
 
@@ -717,7 +718,7 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         body: &IPRBlockExpression,
-    ) -> Result<Vec<THRStatementID>, CompilerError> {
+    ) -> Result<Vec<THRStatementID>, InternalCompilerError> {
         let mut items: Vec<THRStatementID> = vec![];
 
         for stmt in body.statements.iter() {
@@ -734,7 +735,7 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         tail_expr: &IPRExpression,
-    ) -> Result<THRStatement, CompilerError> {
+    ) -> Result<THRStatement, InternalCompilerError> {
         let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, tail_expr)?;
         let tail_eval_decl = self.label_construct_eval(SymbolKind::LocalVar);
         let tail_eval_init = THRStatement::Init {
@@ -839,7 +840,7 @@ mod tests {
     }
     #[test]
     fn struct_width() {
-        let mut ctx = THRKeySets::with_integer_types();
+        let mut ctx = THRKeySets::new();
         let i8 = struct_field_i8(&mut ctx);
         let i16 = struct_field_i16(&mut ctx);
         let i32 = struct_field_i32(&mut ctx);

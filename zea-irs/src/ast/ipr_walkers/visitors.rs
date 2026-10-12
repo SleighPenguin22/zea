@@ -10,7 +10,7 @@ use crate::ast::ipr_walkers::{
 use crate::ast::{NodeId, ZeaNodeQuery, ipr::*};
 use crate::impls::StructuralEq;
 use arbitrary::Arbitrary;
-use zea_common::CompilerError;
+use zea_common::InternalCompilerError;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug, Arbitrary)]
 pub enum SymbolKind {
@@ -109,21 +109,26 @@ impl ScopeAnnotations {
             .collect()
     }
 
-    pub fn gather_idents_module(&mut self, module: &IPRModule) {
+    pub fn gather_idents_module(
+        &mut self,
+        module: &IPRModule,
+    ) -> Result<(), InternalCompilerError> {
         for glob in module.global_vars.iter() {
-            self.gather_idents_global_init(glob);
+            self.gather_idents_global_init(glob)?;
         }
         for func in module.functions.iter() {
-            self.gather_idents_func_def(func);
+            self.gather_idents_func_def(func)?;
         }
+
+        Ok(())
     }
 
     fn gather_idents_local_stmt(
         &mut self,
         init: &IPRInitializationBlock,
-    ) -> Result<(), CompilerError> {
+    ) -> Result<(), InternalCompilerError> {
         let IPRInitializationKind::Unpacked(u) = &init.kind else {
-            return Err(CompilerError::new(
+            return Err(InternalCompilerError::new(
                 zea_common::CompilerStage::LexicalScopeAnalysis,
                 zea_common::CompilerErrorKind::StrayPackedInit,
             ));
@@ -138,9 +143,9 @@ impl ScopeAnnotations {
     fn gather_idents_global_init(
         &mut self,
         init: &IPRInitializationBlock,
-    ) -> Result<(), CompilerError> {
+    ) -> Result<(), InternalCompilerError> {
         let IPRInitializationKind::Unpacked(u) = &init.kind else {
-            return Err(CompilerError::new(
+            return Err(InternalCompilerError::new(
                 zea_common::CompilerStage::LexicalScopeAnalysis,
                 zea_common::CompilerErrorKind::StrayPackedInit,
             ));
@@ -152,7 +157,10 @@ impl ScopeAnnotations {
         Ok(())
     }
 
-    fn gather_idents_func_def(&mut self, func_def: &IPRFunction) {
+    fn gather_idents_func_def(
+        &mut self,
+        func_def: &IPRFunction,
+    ) -> Result<(), InternalCompilerError> {
         self.identifiers.insert(IPRScopedIdentifier::func_name(
             func_def.id,
             func_def.name.clone(),
@@ -162,60 +170,62 @@ impl ScopeAnnotations {
                 .insert(IPRScopedIdentifier::from_func_param(param));
         }
         for stmt in func_def.body.statements.iter() {
-            self.gather_idents_stmt(stmt);
+            self.gather_idents_stmt(stmt)?;
         }
+        Ok(())
     }
-    fn gather_idents_stmt(&mut self, stmt: &IPRStatement) -> Result<(), CompilerError> {
+    fn gather_idents_stmt(&mut self, stmt: &IPRStatement) -> Result<(), InternalCompilerError> {
         match &stmt.kind {
             IPRStatementKind::Initialization(init) => self.gather_idents_local_stmt(init)?,
-            IPRStatementKind::Reassignment(reinit) => self.gather_idents_expr(&reinit.value),
-            IPRStatementKind::FunctionCall(call) => self.gather_idents_call(call),
-            IPRStatementKind::Return(e) => self.gather_idents_expr(e),
-            IPRStatementKind::Block(eb) => self.gather_idents_block(eb),
-            IPRStatementKind::IfThenElse(ite) => self.gather_idents_branch(ite),
+            IPRStatementKind::Reassignment(reinit) => self.gather_idents_expr(&reinit.value)?,
+            IPRStatementKind::FunctionCall(call) => self.gather_idents_call(call)?,
+            IPRStatementKind::Return(e) => self.gather_idents_expr(e)?,
+            IPRStatementKind::Block(eb) => self.gather_idents_block(eb)?,
+            IPRStatementKind::IfThenElse(ite) => self.gather_idents_branch(ite)?,
         };
         Ok(())
     }
 
-    fn gather_idents_expr(&mut self, expr: &IPRExpression) {
+    fn gather_idents_expr(&mut self, expr: &IPRExpression) -> Result<(), InternalCompilerError> {
         match &expr.kind {
             IPRExpressionKind::Unit => {}
-            IPRExpressionKind::IntegerLiteral(_) => {}
-            IPRExpressionKind::BoolLiteral(_) => {}
-            IPRExpressionKind::FloatLiteral(_) => {}
-            IPRExpressionKind::StringLiteral(_) => {}
-            IPRExpressionKind::UnScopedIdent(_) => {}
 
-            IPRExpressionKind::FunctionCall(call) => self.gather_idents_call(call),
+            IPRExpressionKind::FunctionCall(call) => self.gather_idents_call(call)?,
             IPRExpressionKind::BinOpExpr(_, lhs, rhs) => {
-                self.gather_idents_expr(lhs);
-                self.gather_idents_expr(rhs);
+                self.gather_idents_expr(lhs)?;
+                self.gather_idents_expr(rhs)?;
             }
-            IPRExpressionKind::UnOpExpr(_, arg) => self.gather_idents_expr(arg),
-            IPRExpressionKind::MemberAccess(data, _) => self.gather_idents_expr(data),
-            IPRExpressionKind::IfThenElse(ite) => self.gather_idents_branch(ite),
-            IPRExpressionKind::Block(eb) => self.gather_idents_block(eb),
-            IPRExpressionKind::ScopedIdent(_) => {}
-        }
+            IPRExpressionKind::UnOpExpr(_, arg) => self.gather_idents_expr(arg)?,
+            IPRExpressionKind::MemberAccess(data, _) => self.gather_idents_expr(data)?,
+            IPRExpressionKind::IfThenElse(ite) => self.gather_idents_branch(ite)?,
+            IPRExpressionKind::Block(eb) => self.gather_idents_block(eb)?,
+            _ => {}
+        };
+        Ok(())
     }
-    fn gather_idents_call(&mut self, call: &IPRFunctionCall) {
+    fn gather_idents_call(&mut self, call: &IPRFunctionCall) -> Result<(), InternalCompilerError> {
         for arg in call.args.iter() {
-            self.gather_idents_expr(arg);
+            self.gather_idents_expr(arg)?;
         }
+        Ok(())
     }
-    fn gather_idents_branch(&mut self, branch: &IPRBranch) {
-        self.gather_idents_expr(&branch.condition);
-        self.gather_idents_expr(&branch.true_case);
+    fn gather_idents_branch(&mut self, branch: &IPRBranch) -> Result<(), InternalCompilerError> {
+        self.gather_idents_expr(&branch.condition)?;
+        self.gather_idents_expr(&branch.true_case)?;
         if let Some(false_case) = &branch.false_case {
-            self.gather_idents_expr(false_case);
+            self.gather_idents_expr(false_case)?;
         }
+        Ok(())
     }
 
-    fn gather_idents_block(&mut self, block: &IPRBlockExpression) {
+    fn gather_idents_block(
+        &mut self,
+        block: &IPRBlockExpression,
+    ) -> Result<(), InternalCompilerError> {
         for stmt in block.statements.iter() {
-            self.gather_idents_stmt(stmt);
+            self.gather_idents_stmt(stmt)?;
         }
-        self.gather_idents_expr(&block.tail);
+        self.gather_idents_expr(&block.tail)
     }
 }
 

@@ -53,7 +53,7 @@ impl TryFrom<u8> for ScalarTypeWidth {
 macro_rules! impl_nodelabeler {
     ($typ:ident, $label:literal) => {
         impl NodeLabeler for $typ {
-            fn labeler_from(mut other_generator: impl NodeLabeler) -> Self {
+            fn from_labeler(mut other_generator: impl NodeLabeler) -> Self {
                 Self {
                     label: other_generator.next_id().0,
                 }
@@ -71,7 +71,7 @@ macro_rules! impl_nodelabeler {
     };
     ($typ:ident) => {
         impl NodeLabeler for $typ {
-            fn labeler_from(mut other_generator: impl NodeLabeler) -> Self {
+            fn from_labeler(mut other_generator: impl NodeLabeler) -> Self {
                 Self {
                     label: other_generator.next_id().0,
                 }

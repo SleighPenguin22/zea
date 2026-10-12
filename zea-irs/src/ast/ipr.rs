@@ -6,7 +6,7 @@ use std::{
     hash::{Hash, Hasher},
     process::exit,
 };
-use zea_common::ZeaError;
+use zea_common::ZeaUserError;
 
 use zea_internal_macros::ASTStructuralEq;
 
@@ -197,33 +197,6 @@ impl IPRModule {
         let mut l = BareNodeLabeler::new();
         l.visit_module(self).unwrap();
         l
-    }
-
-    pub fn insert_implicit_main_return(&mut self, labeler: impl NodeLabeler) -> impl NodeLabeler {
-        let mut transformer = InsertImplicitMainReturn::labeler_from(labeler);
-        transformer.visit_module(self).unwrap();
-        transformer
-    }
-
-    pub fn visit_self_with<'m, V: IPRVisitor<'m> + NodeLabeler>(
-        &'m mut self,
-        labeler: impl NodeLabeler,
-    ) -> Result<V, V::VisitorError> {
-        let mut v: V = labeler.labeler_into();
-        v.visit_module(self)?;
-        Ok(v)
-    }
-
-    pub fn transform_self_with<'m, V: IPRTransfomer<'m> + NodeLabeler>(
-        &'m mut self,
-        labeler: impl NodeLabeler,
-    ) -> Result<V, V::TransformerError> {
-        let mut v: V = labeler.labeler_into();
-        v.visit_module(self).map(|_| v)
-    }
-
-    pub fn simplify_assignments_after(&mut self, labeler: impl NodeLabeler) -> AssignmentExpander {
-        self.transform_self_with(labeler).unwrap()
     }
 }
 #[derive(Debug, Clone, Arbitrary)]

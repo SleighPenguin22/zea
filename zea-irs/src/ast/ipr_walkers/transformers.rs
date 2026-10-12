@@ -1,4 +1,3 @@
-//!
 //! This module contains implementations for the following transformers:
 //! - [`BareNodeLabeler`]: give each IPR node a unique label
 //! - [`AssignmentExpander`]: expand pattern-initializations into a series of simple initializations
@@ -22,7 +21,8 @@ use std::env::Args;
 use std::ops::IndexMut;
 use std::process::exit;
 use zea_common::{
-    CompilerConfig, CompilerError, CompilerStage, ZeaError, ZeaErrorMessage, ice_bail,
+    CompilerConfig, CompilerStage, InternalCompilerError, ZeaError, ZeaErrorMessage, ZeaUserError,
+    ice_bail,
 };
 use zea_internal_macros::{InternKey, VariantToStr};
 
@@ -30,9 +30,9 @@ pub trait NodeLabeler: Sized {
     /// Start `Self`'s id-generator with the last id that `other_generator` used,
     /// such that [`Self::next_id`] calls will never produce an ID
     /// equal to any of `other_generator`'s ID's.
-    fn labeler_from(other_generator: impl NodeLabeler) -> Self;
-    fn labeler_into<V: NodeLabeler>(self) -> V {
-        NodeLabeler::labeler_from(self)
+    fn from_labeler(other_generator: impl NodeLabeler) -> Self;
+    fn into_labeler<V: NodeLabeler>(self) -> V {
+        NodeLabeler::from_labeler(self)
     }
     /// All implementors must ensure that any ID generated is not equal to 0,
     /// as this is a sentinel ID used to signify the need for a fresh ID
@@ -335,7 +335,8 @@ pub struct NotInScopeError {
     scope_stack_top: BlockScopeIndex,
 }
 
-impl ZeaError<IdentifierScoper> for NotInScopeError {
+impl ZeaUserError for NotInScopeError {
+    type ZeaUserErrorContext = IdentifierScoper;
     fn zea_error_format(&self, ctx: &IdentifierScoper) -> ZeaErrorMessage {
         let origin = ctx.get_scope(self.scope_stack_top).expect("missing scope");
         let ident = &self.ident;
@@ -349,13 +350,9 @@ impl ZeaError<IdentifierScoper> for NotInScopeError {
         for i in in_scope {
             buffer += &format!("- {i}\n");
         }
-        ZeaErrorMessage { msg: buffer }
-    }
-    fn into_zea_error(self, ctx: &IdentifierScoper, stage: CompilerStage) -> CompilerError {
-        let msg = self.zea_error_format(ctx);
-        CompilerError {
-            stage,
-            kind: zea_common::CompilerErrorKind::Other(msg),
+        ZeaErrorMessage {
+            msg: buffer,
+            loc: None,
         }
     }
 }
@@ -371,17 +368,19 @@ fn scopekind_to_pretty_string(scopekind: ScopeKind) -> &'static str {
 
 pub fn scope_module(
     mut module: IPRModule,
-) -> (IdentifierScoper, Result<IPRModule, NotInScopeError>) {
+) -> (
+    IdentifierScoper,
+    Result<IPRModule, ZeaError<NotInScopeError>>,
+) {
     let mut scoper = IdentifierScoper::new(&module);
-    let t = match scoper.visit_module(&mut module) {
-        Ok(t) => t,
-        Err(e) => return (scoper, Err(e)),
+    if let Err(e) = scoper.visit_module(&mut module) {
+        return (scoper, Err(e));
     };
     (scoper, Ok(module))
 }
 
 impl IPRTransfomer<'_> for IdentifierScoper {
-    type TransformerError = NotInScopeError;
+    type TransformerError = ZeaError<NotInScopeError>;
     type TransformerOk = ();
     fn visit_expr(
         &mut self,
@@ -430,10 +429,11 @@ impl IPRTransfomer<'_> for IdentifierScoper {
         // global variables may not be initialized with function calls; they should be constants.
         for glob in module.global_vars.iter_mut() {
             let IPRInitializationKind::Unpacked(u) = &mut glob.kind else {
-                ice_bail!(CompilerError::new(
+                return Err(InternalCompilerError::new(
                     zea_common::CompilerStage::LexicalScopeAnalysis,
                     zea_common::CompilerErrorKind::StrayPackedInit,
-                ));
+                )
+                .into());
             };
             trace!("scoping global inits {u:?}");
             for init in u {
@@ -502,6 +502,14 @@ impl IdentifierScoper {
         new.scope_stack.push(BlockScopeIndex::from_usize(0));
         new
     }
+
+    pub fn scope_module(
+        &mut self,
+        mut module: IPRModule,
+    ) -> Result<IPRModule, ZeaError<NotInScopeError>> {
+        self.visit_module(&mut module).map(|_| module)
+    }
+
     fn build_global_scope_skeleton(module: &IPRModule) -> BlockLikeScope {
         let global_scope = BlockLikeScope {
             origin: module.id,
@@ -587,7 +595,10 @@ impl IdentifierScoper {
     /// but this might change in the future.
     /// This method exists as a future proofing thing,
     /// as the non-block path will never be taken given the current parser implementation.
-    fn visit_branch_twig(&mut self, twig: &mut IPRExpression) -> Result<(), NotInScopeError> {
+    fn visit_branch_twig(
+        &mut self,
+        twig: &mut IPRExpression,
+    ) -> Result<(), ZeaError<NotInScopeError>> {
         if let Some(twig) = branch_twig_as_block(twig) {
             self.enter_scope(twig.id, ScopeKind::BranchTwig);
             walk_mut_block(self, twig)?;
@@ -644,13 +655,7 @@ impl<'cfg> CompilerAttributeInserter<'cfg> {
 #[cfg(test)]
 mod tests {
     use crate::ast::ipr_walkers::IPRTransfomer;
+    use crate::ast::ipr_walkers::transformers::AssignmentExpander;
     use crate::ast::*;
     use crate::ast::{IPRModule, NodeLabeler};
-
-    fn prepare_module(mut ast: IPRModule) -> (IPRModule, impl NodeLabeler) {
-        let mut labeler = BareNodeLabeler::new();
-        labeler.visit_module(&mut ast).unwrap();
-        let labeler = ast.simplify_assignments_after(labeler);
-        (ast, labeler)
-    }
 }
