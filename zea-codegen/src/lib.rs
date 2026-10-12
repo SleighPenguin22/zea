@@ -122,7 +122,7 @@ impl<'m> THRtoQBE<'m> {
             }
             _ => {
                 let q_typ = self.emit_lvalue_type_and_get(typ);
-                let temp = Q::Value::Temporary(self.disambiguate_symbol_local_usage(bctx, symb));
+                let temp = Q::Value::Temporary(self.mangle_symbol_local_usage(bctx, symb));
                 bctx.sig
                     .assign_instr(temp.clone(), q_typ, Q::Instr::Copy(val_qbe));
                 self.symbol_table.insert(symb_id, temp.clone());
@@ -149,7 +149,7 @@ impl<'m> THRtoQBE<'m> {
             THRExpression::Unop(..) => todo!(),
             THRExpression::Ident(i) => {
                 let symbol = self.thr_module.get_symbol(*i);
-                let disamb = self.disambiguate_symbol_local_usage(bctx, symbol);
+                let disamb = self.mangle_symbol_local_usage(bctx, symbol);
                 match symbol.kind {
                     SymbolKind::LocalVar | SymbolKind::FunctionParam => Q::Value::Temporary(disamb),
                     SymbolKind::GlobalVar => Q::Value::Global(disamb),
@@ -314,11 +314,13 @@ impl<'m> THRtoQBE<'m> {
         }
     }
 
+    /// Emit a given type, and then immediately dereference the QBETypeID into its QBE type
     fn emit_lvalue_type_and_get(&mut self, typ: &THRTypeSpecifier) -> Q::Type {
         let t = self.emit_lvalue_type(typ);
         self.types.get_by_id(t).unwrap().clone()
     }
 
+    /// Emit a given type, and return its QBE Type ID
     fn emit_basetype_integer(&mut self, width: ScalarTypeWidth, signed: bool) -> QBETypeID {
         let t = match (width, signed) {
             (ScalarTypeWidth::_8, true) => Q::Type::SignedByte,
@@ -365,19 +367,33 @@ impl<'m> THRtoQBE<'m> {
     fn get_module_func_prefix(&self, bctx: &BlockContext) -> String {
         format!("{}_{}_", self.thr_module.name, bctx.sig.name)
     }
-    /// demangle a symbol that is used in a local context;
+    /// mangle a symbol that is used in a local context;
     /// Any usage of a symbol within a basic-block/function body
-    fn disambiguate_symbol_local_usage(&self, bctx: &BlockContext, ident: &THRSymbol) -> String {
-        let prefix = self.get_module_prefix();
-        let demangle = match ident.kind {
-            SymbolKind::LocalVar => &format!("{}_local_", bctx.sig.name),
-            SymbolKind::GlobalVar => "global_",
-            SymbolKind::FunctionName => "func_",
-            SymbolKind::FunctionParam => &format!("{}_param_", bctx.sig.name),
+    fn mangle_symbol_local_usage(&self, bctx: &BlockContext, ident: &THRSymbol) -> String {
+        let module_prefix = self.get_module_prefix();
+        match ident.kind {
+            SymbolKind::LocalVar => {
+                self.mangle_local_var(&module_prefix, &bctx.sig.name, &ident.name)
+            }
+            SymbolKind::GlobalVar => self.mangle_global_var(&ident.name),
+            SymbolKind::FunctionName => self.mangle_func_name(&ident.name),
+            SymbolKind::FunctionParam => {
+                self.mangle_func_param(&module_prefix, &bctx.sig.name, &ident.name)
+            }
             SymbolKind::StructName => todo!(),
-        };
-
-        format!("{prefix}{demangle}{}", ident.name)
+        }
+    }
+    fn mangle_func_param(&self, module_prefix: &str, func_name: &str, param_name: &str) -> String {
+        format!("{module_prefix}{func_name}_param_{param_name}")
+    }
+    fn mangle_local_var(&self, module_prefix: &str, func_name: &str, local_name: &str) -> String {
+        format!("{module_prefix}{func_name}_local_{local_name}")
+    }
+    fn mangle_global_var(&self, name: &str) -> String {
+        format!("global_{name}")
+    }
+    fn mangle_func_name(&self, name: &str) -> String {
+        format!("func_{name}")
     }
 
     /// demangle a symbol that is used in a global context, i.e.
@@ -387,9 +403,9 @@ impl<'m> THRtoQBE<'m> {
         ident: &THRSymbol,
     ) -> Result<String, InternalCompilerError> {
         let prefix = self.get_module_prefix();
-        let demangle = match ident.kind {
-            SymbolKind::GlobalVar => "global_",
-            SymbolKind::FunctionName => "func_",
+        let mangle = match ident.kind {
+            SymbolKind::GlobalVar => self.mangle_global_var(&ident.name),
+            SymbolKind::FunctionName => self.mangle_func_name(&ident.name),
             _ => {
                 return Err(InternalCompilerError::new(
                     zea_common::CompilerStage::CodeGen,
@@ -398,7 +414,7 @@ impl<'m> THRtoQBE<'m> {
             }
         };
 
-        Ok(format!("{prefix}{demangle}{}", ident.name))
+        Ok(format!("{prefix}{mangle}"))
     }
 
     #[allow(unused)]
@@ -501,12 +517,14 @@ impl<'m> THRtoQBE<'m> {
     fn build_function_signature(&mut self, func: &THRFunction) -> Q::Function {
         let return_ty = self.thr_module.get_type(func.returns);
         let return_ty_qbe = self.emit_return_type_and_get(return_ty).cloned();
+        let module_prefix = self.get_module_prefix();
         let mut arguments = vec![];
         for param in func.params.iter() {
             let typ = self.thr_module.get_type(param.typ);
             let typ = self.emit_lvalue_type_and_get(typ);
-            let name = self.thr_module.get_symbol(param.symbol).name.as_ref();
-            let name = self.fresh_temporary_with_suffix(name);
+            let name = &self.thr_module.get_symbol(param.symbol).name;
+            let name = self.mangle_func_param(&module_prefix, &func.name, name);
+            let name = Q::Value::Temporary(name);
             arguments.push((typ, name));
         }
         Q::Function::new(

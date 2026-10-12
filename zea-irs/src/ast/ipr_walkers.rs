@@ -429,8 +429,8 @@ fn walk_funcdef<'m, V: IPRVisitor<'m>>(
 ) -> Result<V::VisitorOk, V::VisitorError> {
     v.visit_type(&f.returns)?;
     v.visit_block(&f.body)?;
-    for param in f.params.iter() {
-        v.visit_type(&param.typ)?;
+    for param in &f.params {
+        v.visit_funcparam(param)?;
     }
     Ok(V::VisitorOk::default())
 }
