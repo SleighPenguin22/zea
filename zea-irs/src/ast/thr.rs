@@ -74,6 +74,7 @@
 use std::collections::HashMap;
 
 use rayon::prelude::*;
+use zea_clargs::{CompilerConfig, ModuleType};
 
 use crate::{
     ScalarTypeWidth,
@@ -91,9 +92,7 @@ use crate::{
 use crate::{ast::NodeId, typecheck::IPRModuleTypeInfo};
 use idset::{InternKey, KeySet, KeyVec, PreKeyVec, internkey};
 use log::trace;
-use zea_common::{
-    CompilerConfig, CompilerErrorKind, CompilerStage, InternalCompilerError, ModuleType,
-};
+use zea_common::{CompilerErrorKind, CompilerStage, InternalCompilerError};
 use zea_internal_macros::InternKey;
 
 internkey!(THRTypeID);

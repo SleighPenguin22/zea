@@ -8,6 +8,7 @@ zea-parser = {path = "../zea-parser"}
 zea-irs = {path = "../zea-irs"}
 zea-common = {path = "../zea-common"}
 zea-codegen = {path="../zea-codegen"}
+zea-clargs = {path = "../zea-clargs"}
 log = { version = "0.4.33", features = ["std"] }
 colog = "1.4.0"
 tempfile = "3.27.0"

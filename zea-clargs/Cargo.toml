@@ -1,0 +1,10 @@
+[package]
+name = "zea-clargs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
+log = { version = "0.4.34", features = ["std"] }
+[lints]
+workspace = true

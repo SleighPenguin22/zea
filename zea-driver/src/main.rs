@@ -13,8 +13,9 @@ use std::{
     process::exit as pexit,
 };
 use tempfile::NamedTempFile;
+use zea_clargs::CompilerConfig;
 use zea_codegen::THRtoQBE;
-use zea_common::{CompilerConfig, InternalCompilerError, ZeaError, ZeaUserError};
+use zea_common::{InternalCompilerError, ZeaError, ZeaUserError};
 use zea_irs::ast::{
     NodeLabeler,
     ipr_walkers::{

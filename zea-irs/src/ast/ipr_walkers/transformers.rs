@@ -20,9 +20,9 @@ use std::collections::{HashMap, HashSet};
 use std::env::Args;
 use std::ops::IndexMut;
 use std::process::exit;
+use zea_clargs::CompilerConfig;
 use zea_common::{
-    CompilerConfig, CompilerStage, InternalCompilerError, ZeaError, ZeaErrorMessage, ZeaUserError,
-    ice_bail,
+    CompilerStage, InternalCompilerError, ZeaError, ZeaErrorMessage, ZeaUserError, ice_bail,
 };
 use zea_internal_macros::{InternKey, VariantToStr};
 
