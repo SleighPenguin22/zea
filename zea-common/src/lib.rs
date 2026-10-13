@@ -4,7 +4,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(version, about, name = "zea")]
 pub struct CompilerConfig {
-    path: PathBuf,
+    infile_path: PathBuf,
 
     #[arg(long = "loglevel", default_value_t = log::LevelFilter::Info)]
     log_level: LevelFilter,
@@ -16,16 +16,16 @@ pub struct CompilerConfig {
     #[arg(long = "print-qbe-il", default_value_t = false)]
     print_qbe_il: bool,
 
-    #[arg(short, long = "output")]
-    out_file: Option<PathBuf>,
+    #[arg(short = 'o', long = "output", default_value = None)]
+    outfile_path: Option<Option<PathBuf>>,
     #[arg(long = "out-dir")]
     out_dir: Option<PathBuf>,
-    #[arg(short, long = "save-asm")]
-    asm_file: Option<PathBuf>,
-    #[arg(short, long = "save-qbe")]
-    qbe_file: Option<PathBuf>,
-    #[arg(long, default_value_t = ModuleType::Bin)]
-    target_type: ModuleType,
+    #[arg(long = "save-asm")]
+    asmfile_path: Option<Option<PathBuf>>,
+    #[arg(long = "save-qbe")]
+    qbefile_path: Option<Option<PathBuf>>,
+    #[arg(long = "object-type", default_value_t = ModuleType::Bin)]
+    object_type: ModuleType,
     #[arg(long, default_value_t = false)]
     keep_files: bool,
 }
@@ -35,7 +35,7 @@ impl CompilerConfig {
         Self::parse()
     }
 
-    pub fn log_level(&self) -> LevelFilter {
+    pub fn get_log_level(&self) -> LevelFilter {
         let cmp = if self.print_thr || self.print_ipr {
             LevelFilter::Info
         } else {
@@ -44,45 +44,96 @@ impl CompilerConfig {
         std::cmp::max(cmp, self.log_level)
     }
 
-    pub fn print_thr(&self) -> bool {
+    pub fn should_print_thr(&self) -> bool {
         self.print_thr
     }
 
-    pub fn path(&self) -> &PathBuf {
-        &self.path
+    pub fn get_infile_path(&self) -> &PathBuf {
+        &self.infile_path
     }
 
-    pub fn asm_file(&self) -> Option<&PathBuf> {
-        self.asm_file.as_ref()
+    /// Get the filename of the to-emit assembly file
+    pub fn get_asmfile_name(&self) -> PathBuf {
+        match self.outfile_path.as_ref() {
+            Some(Some(p)) => p.clone(),
+            _ => {
+                let mut infile = self.infile_path.clone();
+                infile.set_extension("S");
+                infile
+            }
+        }
     }
 
-    pub fn out_file(&self) -> Option<&PathBuf> {
-        self.out_file.as_ref()
+    /// Get the filename of the to-emit final object
+    pub fn get_outfile_name(&self) -> PathBuf {
+        match self.outfile_path.as_ref() {
+            Some(Some(p)) => p.clone(),
+            _ => {
+                let mut infile = self.infile_path.clone();
+                infile.set_extension("out");
+                infile
+            }
+        }
     }
 
-    pub fn qbe_file(&self) -> Option<&PathBuf> {
-        self.qbe_file.as_ref()
+    /// Get the filename of the to-emit QBE-IL file
+    pub fn get_qbefile_name(&self) -> PathBuf {
+        match self.outfile_path.as_ref() {
+            Some(Some(p)) => p.clone(),
+            _ => {
+                let mut infile = self.infile_path.clone();
+                infile.set_extension("qbe");
+                infile
+            }
+        }
+    }
+    /// Get the filename of the to-emit QBE-IL file, prefixed with the artifact directory
+    pub fn get_prefixed_qbefile_path(&self) -> std::io::Result<PathBuf> {
+        let outdir = self.out_dir()?;
+        Ok(outdir.join(self.get_qbefile_name()))
+    }
+    /// Returns true if the ccfg defined a QBE-IL file name
+    pub fn defines_qbefile(&self) -> bool {
+        self.qbefile_path.is_some()
+    }
+    /// Get the filename of the to-emit assembly file, prefixed with the artifact directory
+    pub fn get_prefixed_asmfile_path(&self) -> std::io::Result<PathBuf> {
+        let outdir = self.out_dir()?;
+        Ok(outdir.join(self.get_asmfile_name()))
+    }
+    /// Returns true if the ccfg defined an assembly file name
+    pub fn defines_asmfile(&self) -> bool {
+        self.asmfile_path.is_some()
+    }
+    /// Get the filename of the to-emit ouput object, prefixed with the artifact directory
+    pub fn get_prefixed_outfile_path(&self) -> std::io::Result<PathBuf> {
+        let outdir = self.out_dir()?;
+        Ok(outdir.join(self.get_outfile_name()))
     }
 
-    pub fn print_ipr(&self) -> bool {
+    /// Returns true if the expanded IPR should be dumped
+    pub fn should_print_ipr(&self) -> bool {
         self.print_ipr
     }
 
-    pub fn print_qbe_il(&self) -> bool {
+    /// Returns true if generated QBE-IL should be dumped
+    pub fn should_print_qbe_il(&self) -> bool {
         self.print_qbe_il
     }
 
-    pub fn module_type(&self) -> ModuleType {
-        self.target_type
+    /// get the type of object that this compilation unit should compile to
+    pub fn get_module_type(&self) -> ModuleType {
+        self.object_type
     }
+    /// Get the artifact directory, or the CWD if none is specified
     pub fn out_dir(&self) -> std::io::Result<PathBuf> {
         match &self.out_dir {
             Some(path) => Ok(path.clone()),
             None => std::env::current_dir(),
         }
     }
-
-    pub fn keep_files(&self) -> bool {
+    /// Returns true if the generated assembly and QBE files should not be deleted.
+    pub fn should_keep_files(&self) -> bool {
         self.keep_files
     }
 }
@@ -141,6 +192,18 @@ pub trait ZeaUserError: Sized {
     fn zea_error_format(&self, ctx: &Self::ZeaUserErrorContext) -> ZeaErrorMessage;
     fn into_zea_error(self) -> ZeaError<Self> {
         ZeaError::User(self)
+    }
+}
+
+impl ZeaUserError for std::io::Error {
+    type ZeaUserErrorContext = ();
+
+    fn zea_error_format(&self, _ctx: &Self::ZeaUserErrorContext) -> ZeaErrorMessage {
+        let kind = self.kind();
+        ZeaErrorMessage {
+            msg: kind.to_string(),
+            loc: None,
+        }
     }
 }
 #[derive(Debug, Clone, Copy)]

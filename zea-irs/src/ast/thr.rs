@@ -652,11 +652,11 @@ impl THRKeySets {
         let mut entry_point = None;
         for f in funcs.iter() {
             let func_id: THRFunctionID = self.lower_function(ipr_ctx, f)?;
-            if f.name == "main" && compiler_config.module_type() == ModuleType::Bin {
+            if f.name == "main" && compiler_config.get_module_type() == ModuleType::Bin {
                 entry_point = Some(func_id);
             }
         }
-        if entry_point.is_none() && compiler_config.module_type() == ModuleType::Bin {
+        if entry_point.is_none() && compiler_config.get_module_type() == ModuleType::Bin {
             return Err(InternalCompilerError::new(
                 CompilerStage::IPRtoTHR,
                 CompilerErrorKind::NoEntryPoint,
