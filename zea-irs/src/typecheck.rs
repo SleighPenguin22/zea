@@ -125,6 +125,7 @@
 use std::{
     collections::{HashMap, HashSet},
     process::exit,
+    time::Duration,
 };
 
 use idset::{KeySet, internkey};
@@ -132,7 +133,7 @@ use log::{error, info, trace};
 use zea_common::{InternalCompilerError, ZeaError, ZeaErrorMessage, ZeaUserError, ice_bail};
 
 use crate::{
-    ast::{BinOp, NodeId, ipr::*},
+    ast::{BinOp, NodeId, ipr::*, thr::THRTypeSpecifier},
     visualisation::IndentPrint,
 };
 pub fn typecheck_module(
@@ -474,11 +475,22 @@ impl ZeaTypeChecker {
     }
     /// Get the type variable associated with some expression node,
     /// or generate it if it does not yet exist
-    fn get_inference_id(&mut self, id: NodeId) -> TypeVariable {
+    fn get_node_tvar(&mut self, id: NodeId) -> TypeVariable {
         *self
             .node_variables
             .entry(id)
             .or_insert_with(|| self.typevar_solving.fresh_var())
+    }
+
+    fn insert_if_known(&mut self, node: NodeId, tvar: TypeVariable) -> TypeCheckResult<()> {
+        let solved = self
+            .typevar_solving
+            .get_solved(tvar)
+            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(tvar))?;
+        if let None = self.node_types.insert(node, solved) {
+            trace!("\t\t\t\t\tnew type found: {node:?}: {tvar:?}/{solved:?}");
+        };
+        Ok(())
     }
 
     /// Solve some type variable to a given type specifier
@@ -647,35 +659,36 @@ impl ZeaTypeChecker {
         if let Some(t) = &init.typ {
             let _ = self.interned_types.get_or_intern(t);
         }
-        let _ = self.get_inference_id(init.id);
+        let _ = self.get_node_tvar(init.id);
         self.introduce_expression(&init.value)
     }
 
     fn introduce_expression(&mut self, expr: &IPRExpression) -> TypeCheckResult<()> {
-        let inf_var = self.get_inference_id(expr.id);
+        let inf_var = self.get_node_tvar(expr.id);
         match &expr.kind {
             IPRExpressionKind::Unit => {
                 self.set_solved_typespec(inf_var, &IPRTypeSpecifier::Unit)
                     .expect("unit literal should solve just fine...");
                 let t_unit = self.interned_types.get_or_intern(&IPRTypeSpecifier::Unit);
-                self.node_types.insert(expr.id, t_unit);
+                self.insert_known(expr.id, t_unit);
             }
             IPRExpressionKind::IntegerLiteral(i) => {
                 let typ = narrowest_int_type(*i);
                 let typ_id = self.interned_types.get_or_intern(&typ);
                 self.set_solved_typespec(inf_var, &typ)
                     .expect("integer literals should solve just fine...");
-                self.node_types.insert(expr.id, typ_id);
+                self.insert_known(expr.id, typ_id);
             }
             IPRExpressionKind::BoolLiteral(_) => {
                 let t_bool = self.interned_types.get_or_intern(&IPRTypeSpecifier::Bool);
                 self.set_solved_typespec(inf_var, &IPRTypeSpecifier::Bool)
                     .expect("boolean literal should solve just fine...");
-                self.node_types.insert(expr.id, t_bool);
+                self.insert_known(expr.id, t_bool);
             }
             IPRExpressionKind::FloatLiteral(_) => {
-                self.set_solved_typespec(inf_var, &IPRTypeSpecifier::t_F64())
-                    .expect("float literal should solve just fine...");
+                todo!()
+                // self.set_solved_typespec(inf_var, &IPRTypeSpecifier::t_F64())
+                //     .expect("float literal should solve just fine...");
             }
             IPRExpressionKind::StringLiteral(_) => todo!(),
             IPRExpressionKind::UnScopedIdent(_) => {
@@ -696,7 +709,9 @@ impl ZeaTypeChecker {
             IPRExpressionKind::MemberAccess(subject, ..) => {
                 self.introduce_expression(subject.as_ref())?;
             }
-            IPRExpressionKind::IfThenElse(_) => todo!(),
+            IPRExpressionKind::IfThenElse(branch) => {
+                self.introduce_branch(branch)?;
+            }
             IPRExpressionKind::Block(b) => {
                 for stmt in b.statements.iter() {
                     self.introduce_stmt(stmt)?;
@@ -719,7 +734,7 @@ impl ZeaTypeChecker {
     }
 
     fn introduce_block(&mut self, b: &IPRBlockExpression) -> TypeCheckResult<()> {
-        let _ = self.get_inference_id(b.id);
+        let _ = self.get_node_tvar(b.id);
         for s in b.statements.iter() {
             self.introduce_stmt(s)?;
         }
@@ -730,9 +745,9 @@ impl ZeaTypeChecker {
             IPRStatementKind::Initialization(i) => self.introduce_assignment_block(i)?,
             IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
             IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
-            IPRStatementKind::Return(_iprexpression) => todo!(),
+            IPRStatementKind::Return(expr) => self.introduce_expression(expr)?,
             IPRStatementKind::Block(_iprblock_expression) => todo!(),
-            IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
+            IPRStatementKind::IfThenElse(branch) => self.introduce_branch(branch)?,
         };
         Ok(())
     }
@@ -745,13 +760,27 @@ impl ZeaTypeChecker {
                 f.name, param.name, id
             );
             let t = self.interned_types.get_or_intern(typ);
-            let t_id = self.get_inference_id(*id);
+            let t_id = self.get_node_tvar(*id);
             self.set_solved_typespec(t_id, typ)
                 .expect("cannot set-solved func param");
             self.node_types.insert(*id, t);
         }
         self.interned_types.get_or_intern(&f.returns);
         self.introduce_block(&f.body)
+    }
+
+    fn insert_known(&mut self, node: NodeId, tconc: InternedType) {
+        self.node_types.insert(node, tconc);
+    }
+
+    fn introduce_branch(&mut self, branch: &IPRBranch) -> TypeCheckResult<()> {
+        self.get_node_tvar(branch.id);
+        self.introduce_expression(&branch.condition)?;
+        self.introduce_expression(&branch.true_case)?;
+        if let Some(false_branch) = &branch.false_case {
+            self.introduce_expression(false_branch)?;
+        }
+        Ok(())
     }
 }
 
@@ -760,10 +789,10 @@ impl ZeaTypeChecker {
 // ================================================================================================
 impl ZeaTypeChecker {
     fn infer_expression(&mut self, expr: &IPRExpression) -> TypeCheckResult<TypeVariable> {
-        let t_var = self.get_inference_id(expr.id);
-        if self.get_solved_typespec(t_var).is_ok() {
+        let expr_tvar = self.get_node_tvar(expr.id);
+        if self.get_solved_typespec(expr_tvar).is_ok() {
             trace!("\tskipping solved expression");
-            return Ok(t_var);
+            return Ok(expr_tvar);
         }
         let res = match &expr.kind {
             IPRExpressionKind::IntegerLiteral(_)
@@ -771,7 +800,7 @@ impl ZeaTypeChecker {
             | IPRExpressionKind::FloatLiteral(_)
             | IPRExpressionKind::Unit => {
                 trace!("\tinferring literal yields existing type variable");
-                Ok(t_var)
+                Ok(expr_tvar)
             }
 
             IPRExpressionKind::BinOpExpr(op, l, r) => {
@@ -780,12 +809,12 @@ impl ZeaTypeChecker {
             }
             IPRExpressionKind::Block(b) => {
                 let t_tail = self.infer_expression(&b.tail)?;
-                self.hindley_milner_unify(t_var, t_tail)?;
+                self.hindley_milner_unify(expr_tvar, t_tail)?;
                 Ok(t_tail)
             }
             IPRExpressionKind::ScopedIdent(s) => {
-                let t_referrant = self.get_inference_id(s.origin);
-                self.hindley_milner_unify(t_var, t_referrant)?;
+                let t_referrant = self.get_node_tvar(s.origin);
+                self.hindley_milner_unify(expr_tvar, t_referrant)?;
                 // self.trace_expr_typevar(expr);
                 if let Some(int_solved) = self.typevar_solving.get_solved(t_referrant) {
                     self.node_types.insert(expr.id, int_solved);
@@ -794,7 +823,6 @@ impl ZeaTypeChecker {
             }
             IPRExpressionKind::StringLiteral(_)
             | IPRExpressionKind::FunctionCall(_)
-            | IPRExpressionKind::IfThenElse(_)
             | IPRExpressionKind::UnOpExpr(_, _) => todo!(),
             IPRExpressionKind::MemberAccess(..) => {
                 todo!("member access inference")
@@ -805,6 +833,11 @@ impl ZeaTypeChecker {
                     zea_common::CompilerErrorKind::StrayUnscopedIdent,
                 )));
             }
+            IPRExpressionKind::IfThenElse(branch) => {
+                let branch_tvar = self.infer_branch(branch)?;
+                self.hindley_milner_unify(expr_tvar, branch_tvar)?;
+                Ok(branch_tvar)
+            }
         }?;
 
         trace!(
@@ -813,6 +846,7 @@ impl ZeaTypeChecker {
             expr.indent_print(0),
             self.get_solved_typespec(res)
         );
+        self.insert_if_known(expr.id, expr_tvar)?;
         self.node_variables.insert(expr.id, res);
         Ok(res)
     }
@@ -823,7 +857,7 @@ impl ZeaTypeChecker {
         l: &IPRExpression,
         r: &IPRExpression,
     ) -> TypeCheckResult<TypeVariable> {
-        let var = self.get_inference_id(id);
+        let var = self.get_node_tvar(id);
         let l_var = self.infer_expression(l)?;
         let r_var = self.infer_expression(r)?;
         let r_t = self.get_solved_typespec(r_var)?.clone();
@@ -878,6 +912,28 @@ impl ZeaTypeChecker {
     fn get_solved_interned_type(&self, tvar: TypeVariable) -> Option<InternedType> {
         self.typevar_solving.get_solved(tvar)
     }
+    fn infer_branch(&mut self, branch: &IPRBranch) -> TypeCheckResult<TypeVariable> {
+        let bool_tvar = self.get_bool_tvar();
+        let unit_tvar = self.get_unit_tvar();
+
+        let branch_tvar = self.get_node_tvar(branch.id);
+        let cond_tvar = self.infer_expression(&branch.condition)?;
+
+        let btrue_tvar = self.infer_expression(&branch.true_case)?;
+
+        self.hindley_milner_unify(cond_tvar, bool_tvar)?;
+
+        if let Some(false_branch) = &branch.false_case {
+            let bfalse_tvar = self.infer_expression(&false_branch)?;
+            self.hindley_milner_unify(bfalse_tvar, btrue_tvar)?;
+        } else {
+            self.hindley_milner_unify(btrue_tvar, unit_tvar)?;
+        }
+
+        self.hindley_milner_unify(btrue_tvar, branch_tvar)?;
+        self.insert_if_known(branch.id, branch_tvar)?;
+        Ok(branch_tvar)
+    }
 }
 
 // ================================================================================================
@@ -890,6 +946,7 @@ impl ZeaTypeChecker {
 
         loop {
             let status = self.check_module_once(module);
+            std::thread::sleep(Duration::from_millis(500));
             match status {
                 Ok(()) => {
                     let solved = self.trace_solved_stats();
@@ -946,18 +1003,14 @@ impl ZeaTypeChecker {
     }
 
     fn check_block(&mut self, body: &mut IPRBlockExpression) -> TypeCheckResult<TypeVariable> {
-        let tvar_block = self.get_inference_id(body.id);
+        let tvar_block = self.get_node_tvar(body.id);
         for stmt in body.statements.iter_mut() {
             self.check_stmt(stmt)?;
         }
         let tail_tvar = self.infer_expression(&body.tail)?;
-        let block_rets = self
-            .typevar_solving
-            .get_solved(tail_tvar)
-            .ok_or(TypeCheckError::ExpectedSolvedTypeVariable(tail_tvar))?;
         self.hindley_milner_unify(tvar_block, tail_tvar)?;
-        self.node_types.insert(body.id, block_rets);
-        self.node_types.insert(body.tail.id, block_rets);
+        self.insert_if_known(body.id, tail_tvar)?;
+        self.insert_if_known(body.tail.id, tail_tvar)?;
         Ok(tail_tvar)
     }
 
@@ -968,9 +1021,16 @@ impl ZeaTypeChecker {
             }
             IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
             IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
-            IPRStatementKind::Return(_iprexpression) => todo!(),
-            IPRStatementKind::Block(_iprblock_expression) => todo!(),
-            IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
+            IPRStatementKind::Return(expr) => {
+                self.infer_expression(expr)?;
+            }
+            IPRStatementKind::Block(block) => {
+                self.check_block(block)?;
+            }
+            IPRStatementKind::IfThenElse(branch) => {
+                let tvar = self.infer_branch(branch)?;
+                self.insert_if_known(stmt.id, tvar)?;
+            }
         }
         Ok(())
     }
@@ -998,8 +1058,8 @@ impl ZeaTypeChecker {
             trace!("\t\tskipping annotated initialization");
             return Ok(());
         }
-        let t_init = self.get_inference_id(assign.id);
-        let t_init_value = self.get_inference_id(assign.value.id);
+        let t_init = self.get_node_tvar(assign.id);
+        let t_init_value = self.get_node_tvar(assign.value.id);
         self.hindley_milner_unify(t_init, t_init_value)?;
 
         let t_inferred = self.infer_expression(&assign.value)?;
@@ -1037,6 +1097,12 @@ impl ZeaTypeChecker {
         self.node_types.insert(assign.id, t_actual_id);
         self.node_types.insert(assign.value.id, t_actual_id);
         Ok(())
+    }
+
+    fn get_unit_tvar(&mut self) -> TypeVariable {
+        self.interned_types
+            .get_or_intern(&IPRTypeSpecifier::Unit)
+            .as_typevar(&mut self.typevar_solving)
     }
 }
 
