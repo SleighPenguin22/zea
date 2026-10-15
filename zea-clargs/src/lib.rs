@@ -4,49 +4,51 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(version, about, name = "zea")]
 pub struct CompilerConfig {
+    /// The source file to compile
     infile_path: PathBuf,
 
     #[arg(short,long, default_value_t = log::LevelFilter::Info, rename_all="lower")]
+    /// The tracing-verbosity
     verbosity: LevelFilter,
 
     #[arg(long, default_value_t = false)]
+    /// Dump the generated THR before lowering into QBE-IL
     dump_thr: bool,
+
     #[arg(long, default_value_t = false)]
+    /// Dump the parsed Module before lowering into THR
     dump_ipr: bool,
-    #[arg(long, default_value_t = false, help = "Dump the generated QBE-IL")]
+
+    #[arg(long, default_value_t = false)]
+    /// Dump the generated QBE-IL
     print_qbe_il: bool,
 
-    #[arg(short = 'o', long = "outfile", default_value = None,
-        help = "the filename to write the final object to")]
-    outfile_path: Option<Option<PathBuf>>,
-    #[arg(
-        long = "artifact-dir",
-        help = "Specify a directory-path to place artifacts in, defaults to the working directory"
-    )]
+    #[arg(short = 'o', long = "outfile", default_value = None)]
+    /// the filename to write the final object to
+    outfile_path: Option<PathBuf>,
+
+    #[arg(long = "artifact-dir")]
+    /// Specify a directory-path to place artifacts in, defaults to the working directory
     out_dir: Option<PathBuf>,
-    #[arg(
-        long = "asm",
-        help = "Save the generated assembly, optionally to a named file"
-    )]
+
+    #[arg(long = "asm")]
+    /// Save the generated assembly, optionally to a named file
     asmfile_path: Option<Option<PathBuf>>,
-    #[arg(
-        long = "qbe",
-        help = "Save the generated QBE-IL, optionally to a named file"
-    )]
+
+    #[arg(long = "qbe")]
+    /// Save the generated QBE-IL, optionally to a named file
     qbefile_path: Option<Option<PathBuf>>,
-    #[arg(
-        long = "object-type",
-        default_value = "bin",
-        help = "Specify the object type this module should compile to",
-        rename_all = "lower"
-    )]
+
+    #[arg(long = "object-type", default_value = "bin", rename_all = "lower")]
+    /// Specify the object type this module should compile to
     object_type: ModuleType,
-    #[arg(
-        long,
-        default_value_t = false,
-        help = "If set, keep assembly and QBE artifacts"
-    )]
+    #[arg(long, default_value_t = false)]
+    /// If set, keep assembly and QBE artifacts
     keep_files: bool,
+    #[arg(long = "emit", default_value = "asm", rename_all = "lower")]
+    /// Specify the format this module should compile to,
+    /// the compiler stops the pipeline after reaching this stage
+    emit: ModuleEmissionType,
 }
 
 impl CompilerConfig {
@@ -73,7 +75,7 @@ impl CompilerConfig {
 
     /// Get the filename of the to-emit assembly file
     pub fn get_asmfile_name(&self) -> PathBuf {
-        match self.outfile_path.as_ref() {
+        match self.asmfile_path.as_ref() {
             Some(Some(p)) => p.clone(),
             _ => {
                 let mut infile = self.infile_path.clone();
@@ -86,7 +88,7 @@ impl CompilerConfig {
     /// Get the filename of the to-emit final object
     pub fn get_outfile_name(&self) -> PathBuf {
         match self.outfile_path.as_ref() {
-            Some(Some(p)) => p.clone(),
+            Some(p) => p.clone(),
             _ => {
                 let mut infile = self.infile_path.clone();
                 infile.set_extension("out");
@@ -97,7 +99,7 @@ impl CompilerConfig {
 
     /// Get the filename of the to-emit QBE-IL file
     pub fn get_qbefile_name(&self) -> PathBuf {
-        match self.outfile_path.as_ref() {
+        match self.qbefile_path.as_ref() {
             Some(Some(p)) => p.clone(),
             _ => {
                 let mut infile = self.infile_path.clone();
@@ -155,11 +157,32 @@ impl CompilerConfig {
     pub fn should_keep_files(&self) -> bool {
         self.keep_files
     }
+
+    pub fn should_invoke_qbe(&self) -> bool {
+        self.emit >= ModuleEmissionType::QBE
+    }
+    pub fn should_invoke_assembler(&self) -> bool {
+        self.emit >= ModuleEmissionType::ASM
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, clap::ValueEnum, Default)]
 pub enum ModuleType {
+    /// The target object should be an executable
     #[default]
     Bin,
+    /// The target object should be a static library
     Lib,
+    /// The target object should be a dynamic library
     Dll,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Default, PartialOrd, Ord)]
+pub enum ModuleEmissionType {
+    /// The compilation unit should be compiled down to QBE IL
+    QBE = 1,
+    /// The compilation unit should be compiled down to Assembly
+    #[default]
+    ASM = 2,
+    /// The compilation unit should be compiled all the way to an ELF object
+    ObjectFile = 3,
 }

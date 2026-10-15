@@ -34,6 +34,7 @@ use zea_parser::parse_module;
 /// In the case of an internal compiler error (ICE),
 /// bail with a message and cause.
 fn error_unpack_ctx<T, UserErr: ZeaUserError>(
+    ccfg: &CompilerConfig,
     res: Result<T, ZeaError<UserErr>>,
     ctx: &UserErr::ZeaUserErrorContext,
 ) -> T {
@@ -42,32 +43,32 @@ fn error_unpack_ctx<T, UserErr: ZeaUserError>(
         Err(ZeaError::User(e)) => {
             let msg = e.zea_error_format(ctx);
             error!("{msg}");
-            exit(1);
+            exit(ccfg, 1);
         }
         Err(ZeaError::Internal(ice)) => {
             let msg = ice.pretty();
             error!("{msg}");
-            exit(2);
+            exit(ccfg, 2);
         }
     }
 }
 
 /// A shorthand for error_unpack for error types whose context type is `()`
-fn error_unpack<T, UserErr>(res: Result<T, ZeaError<UserErr>>) -> T
+fn error_unpack<T, UserErr>(ccfg: &CompilerConfig, res: Result<T, ZeaError<UserErr>>) -> T
 where
     UserErr: ZeaUserError<ZeaUserErrorContext = ()>,
 {
-    error_unpack_ctx(res, &())
+    error_unpack_ctx(ccfg, res, &())
 }
 /// 'unwrap' an internal compiler error (ICE),
 /// bail with a message and cause.
-fn error_unpack_ice<T>(res: Result<T, InternalCompilerError>) -> T {
+fn error_unpack_ice<T>(ccfg: &CompilerConfig, res: Result<T, InternalCompilerError>) -> T {
     match res {
         Ok(t) => t,
         Err(ice) => {
             let msg = ice.pretty();
             error!("{msg}");
-            exit(2);
+            exit(ccfg, 2);
         }
     }
 }
@@ -79,10 +80,8 @@ fn create_file(filename: &Path) -> (File, PathBuf) {
 }
 
 /// Invoke GCC's assembler and return the path that the artifact got written to.
-fn invoke_assembler(
-    ccfg: &CompilerConfig,
-    asm_path: &Path,
-) -> Result<PathBuf, ZeaError<std::io::Error>> {
+fn invoke_assembler(ccfg: &CompilerConfig) -> Result<PathBuf, ZeaError<std::io::Error>> {
+    let asm_path = ccfg.get_prefixed_asmfile_path()?;
     let out_path = ccfg.get_prefixed_outfile_path()?;
     let status = std::process::Command::new("gcc")
         .arg(asm_path)
@@ -95,13 +94,18 @@ fn invoke_assembler(
         && let Some(code) = status.code()
     {
         error!("GCC returned error code {code}, exiting...");
-        exit(code)
+        exit(ccfg, code)
     }
     info!("saved compiled binary to {}", out_path.display());
     Ok(out_path)
 }
 /// Invoke QBE and return the path that the artifact got written to.
-fn invoke_qbe(ccfg: &CompilerConfig, qbe_path: &Path) -> Result<PathBuf, ZeaError<std::io::Error>> {
+fn invoke_qbe(ccfg: &CompilerConfig) -> Result<(), ZeaError<std::io::Error>> {
+    if !ccfg.should_invoke_qbe() {
+        return Ok(());
+    }
+
+    let qbe_path = ccfg.get_prefixed_qbefile_path()?;
     let asmpath = ccfg.get_prefixed_asmfile_path()?;
     let status = std::process::Command::new("qbe")
         .arg(qbe_path)
@@ -113,39 +117,38 @@ fn invoke_qbe(ccfg: &CompilerConfig, qbe_path: &Path) -> Result<PathBuf, ZeaErro
         && let Some(code) = status.code()
     {
         error!("QBE returned error code {code}, exiting...");
-        exit(code)
+        exit(ccfg, code)
     }
     info!("saved QBE assembly to {}", asmpath.display());
-    Ok(asmpath)
+    Ok(())
 }
-fn write_qbe_il(ccfg: &CompilerConfig, il_str: &str) -> Result<PathBuf, ZeaError<std::io::Error>> {
+fn write_qbe_il(ccfg: &CompilerConfig, il_str: &str) -> Result<(), ZeaError<std::io::Error>> {
     let qbefile_path = ccfg.get_prefixed_qbefile_path()?;
-    let (mut file, path) = create_file(qbefile_path.as_path());
+    let (mut file, _) = create_file(qbefile_path.as_path());
     file.write_all(il_str.as_bytes()).unwrap();
-    Ok(path)
+    Ok(())
 }
 
 /// remove any artifact that the config specified not to keep.
-fn cleanup_temp_files(
-    ccfg: &CompilerConfig,
-    qbe_il_path: &Path,
-    asm_path: &Path,
-) -> Result<(), ZeaError<std::io::Error>> {
+fn cleanup_artifacts(ccfg: &CompilerConfig) -> Result<(), ZeaError<std::io::Error>> {
     if ccfg.should_keep_files() {
         return Ok(());
     }
     if !ccfg.defines_asmfile() {
+        let asm_path = ccfg.get_prefixed_asmfile_path()?;
         trace!("cleaning up {}", asm_path.display());
         std::fs::remove_file(asm_path)?;
     }
 
     if !ccfg.defines_qbefile() {
+        let qbe_il_path = ccfg.get_prefixed_qbefile_path()?;
         trace!("cleaning up {}", qbe_il_path.display());
         std::fs::remove_file(qbe_il_path)?;
     }
     Ok(())
 }
-fn exit(code: i32) -> ! {
+fn exit(ccfg: &CompilerConfig, code: i32) -> ! {
+    cleanup_artifacts(ccfg).expect("error while cleaning up artifacts");
     error!("exiting...");
     pexit(code)
 }
@@ -161,7 +164,7 @@ fn main() {
         .filter_level(ccfg.get_log_level())
         .init();
     let src = read_to_string_wrapper(ccfg.get_infile_path());
-    let src = error_unpack_ctx(src, &());
+    let src = error_unpack_ctx(&ccfg, src, &());
     let (mut module, labeler) = parse_module(&src);
 
     let mut expander = transformers::AssignmentExpander::from_labeler(labeler);
@@ -174,12 +177,12 @@ fn main() {
 
     let mut scoper = IdentifierScoper::new(&module);
     let status = scoper.scope_module(module);
-    let mut scoped_module = error_unpack_ctx(status, &scoper);
+    let mut scoped_module = error_unpack_ctx(&ccfg, status, &scoper);
 
     info!("commencing typechecking...");
     let mut tc = ZeaTypeChecker::new();
     let status = tc.typecheck_module(&mut scoped_module);
-    error_unpack_ctx(status, &tc);
+    error_unpack_ctx(&ccfg, status, &tc);
     let tinfo = tc.finish();
     info!("finished typechecking");
     if ccfg.should_print_ipr() {
@@ -189,26 +192,26 @@ fn main() {
     info!("lowering into THR...");
     let thr_ctx = THRKeySets::new();
     let status = thr_ctx.lower_module(scoped_module, tinfo, scoper, &ccfg);
-    let lowered = error_unpack_ice(status);
+    let lowered = error_unpack_ice(&ccfg, status);
     if ccfg.should_print_thr() {
         info!("Typed Highlevel Representation:\n{:?}", lowered);
     }
 
     let mut codegen = THRtoQBE::new(&lowered);
-    let qbe = error_unpack_ice(codegen.lower());
+    let qbe = error_unpack_ice(&ccfg, codegen.lower());
     let il = format!("{qbe}");
     if ccfg.should_print_qbe_il() {
         info!("Generated QBE IL:\n{il}");
     }
 
-    let qbe_path = error_unpack(write_qbe_il(&ccfg, &il));
+    error_unpack(&ccfg, write_qbe_il(&ccfg, &il));
 
-    let asm_path = error_unpack(invoke_qbe(&ccfg, &qbe_path));
-    let _out_path = error_unpack(invoke_assembler(&ccfg, &asm_path));
+    error_unpack(&ccfg, invoke_qbe(&ccfg));
+    let out_path = error_unpack(&ccfg, invoke_assembler(&ccfg));
 
     info!(
         "saved compiled binary to {}",
-        _out_path.canonicalize().unwrap().display()
+        out_path.canonicalize().unwrap().display()
     );
-    error_unpack(cleanup_temp_files(&ccfg, &qbe_path, &asm_path));
+    error_unpack(&ccfg, cleanup_artifacts(&ccfg));
 }
