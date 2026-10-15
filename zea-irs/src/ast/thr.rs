@@ -95,6 +95,8 @@ use log::trace;
 use zea_common::{CompilerErrorKind, CompilerStage, InternalCompilerError};
 use zea_internal_macros::InternKey;
 
+use super::ipr;
+
 internkey!(THRTypeID);
 
 impl THRTypeID {
@@ -157,6 +159,9 @@ impl THRModule {
 
     pub fn get_type(&self, typ: THRTypeID) -> &THRTypeSpecifier {
         self.interned.types.get_by_id(typ).unwrap()
+    }
+    pub fn get_id_of_type(&self, typ: &THRTypeSpecifier) -> THRTypeID {
+        self.interned.types.get_id_of(typ).unwrap()
     }
     pub fn get_type_of_expr(&self, expr: THRExprID) -> Option<THRTypeID> {
         self.interned.expr_types.get(&expr).copied()
@@ -346,9 +351,24 @@ pub enum THRStatement {
         ipr_id: NodeId,
     },
     Branch {
+        /// The temporary to test
         cond: THRExprID,
-        bthen: Box<[THRStatementID]>,
-        belse: Box<[THRStatementID]>,
+        bthen_label: Box<str>,
+        /// The taken block
+        bthen_stmts: Box<[THRStatementID]>,
+
+        belse_label: Box<str>,
+        /// The not-taken block
+        belse_stmts: Box<[THRStatementID]>,
+        merge_label: Box<str>,
+        /// The symbol that the branch resolves to, if it is an expression
+        /// this symbol has already been assigned to,
+        /// so you can use it in ident-expressions safely
+        resolving_symbol: THRSymbolID,
+    },
+    Block {
+        label: Box<str>,
+        items: Box<[THRStatementID]>,
     },
     Ret(THRExprID),
 }
@@ -458,8 +478,8 @@ impl THRKeySets {
     /// ThrConstruct.0 := 3;
     /// a := ThrConstruct.0;
     /// ```
-    pub fn label_construct_eval(&mut self, kind: SymbolKind) -> THRSymbolID {
-        let name = format!("ThrConstruct.{}", self.thr_construct_eval_counter);
+    pub fn label_thr_construct(&mut self, kind: SymbolKind) -> THRSymbolID {
+        let name = format!("THR.{}", self.thr_construct_eval_counter);
         let symb = THRSymbol {
             name: name.into_boxed_str(),
             kind,
@@ -519,18 +539,27 @@ impl THRKeySets {
         };
         self.types.get_or_intern(t)
     }
-
+    #[must_use]
     fn lower_expression(
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         expr: &IPRExpression,
-    ) -> Result<(THRExprID, THRTypeID), InternalCompilerError> {
+    ) -> Result<(Vec<THRStatementID>, THRExprID, THRTypeID), InternalCompilerError> {
         let ipr_t = ipr_ctx.types.lookup(expr.id);
         let thr_t = self.lower_type(ipr_ctx, ipr_t);
-        let node = match &expr.kind {
+        let (pre, node, thr_t) = match &expr.kind {
             IPRExpressionKind::Unit => todo!(),
-            IPRExpressionKind::IntegerLiteral(i) => THRExpression::const_int(*i as u64, thr_t),
-            IPRExpressionKind::BoolLiteral(b) => THRExpression::ConstBool(*b),
+            IPRExpressionKind::IntegerLiteral(i) => {
+                let const_int = self
+                    .expressions
+                    .get_or_intern(THRExpression::const_int(*i as u64, thr_t));
+                (vec![], const_int, thr_t)
+            }
+            IPRExpressionKind::BoolLiteral(b) => {
+                let const_bool = THRExpression::ConstBool(*b);
+                let const_bool = self.expressions.get_or_intern(const_bool);
+                (vec![], const_bool, thr_t)
+            }
             IPRExpressionKind::FloatLiteral(_) => todo!(),
             IPRExpressionKind::StringLiteral(_) => todo!(),
             IPRExpressionKind::ScopedIdent(i) => {
@@ -539,15 +568,21 @@ impl THRKeySets {
                     kind: i.kind,
                 };
                 let symbol = self.symbols.get_or_intern(symbol);
-                THRExpression::Ident(symbol)
+                let ident = THRExpression::Ident(symbol);
+                let ident = self.expressions.get_or_intern(ident);
+                (vec![], ident, thr_t)
             }
             IPRExpressionKind::FunctionCall(_iprfunction_call) => {
                 todo!()
             }
             IPRExpressionKind::BinOpExpr(op, l, r) => {
-                let (l, _) = self.lower_expression(ipr_ctx, l.as_ref())?;
-                let (r, _) = self.lower_expression(ipr_ctx, r.as_ref())?;
-                THRExpression::binop(*op, l, r)
+                let (mut l_pre, l, _) = self.lower_expression(ipr_ctx, l.as_ref())?;
+                let (r_pre, r, _) = self.lower_expression(ipr_ctx, r.as_ref())?;
+                l_pre.extend(r_pre);
+
+                let binop = THRExpression::binop(*op, l, r);
+                let binop = self.expressions.get_or_intern(binop);
+                (l_pre, binop, thr_t)
             }
             IPRExpressionKind::UnOpExpr(_op, _arg) => {
                 todo!()
@@ -558,7 +593,7 @@ impl THRKeySets {
             IPRExpressionKind::IfThenElse(_iprbranch) => {
                 todo!()
             }
-            IPRExpressionKind::Block(_b) => todo!(),
+            IPRExpressionKind::Block(block) => self.lower_block(ipr_ctx, block)?,
             IPRExpressionKind::UnScopedIdent(_) => {
                 return Err(InternalCompilerError::new(
                     CompilerStage::CodeGen,
@@ -566,26 +601,30 @@ impl THRKeySets {
                 ));
             }
         };
-        let e = self.expressions.get_or_intern(node);
-        self.expr_types.insert(e, thr_t);
-        Ok((e, thr_t))
+        self.expr_types.insert(node, thr_t);
+        Ok((pre, node, thr_t))
     }
 
     fn lower_stmt(
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         stmt: &IPRStatement,
-    ) -> Result<Vec<THRStatementID>, InternalCompilerError> {
+    ) -> Result<(Vec<THRStatementID>, THRStatementID), InternalCompilerError> {
         match &stmt.kind {
             IPRStatementKind::Initialization(init) => {
-                let recursive_inits = self.lower_init_block(ipr_ctx, init, SymbolKind::LocalVar)?;
-                Ok(recursive_inits)
+                let init = self.lower_init_block(ipr_ctx, init, SymbolKind::LocalVar)?;
+                Ok((vec![], init))
             }
             IPRStatementKind::Reassignment(_iprreassignment) => todo!(),
             IPRStatementKind::FunctionCall(_iprfunction_call) => todo!(),
-            IPRStatementKind::Return(_iprexpression) => todo!(),
+            IPRStatementKind::Return(e) => {
+                let (pre, expr, _expr_t) = self.lower_expression(ipr_ctx, e)?;
+                let ret_stmt = THRStatement::Ret(expr);
+                let ret_stmt = self.statements.get_or_intern(ret_stmt);
+                Ok((pre, ret_stmt))
+            }
             IPRStatementKind::Block(_iprblock_expression) => todo!(),
-            IPRStatementKind::IfThenElse(_iprbranch) => todo!(),
+            IPRStatementKind::IfThenElse(branch) => self.lower_branch_stmt(ipr_ctx, branch),
         }
     }
 
@@ -594,17 +633,27 @@ impl THRKeySets {
         ipr_ctx: &IPRLoweringContext,
         init_block: &IPRInitializationBlock,
         kind: SymbolKind,
-    ) -> Result<Vec<THRStatementID>, InternalCompilerError> {
+    ) -> Result<THRStatementID, InternalCompilerError> {
         let IPRInitializationKind::Unpacked(inits) = &init_block.kind else {
             return Err(InternalCompilerError::new(
                 CompilerStage::IPRtoTHR,
                 CompilerErrorKind::StrayPackedInit,
             ));
         };
-        Ok(inits
-            .iter()
-            .map(|init| self.lower_init_single(ipr_ctx, init, kind))
-            .collect())?
+        let mut items = vec![];
+        for init in inits {
+            let (pre, init) = self.lower_init_single(ipr_ctx, init, kind)?;
+            items.extend(pre);
+            items.push(init);
+        }
+
+        let label = self.label_ipr_construct_str(init_block.id);
+        let stmt = THRStatement::Block {
+            label: label.into_boxed_str(),
+            items: items.into_boxed_slice(),
+        };
+        let stmt = self.statements.get_or_intern(stmt);
+        Ok(stmt)
     }
 
     /// Lower a single IPR initialization
@@ -615,13 +664,13 @@ impl THRKeySets {
         ipr_ctx: &IPRLoweringContext,
         init: &IPRSimpleInitialization,
         kind: SymbolKind,
-    ) -> Result<THRStatementID, InternalCompilerError> {
+    ) -> Result<(Vec<THRStatementID>, THRStatementID), InternalCompilerError> {
         let symbol = THRSymbol {
             name: init.assignee.clone().into_boxed_str(),
             kind,
         };
         let symbol = self.symbols.get_or_intern(symbol);
-        let (value, value_t) = self.lower_expression(ipr_ctx, &init.value)?;
+        let (pre, value, value_t) = self.lower_expression(ipr_ctx, &init.value)?;
 
         let tail_eval_init = THRStatement::Init {
             decl: THRSymbolDecl {
@@ -631,7 +680,8 @@ impl THRKeySets {
             val: value,
             ipr_id: init.id,
         };
-        Ok(self.statements.get_or_intern(tail_eval_init))
+        let tail_eval_init = self.statements.get_or_intern(tail_eval_init);
+        Ok((pre, tail_eval_init))
     }
 
     fn _lower_module<'a>(
@@ -644,7 +694,7 @@ impl THRKeySets {
         for glob in globs.iter() {
             trace!("lowering global {}", glob.id);
             let ids = self.lower_init_block(ipr_ctx, glob, SymbolKind::GlobalVar)?;
-            global_data_block.extend(ids);
+            global_data_block.push(ids);
         }
 
         let funcs = &ipr_ctx.module.functions;
@@ -693,23 +743,11 @@ impl THRKeySets {
             thr_params.push(param);
         }
 
-        let mut thr_body = Vec::with_capacity(body.statements.len());
-        for stmt in &body.statements {
-            let stmts = self.lower_stmt(ipr_ctx, &stmt)?;
-            thr_body.extend(stmts);
-        }
-        let (tail_expr, _tail_expr_t) = self.lower_expression(ipr_ctx, &body.tail)?;
+        let (mut body, tail_expr, _tail_expr_t) = self.lower_funcbody(ipr_ctx, &body)?;
         let ret_stmt = self.statements.get_or_intern(THRStatement::Ret(tail_expr));
-        thr_body.push(ret_stmt);
+        body.push(ret_stmt);
 
-        let func = THRFunction::new(
-            name.clone(),
-            thr_params,
-            thr_body,
-            returns,
-            *attributes,
-            *id,
-        );
+        let func = THRFunction::new(name.clone(), thr_params, body, returns, *attributes, *id);
         Ok(self.functions.get_or_intern(func))
     }
 
@@ -717,35 +755,96 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         body: &IPRBlockExpression,
-    ) -> Result<Vec<THRStatementID>, InternalCompilerError> {
+    ) -> Result<(Vec<THRStatementID>, THRExprID, THRTypeID), InternalCompilerError> {
         let mut items: Vec<THRStatementID> = vec![];
 
         for stmt in body.statements.iter() {
-            let stmts = self.lower_stmt(ipr_ctx, stmt)?;
-            items.extend(stmts);
+            let (pre_stmts, stmt) = self.lower_stmt(ipr_ctx, stmt)?;
+            items.extend(pre_stmts);
+            items.push(stmt);
         }
-        let tail_eval_init = self.synthesize_tail_expr_init(ipr_ctx, &body.tail)?;
-        let tail = self.statements.get_or_intern(tail_eval_init);
-        items.push(tail);
-        Ok(items)
+        let (mut pre, tail_eval, tail_eval_t) = self.lower_expression(ipr_ctx, &body.tail)?;
+        pre.extend(items);
+        Ok((pre, tail_eval, tail_eval_t))
     }
 
-    fn synthesize_tail_expr_init(
+    fn label_ipr_construct_str(&self, id: NodeId) -> String {
+        format!("IPR.{}", id.0)
+    }
+
+    fn lower_branch_stmt(
         &mut self,
         ipr_ctx: &IPRLoweringContext,
-        tail_expr: &IPRExpression,
-    ) -> Result<THRStatement, InternalCompilerError> {
-        let (tail_expr, tail_expr_t) = self.lower_expression(ipr_ctx, tail_expr)?;
-        let tail_eval_decl = self.label_construct_eval(SymbolKind::LocalVar);
-        let tail_eval_init = THRStatement::Init {
-            decl: THRSymbolDecl {
-                symbol: tail_eval_decl,
-                typ: tail_expr_t,
-            },
-            val: tail_expr,
-            ipr_id: NodeId::sentinel(),
+        branch: &ipr::IPRBranch,
+    ) -> Result<(Vec<THRStatementID>, THRStatementID), InternalCompilerError> {
+        let label_prefix = self.label_ipr_construct_str(branch.id);
+        let (pre_cond, cond, _cond_t) = self.lower_expression(ipr_ctx, &branch.condition)?;
+
+        let resolving_symbol = THRSymbol {
+            name: label_prefix.clone().into_boxed_str(),
+            kind: SymbolKind::LocalVar,
         };
-        Ok(tail_eval_init)
+        let resolving_symbol = self.symbols.get_or_intern(resolving_symbol);
+
+        let bthen_label = (label_prefix.clone() + ".t").into_boxed_str();
+        let bthen = {
+            let (mut bthen_pre, bthen_expr, bthen_t) =
+                self.lower_expression(ipr_ctx, &branch.true_case)?;
+            let bthen_resolves = THRStatement::Init {
+                decl: THRSymbolDecl {
+                    symbol: resolving_symbol,
+                    typ: bthen_t,
+                },
+                val: bthen_expr,
+                ipr_id: branch.id,
+            };
+            let bthen_resolves = self.statements.get_or_intern(bthen_resolves);
+            bthen_pre.push(bthen_resolves);
+            bthen_pre.into_boxed_slice()
+        };
+
+        let belse_label = (label_prefix.clone() + ".nt").into_boxed_str();
+        let belse = match &branch.false_case {
+            Some(twig) => {
+                let (mut belse_pre, belse_expr, belse_t) = self.lower_expression(ipr_ctx, twig)?;
+                let belse_resolves = THRStatement::Init {
+                    decl: THRSymbolDecl {
+                        symbol: resolving_symbol,
+                        typ: belse_t,
+                    },
+                    val: belse_expr,
+                    ipr_id: branch.id,
+                };
+                let belse_resolves = self.statements.get_or_intern(belse_resolves);
+                belse_pre.push(belse_resolves);
+                belse_pre.into_boxed_slice()
+            }
+            None => Box::new([]),
+        };
+
+        let branch = THRStatement::Branch {
+            cond: cond,
+            bthen_stmts: bthen,
+            belse_stmts: belse,
+            resolving_symbol,
+            bthen_label,
+            belse_label,
+            merge_label: (label_prefix + ".m").into_boxed_str(),
+        };
+        let branch = self.statements.get_or_intern(branch);
+
+        Ok((pre_cond, branch))
+    }
+
+    fn lower_funcbody(&self, ipr_ctx: &IPRLoweringContext, body: &[THRStatementID]) -> _ {
+        let mut items: Vec<THRStatementID> = vec![];
+
+        for stmt in body.iter() {
+            let (pre_stmts, stmt) = self.lower_stmt(ipr_ctx, stmt)?;
+            items.extend(pre_stmts);
+            items.push(stmt);
+        }
+        Ok((pre, tail_eval, tail_eval_t))
     }
 }
 

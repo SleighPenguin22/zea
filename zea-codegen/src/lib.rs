@@ -98,7 +98,33 @@ impl<'m> THRtoQBE<'m> {
                 let instr = Q::Instr::Ret(Some(temp));
                 bctx.sig.add_instr(instr);
             }
-            THRStatement::Branch { .. } => todo!(),
+            THRStatement::Branch {
+                cond,
+                bthen_stmts,
+                belse_stmts,
+                resolving_symbol: _,
+                bthen_label,
+                belse_label,
+                merge_label,
+            } => {
+                let thr_bool_t = self.thr_module.get_id_of_type(&THRTypeSpecifier::Boolean);
+                let cond = self.thr_module.get_expr(*cond);
+                let cond = self.emit_expr(bctx, cond, thr_bool_t);
+                bctx.sig.add_instr(qbe::Instr::Jnz(
+                    cond,
+                    bthen_label.clone().into_string(),
+                    belse_label.clone().into_string(),
+                ));
+                self.emit_block(bctx, bthen_stmts, bthen_label);
+                bctx.sig
+                    .add_instr(Q::Instr::Jmp(merge_label.clone().into_string()));
+
+                self.emit_block(bctx, belse_stmts, belse_label);
+                bctx.sig.add_block(merge_label.clone().into_string());
+            }
+            THRStatement::Block { items, label } => {
+                self.emit_block(bctx, items, label);
+            }
         }
     }
     /// Given all components of an initialization, construct the QBE nodes necessary for it.
@@ -365,7 +391,7 @@ impl<'m> THRtoQBE<'m> {
     }
 
     fn get_module_func_prefix(&self, bctx: &BlockContext) -> String {
-        format!("{}_{}_", self.thr_module.name, bctx.sig.name)
+        format!("{}.{}.", self.thr_module.name, bctx.sig.name)
     }
     /// mangle a symbol that is used in a local context;
     /// Any usage of a symbol within a basic-block/function body
@@ -384,16 +410,16 @@ impl<'m> THRtoQBE<'m> {
         }
     }
     fn mangle_func_param(&self, module_prefix: &str, func_name: &str, param_name: &str) -> String {
-        format!("{module_prefix}{func_name}_param_{param_name}")
+        format!("{module_prefix}{func_name}.p.{param_name}")
     }
     fn mangle_local_var(&self, module_prefix: &str, func_name: &str, local_name: &str) -> String {
-        format!("{module_prefix}{func_name}_local_{local_name}")
+        format!("{module_prefix}{func_name}.l.{local_name}")
     }
     fn mangle_global_var(&self, name: &str) -> String {
-        format!("global_{name}")
+        format!("g.{name}")
     }
     fn mangle_func_name(&self, name: &str) -> String {
-        format!("func_{name}")
+        format!("f.{name}")
     }
 
     /// demangle a symbol that is used in a global context, i.e.
@@ -542,11 +568,6 @@ impl<'m> THRtoQBE<'m> {
             trace!("emitting block statement `{stmt:?}`");
             self.emit_stmt(bctx, stmt);
         }
-        bctx.sig
-            .blocks
-            .last_mut()
-            .unwrap()
-            .add_comment(format!("END_{label}"));
     }
 
     fn get_module_prefix(&self) -> String {
