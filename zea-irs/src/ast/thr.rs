@@ -41,19 +41,13 @@
 //! which provides a way to get the pred- and successors of a [`THRBlock`],
 //! which is then used by QBE or some other backend to generate its CFG.
 //!
-//!
-//!
-//! Grammar constructs are lowered as folllows:
-//!
-//! a block b in the following form:
-//!
 //! Since Zea is a value-oriented language, most constructs  evaluate to some kind of value.
 //! a block `{ var := val; var }` would evaulate to whatever `val` is,
 //! while `{ var := val; }` evaluates to `()`.
 //! likewise a branch `if cond { val1 } else { val2 }`
 //! (with `var1` and `var2` having the same type) would evaluate to
 //! one of the two `val`'s depending on `cond`. Each value-full construct emits a [`THRInit`]
-//! that assigns the constructs value to a syhnthesized, unique label like `_thr_construct1`
+//! that assigns the constructs value to a syhnthesized, unique label like `IPR.N`
 //! or something similar (I will decide on that later)
 //!
 //! So the code
@@ -63,13 +57,67 @@
 //!
 //! lowers into:
 //! ```
-//! @blockN
-//!   var := 3;
-//!   _thr_construct1 := var;
-//!   a := _thr_construct1;
+//! @IPR.0
+//!   %var := 3;
+//!   %IPR.0 := var;
+//! # end of the block
+//!   %a := IPR.0;
 //! ```
 //!
+//! The methods that THRKeySets defines lower IPR constructs
+//! into THR ones.
 //!
+//! THR maps quite closely to QBE-IL, and as such a lot of 'desugaring' must be done.
+//! For example, We cannot have initializors for a variable `v` be blocks or branches anymore,
+//! instead we must synthesize a temporary `t` and assign to it within the lowered construct,
+//! and then assign that synthesized temporary to `v`:
+//! ```
+//! a := 3;
+//! b := if a < 10 {
+//!   6
+//! } else {
+//!   7
+//! };
+//! c := b + 4;
+//!
+//! # could become
+//! %a : U8 = constint(3);
+//! %t0: Bool = %a;
+//! jnz %t0, @IPR.0.t, @IPR.0.nt;
+//!
+//! @IPR.0.t:
+//! %IPR.0: U8 = 6;
+//! jmp @IPR.0.m;
+//!
+//! @IPR.0.nt:
+//! %IPR.0: U8 = 7;
+//! jmp @IPR.0.m;
+//!
+//! @IPR.0.m:
+//! %b : U8 = %IPR.0;
+//! %t1 : U8 = constint(4);
+//! %c : U8 = add %b, %t1
+//! ```
+//!
+//! This lowering is quite naive and can be optimized of course, but this is quite
+//! close to how the current implementation would lower this code.
+//!
+//!
+//! Most methods return something like [`(Vec<THRStatementID>, THRStatementID)`],
+//! [`(Vec<THRStatementID>, THRExprID)`], etc. The first return value `pre` of the tuple contains
+//! all the statements needed to compute the second tuple value `val`.
+//!
+//! i.e. when lowering a binary expression, we would concatenate the `pre`'s of the operands,
+//! and then emit an `add` intruction of their `val`'s:
+//! ```Rust
+//! // given (assignee, l, r, op)
+//! let (l_pre, l_val, l_val_t) = lower_expr(l);
+//! let (r_pre, r_val, r_val_t) = lower_expr(r);
+//! l_pre.extend(r_pre);
+//! let val = make_binop(op, l_val, r_val);
+//! let init = make_init(assignee, val);
+//! l_pre.push(init);
+//! ```
 
 use std::collections::HashMap;
 
