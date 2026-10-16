@@ -564,9 +564,9 @@ impl<'m> THRtoQBE<'m> {
     fn emit_block(&mut self, bctx: &mut BlockContext, body: &[THRStatementID], label: &str) {
         bctx.sig.add_block(label);
         for stmt in body.iter().copied() {
-            let stmt = self.thr_module.get_statement(stmt);
+            let stmt_data = self.thr_module.get_statement(stmt);
             trace!("emitting block statement `{stmt:?}`");
-            self.emit_stmt(bctx, stmt);
+            self.emit_stmt(bctx, stmt_data);
         }
     }
 

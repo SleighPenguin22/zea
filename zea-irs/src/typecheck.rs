@@ -946,7 +946,6 @@ impl ZeaTypeChecker {
 
         loop {
             let status = self.check_module_once(module);
-            std::thread::sleep(Duration::from_millis(500));
             match status {
                 Ok(()) => {
                     let solved = self.trace_solved_stats();

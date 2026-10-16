@@ -350,6 +350,9 @@ pub enum THRStatement {
         /// this node's corresponding NodeID from the IPR representation
         ipr_id: NodeId,
     },
+    // we could probably do with a label_prefix and then generate the labels
+    // in QBE lowering?
+    // i.e. generate .t, .nt, .m suffixes while lowering into QBE as to save space here
     Branch {
         /// The temporary to test
         cond: THRExprID,
@@ -590,8 +593,21 @@ impl THRKeySets {
             IPRExpressionKind::MemberAccess(_iprexpression, _) => {
                 todo!()
             }
-            IPRExpressionKind::IfThenElse(_iprbranch) => {
-                todo!()
+            IPRExpressionKind::IfThenElse(branch) => {
+                let (mut pre, stmt) = self.lower_branch_stmt(ipr_ctx, branch)?;
+                let THRStatement::Branch {
+                    resolving_symbol, ..
+                } = stmt
+                else {
+                    unreachable!()
+                };
+                let branch = self.statements.get_or_intern(stmt);
+                pre.push(branch);
+
+                let node = THRExpression::Ident(resolving_symbol);
+                let node = self.expressions.get_or_intern(node);
+
+                (pre, node, thr_t)
             }
             IPRExpressionKind::Block(block) => self.lower_block(ipr_ctx, block)?,
             IPRExpressionKind::UnScopedIdent(_) => {
@@ -624,7 +640,10 @@ impl THRKeySets {
                 Ok((pre, ret_stmt))
             }
             IPRStatementKind::Block(_iprblock_expression) => todo!(),
-            IPRStatementKind::IfThenElse(branch) => self.lower_branch_stmt(ipr_ctx, branch),
+            IPRStatementKind::IfThenElse(branch) => {
+                let (pre, stmt) = self.lower_branch_stmt(ipr_ctx, branch)?;
+                Ok((pre, self.statements.get_or_intern(stmt)))
+            }
         }
     }
 
@@ -743,9 +762,7 @@ impl THRKeySets {
             thr_params.push(param);
         }
 
-        let (mut body, tail_expr, _tail_expr_t) = self.lower_funcbody(ipr_ctx, &body)?;
-        let ret_stmt = self.statements.get_or_intern(THRStatement::Ret(tail_expr));
-        body.push(ret_stmt);
+        let body = self.lower_funcbody(ipr_ctx, &body)?;
 
         let func = THRFunction::new(name.clone(), thr_params, body, returns, *attributes, *id);
         Ok(self.functions.get_or_intern(func))
@@ -776,7 +793,7 @@ impl THRKeySets {
         &mut self,
         ipr_ctx: &IPRLoweringContext,
         branch: &ipr::IPRBranch,
-    ) -> Result<(Vec<THRStatementID>, THRStatementID), InternalCompilerError> {
+    ) -> Result<(Vec<THRStatementID>, THRStatement), InternalCompilerError> {
         let label_prefix = self.label_ipr_construct_str(branch.id);
         let (pre_cond, cond, _cond_t) = self.lower_expression(ipr_ctx, &branch.condition)?;
 
@@ -831,20 +848,36 @@ impl THRKeySets {
             belse_label,
             merge_label: (label_prefix + ".m").into_boxed_str(),
         };
-        let branch = self.statements.get_or_intern(branch);
 
         Ok((pre_cond, branch))
     }
 
-    fn lower_funcbody(&self, ipr_ctx: &IPRLoweringContext, body: &[THRStatementID]) -> _ {
+    fn lower_funcbody(
+        &mut self,
+        ipr_ctx: &IPRLoweringContext,
+        body: &IPRBlockExpression,
+    ) -> Result<Vec<THRStatementID>, InternalCompilerError> {
         let mut items: Vec<THRStatementID> = vec![];
 
-        for stmt in body.iter() {
-            let (pre_stmts, stmt) = self.lower_stmt(ipr_ctx, stmt)?;
-            items.extend(pre_stmts);
-            items.push(stmt);
+        // this block is used to allow short-circuiting on encountering a return
+        // before the end of the function body, as anything after a return is dead code
+        'lowering_body: {
+            for ipr_stmt in &body.statements {
+                let (pre_stmts, stmt) = self.lower_stmt(ipr_ctx, ipr_stmt)?;
+                items.extend(pre_stmts);
+                items.push(stmt);
+                if let IPRStatementKind::Return(_) = ipr_stmt.kind {
+                    break 'lowering_body;
+                }
+            }
+
+            let (tail_pre, tail_expr, _tail_expr_t) = self.lower_expression(ipr_ctx, &body.tail)?;
+            items.extend(tail_pre);
+            let ret_stmt = THRStatement::Ret(tail_expr);
+            let ret_stmt = self.statements.get_or_intern(ret_stmt);
+            items.push(ret_stmt);
         }
-        Ok((pre, tail_eval, tail_eval_t))
+        Ok(items)
     }
 }
 
@@ -856,7 +889,7 @@ struct IPRLoweringContext {
 
 impl std::fmt::Debug for THRKeySets {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&"TYPES:\n\t", f)?;
+        std::fmt::Display::fmt(&"\nTYPES:\n\t", f)?;
         for (i, t) in self.types.iter().enumerate() {
             i.fmt(f)?;
             std::fmt::Display::fmt(&"\t", f)?;
