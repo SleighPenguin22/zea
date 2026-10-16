@@ -30,8 +30,10 @@ flamegraph.svg
 perf.data
 perf.data.old
 bob*
+.cargo/
 
 *.o
 *.s
+*.S
 *.out
 *.qbe
